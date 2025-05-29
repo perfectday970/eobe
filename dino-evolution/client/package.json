@@ -1,0 +1,15 @@
+{
+  "name": "dino-evolution-client",
+  "version": "1.0.0",
+  "description": "Dino Evolution Frontend - HTML5 Canvas Game",
+  "scripts": {
+    "dev": "python3 -m http.server 3000 || python -m http.server 3000",
+    "dev:win": "python -m http.server 3000",
+    "serve": "npx serve -s . -l 3000",
+    "build": "echo '📦 Static files - no build step needed'",
+    "test": "echo '🧪 No tests configured yet'"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}

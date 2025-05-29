@@ -1,0 +1,28 @@
+{
+  "name": "dino-evolution",
+  "version": "1.0.0",
+  "description": "Full-stack Dino Evolution Game with Node.js Backend",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "postinstall": "echo '🎮 Dino Evolution dependencies installed!'",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"yellow,cyan\" \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "start": "npm run start --workspace=server",
+    "build": "npm run build --workspace=client",
+    "test": "npm run test --workspace=server && npm run test --workspace=client",
+    "clean": "rm -rf node_modules client/node_modules server/node_modules",
+    "reset": "npm run clean && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}
