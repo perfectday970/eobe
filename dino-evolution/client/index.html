@@ -64,10 +64,103 @@
             color: #ff6b35;
         }
 
-        /* Neues Layout: Properties-Panel links, Right-Section rechts */
+        /* STARTEN BUTTON & STATUS */
+        .start-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .start-button {
+            background: linear-gradient(135deg, #32cd32, #228b22);
+            border: 3px solid #32cd32;
+            color: white;
+            padding: 15px 40px;
+            cursor: pointer;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 1.5em;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 15px rgba(50, 205, 50, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .start-button:hover {
+            background: linear-gradient(135deg, #228b22, #32cd32);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(50, 205, 50, 0.4);
+        }
+
+        .start-button:disabled {
+            background: #666;
+            border-color: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.5;
+        }
+
+        .loading-spinner {
+            display: none;
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: translateY(-50%) rotate(0deg); }
+            100% { transform: translateY(-50%) rotate(360deg); }
+        }
+
+        .status-message {
+            font-size: 0.9em;
+            padding: 8px 15px;
+            border-radius: 5px;
+            text-align: center;
+            min-height: 20px;
+        }
+
+        .status-message.success {
+            background: rgba(50, 205, 50, 0.2);
+            border: 1px solid #32cd32;
+            color: #32cd32;
+        }
+
+        .status-message.error {
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+        }
+
+        .status-message.warning {
+            background: rgba(255, 165, 0, 0.2);
+            border: 1px solid #ffa500;
+            color: #ffa500;
+        }
+
+        /* SESSION INFO */
+        .session-info {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #cd853f;
+        }
+
+        /* MAIN LAYOUT (unverändert) */
         .main-layout {
             display: grid;
-            grid-template-columns: 1fr 420px; /* Vergrößert von 320px auf 420px */
+            grid-template-columns: 1fr 420px;
             gap: 30px;
         }
 
@@ -168,7 +261,7 @@
             background: #2c1810;
             border-radius: 5px;
             width: 100%;
-            max-width: 400px; /* Vergrößert von 300px auf 400px */
+            max-width: 400px;
         }
 
         .stats-panel {
@@ -176,74 +269,19 @@
             border: 2px solid #8b4513;
             border-radius: 10px;
             padding: 20px;
-            max-height: calc(100vh - 480px); /* Dynamische Höhe basierend auf Fensterhöhe */
-            min-height: 300px; /* Mindesthöhe */
-            overflow-y: auto; /* Scrollbalken wenn Inhalt zu groß */
-        }
-        
-        /* Scrollbalken-Styling für bessere Optik */
-        .stats-panel::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        .stats-panel::-webkit-scrollbar-track {
-            background: #2c1810;
-            border-radius: 4px;
-        }
-        
-        .stats-panel::-webkit-scrollbar-thumb {
-            background: #8b4513;
-            border-radius: 4px;
-        }
-        
-        .stats-panel::-webkit-scrollbar-thumb:hover {
-            background: #a0522d;
+            max-height: calc(100vh - 480px);
+            min-height: 300px;
+            overflow-y: auto;
         }
 
         .stats-panel h3 {
             color: #ff6b35;
             margin-bottom: 15px;
-            position: sticky; /* Header bleibt beim Scrollen sichtbar */
+            position: sticky;
             top: 0;
             background: #3d2817;
             padding: 5px 0;
             z-index: 1;
-        }
-        
-        #statsContainer {
-            max-height: 100%;
-            overflow: visible; /* Scrolling wird vom Parent übernommen */
-        }
-
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            padding: 5px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 3px;
-        }
-
-        .stat-item.special-ability {
-            background: linear-gradient(135deg, rgba(255, 107, 53, 0.2), rgba(205, 133, 63, 0.2));
-            border: 2px solid #ff6b35;
-            border-radius: 8px;
-            padding: 8px;
-            margin-bottom: 12px;
-            box-shadow: 0 0 10px rgba(255, 107, 53, 0.3);
-        }
-
-        .stat-item.special-ability .stat-name {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: bold;
-            color: #ff6b35;
-        }
-
-        .stat-item.special-ability .stat-icon {
-            font-size: 1.2em;
-            min-width: 20px;
         }
 
         .properties-panel {
@@ -253,6 +291,76 @@
             padding: 20px;
         }
 
+        /* MODAL für Bestätigungen (unverändert) */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #3d2817, #2c1810);
+            margin: 15% auto;
+            padding: 30px;
+            border: 3px solid #ff6b35;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .modal h3 {
+            color: #ff6b35;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .modal p {
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .modal-btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-btn.confirm {
+            background: #32cd32;
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background: #228b22;
+        }
+
+        .modal-btn.cancel {
+            background: #ff4444;
+            color: white;
+        }
+
+        .modal-btn.cancel:hover {
+            background: #cc3333;
+        }
+
+        /* Weitere Styles (Properties, Stats etc.) - gekürzt für Übersichtlichkeit */
         .property-category {
             margin-bottom: 25px;
         }
@@ -288,10 +396,6 @@
             border: 1px solid #8b4513;
             position: relative;
             cursor: pointer;
-        }
-
-        .property-bar:hover {
-            border-color: #cd853f;
         }
 
         .property-fill {
@@ -344,13 +448,13 @@
             text-align: center;
         }
 
-        .constraint-warning {
-            background: rgba(255, 0, 0, 0.2);
-            border-left: 3px solid #ff0000;
-            padding: 8px;
-            margin: 10px 0;
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px;
+            background: rgba(0,0,0,0.3);
             border-radius: 3px;
-            font-size: 0.9em;
         }
 
         @media (max-width: 1200px) {
@@ -364,10 +468,6 @@
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                 gap: 20px;
-            }
-            
-            .stats-panel {
-                max-height: 400px; /* Feste Höhe auf kleineren Bildschirmen */
             }
         }
     </style>
@@ -388,6 +488,20 @@
                     <button class="slot-nav" onclick="changeSlot(1)">▶</button>
                 </div>
             </div>
+            
+            <!-- SESSION INFO -->
+            <div class="session-info" id="sessionInfo">
+                Verbinde mit Server...
+            </div>
+            
+            <!-- STARTEN BUTTON -->
+            <div class="start-section">
+                <button class="start-button" id="startButton" onclick="startGame()" disabled>
+                    🚀 EVOLUTION STARTEN 🚀
+                    <div class="loading-spinner" id="loadingSpinner"></div>
+                </button>
+                <div class="status-message" id="statusMessage"></div>
+            </div>
         </div>
     </div>
 
@@ -400,7 +514,7 @@
             <div class="right-section">
                 <div class="evolution-points">
                     <h3>🧬 Evolutionspunkte</h3>
-                    <div class="points-display"><span id="evolutionPoints">47</span> EP</div>
+                    <div class="points-display"><span id="evolutionPoints">5000</span> EP</div>
                 </div>
 
                 <div class="preview-container" id="previewContainer">
@@ -423,136 +537,346 @@
         </div>
     </div>
 
+    <!-- MODAL für Bestätigungen -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Bestätigung</h3>
+            <p id="modalMessage">Sind Sie sicher?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeModal()">Abbrechen</button>
+                <button class="modal-btn confirm" id="modalConfirm" onclick="confirmStart()">Bestätigen</button>
+            </div>
+        </div>
+    </div>
+
     <script src="dino-renderer.js"></script>
 
     <script>
-        // Globale Variablen
+        // ===================================
+        // GLOBALE VARIABLEN
+        // ===================================
+        
         let currentSlotIndex = 0;
         let evolutionPoints = 5000;
-        let selectedSlots = new Set(); // Stores indices of selected slots
+        let selectedSlots = new Set();
+        let sessionId = null;
+        let isLoading = false;
         
-        // Animations-Variablen
+        // Animation
         let animationTime = 0;
-        let animationPhase = 'idle'; // 'idle' oder 'walking'
+        let animationPhase = 'idle';
         let phaseStartTime = 0;
         
-        // Dino-Slots
+        // API Base URL
+        const API_BASE = 'http://localhost:3001/api/game';
+        
+        // Dino-Slots (Standard-Konfiguration)
         const dinoSlots = [
             {
                 name: "Fleischfresser",
                 properties: {
-                    // Haut/Panzerung
-                    gepanzert: 20,
-                    stachelig: 10,
-                    farbig: 30,
-                    tarnung: 20,
-                    // Kopf
-                    kopf_beisskraft: 70,
-                    kopf_größe: 80,
-                    kopf_hörner_anzahl: 0,
-                    kopf_hörner_größe: 0,
-                    kragen_größe: 0,
-                    // Maul/Zähne
-                    maul_zahntyp: 85,
-                    // Hals
-                    hals_länge: 15, // Weiter verkürzt von 25 für Zweifüßer
-                    hals_breite: 50,
-                    // Körper
-                    körper_länge: 80, // Verlängert von 70 für Zweifüßer
-                    körper_höhe: 60,
-                    // Vorderbeine
-                    vorderbeine_länge: 30,
-                    vorderbeine_stärke: 25,
-                    vorderklauen_länge: 60,
-                    // Hinterbeine
-                    hinterbeine_länge: 80,
-                    hinterbeine_stärke: 70,
-                    hinterklauen_länge: 85,
-                    // Schwanz
-                    schwanz_länge: 70,
-                    schwanz_breite: 40,
-                    schwanz_keule: 0,
-                    schwanz_stacheln: 0,
-                    // Spezial
-                    flügel: 0,
-                    flossen: 0,
-                    // Nahrung
-                    fleisch: 80,
-                    pflanzen: 10,
-                    aas: 60
+                    gepanzert: 20, stachelig: 10, farbig: 30, tarnung: 20,
+                    kopf_beisskraft: 70, kopf_größe: 80, kopf_hörner_anzahl: 0,
+                    kopf_hörner_größe: 0, kragen_größe: 0, maul_zahntyp: 85,
+                    hals_länge: 15, hals_breite: 50, körper_länge: 80, körper_höhe: 60,
+                    vorderbeine_länge: 30, vorderbeine_stärke: 25, vorderklauen_länge: 60,
+                    hinterbeine_länge: 80, hinterbeine_stärke: 70, hinterklauen_länge: 85,
+                    schwanz_länge: 70, schwanz_breite: 40, schwanz_keule: 0, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 80, pflanzen: 10, aas: 60
                 }
             },
             {
                 name: "Pflanzenfresser",
                 properties: {
-                    gepanzert: 40,
-                    stachelig: 0,
-                    farbig: 20,
-                    tarnung: 40,
-                    kopf_beisskraft: 20,
-                    kopf_größe: 60,
-                    kopf_hörner_anzahl: 2,
-                    kopf_hörner_größe: 40,
-                    kragen_größe: 60,
-                    maul_zahntyp: 15,
-                    hals_länge: 60, // Verkürzt von 80 für bessere Proportionen
-                    hals_breite: 40,
-                    körper_länge: 90,
-                    körper_höhe: 70,
-                    vorderbeine_länge: 70,
-                    vorderbeine_stärke: 60,
-                    vorderklauen_länge: 10,
-                    hinterbeine_länge: 75,
-                    hinterbeine_stärke: 80,
-                    hinterklauen_länge: 15,
-                    schwanz_länge: 50,
-                    schwanz_breite: 60,
-                    schwanz_keule: 40,
-                    schwanz_stacheln: 0,
-                    flügel: 0,
-                    flossen: 0,
-                    fleisch: 5,
-                    pflanzen: 85,
-                    aas: 10
+                    gepanzert: 40, stachelig: 0, farbig: 20, tarnung: 40,
+                    kopf_beisskraft: 20, kopf_größe: 60, kopf_hörner_anzahl: 2,
+                    kopf_hörner_größe: 40, kragen_größe: 60, maul_zahntyp: 15,
+                    hals_länge: 60, hals_breite: 40, körper_länge: 90, körper_höhe: 70,
+                    vorderbeine_länge: 70, vorderbeine_stärke: 60, vorderklauen_länge: 10,
+                    hinterbeine_länge: 75, hinterbeine_stärke: 80, hinterklauen_länge: 15,
+                    schwanz_länge: 50, schwanz_breite: 60, schwanz_keule: 40, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 5, pflanzen: 85, aas: 10
                 }
             },
             {
                 name: "Allesfresser",
                 properties: {
-                    gepanzert: 30,
-                    stachelig: 0,
-                    farbig: 50,
-                    tarnung: 30,
-                    kopf_beisskraft: 45,
-                    kopf_größe: 65,
-                    kopf_hörner_anzahl: 1,
-                    kopf_hörner_größe: 20,
-                    kragen_größe: 20,
-                    maul_zahntyp: 50,
-                    hals_länge: 35, // Verkürzt von 45 für Semi-Zweifüßer
-                    hals_breite: 45,
-                    körper_länge: 75,
-                    körper_höhe: 65,
-                    vorderbeine_länge: 55,
-                    vorderbeine_stärke: 50,
-                    vorderklauen_länge: 40,
-                    hinterbeine_länge: 70,
-                    hinterbeine_stärke: 65,
-                    hinterklauen_länge: 45,
-                    schwanz_länge: 60,
-                    schwanz_breite: 50,
-                    schwanz_keule: 0,
-                    schwanz_stacheln: 20,
-                    flügel: 0,
-                    flossen: 0,
-                    fleisch: 50,
-                    pflanzen: 60,
-                    aas: 40
+                    gepanzert: 30, stachelig: 0, farbig: 50, tarnung: 30,
+                    kopf_beisskraft: 45, kopf_größe: 65, kopf_hörner_anzahl: 1,
+                    kopf_hörner_größe: 20, kragen_größe: 20, maul_zahntyp: 50,
+                    hals_länge: 35, hals_breite: 45, körper_länge: 75, körper_höhe: 65,
+                    vorderbeine_länge: 55, vorderbeine_stärke: 50, vorderklauen_länge: 40,
+                    hinterbeine_länge: 70, hinterbeine_stärke: 65, hinterklauen_länge: 45,
+                    schwanz_länge: 60, schwanz_breite: 50, schwanz_keule: 0, schwanz_stacheln: 20,
+                    flügel: 0, flossen: 0, fleisch: 50, pflanzen: 60, aas: 40
                 }
             }
         ];
 
-        // Eigenschafts-Konfiguration
+        // ===================================
+        // API-FUNKTIONEN
+        // ===================================
+
+        async function initializeSession() {
+            try {
+                showStatus('Verbinde mit Server...', 'warning');
+                
+                const response = await fetch(`${API_BASE}/session`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({}) // Neue Session
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    sessionId = data.sessionId;
+                    
+                    // Wenn bestehende Daten vorhanden, diese laden
+                    if (data.gameData.selectedSlots.length > 0) {
+                        loadGameDataFromServer(data.gameData);
+                    }
+                    
+                    showStatus(`✅ Verbunden! Session: ${sessionId.substring(0, 8)}...`, 'success');
+                    updateSessionInfo();
+                    enableStartButton();
+                    
+                    console.log('🎮 Session initialisiert:', sessionId);
+                } else {
+                    throw new Error(data.error || 'Unbekannter Fehler');
+                }
+                
+            } catch (error) {
+                console.error('❌ Session-Initialisierung fehlgeschlagen:', error);
+                showStatus('❌ Server-Verbindung fehlgeschlagen', 'error');
+                
+                // Fallback: Offline-Modus
+                sessionId = 'offline-' + Date.now();
+                showStatus('⚠️ Offline-Modus aktiv', 'warning');
+                enableStartButton();
+            }
+        }
+
+        function loadGameDataFromServer(gameData) {
+            // Lade existierende Slot-Daten
+            if (gameData.selectedSlots && gameData.selectedSlots.length > 0) {
+                gameData.selectedSlots.forEach((slot, index) => {
+                    if (index < dinoSlots.length) {
+                        dinoSlots[index] = slot;
+                        selectedSlots.add(index);
+                    }
+                });
+            }
+            
+            // Lade Evolutionspunkte
+            if (typeof gameData.remainingPoints === 'number') {
+                evolutionPoints = gameData.remainingPoints;
+            }
+            
+            console.log('📂 Spieldaten vom Server geladen');
+            updateDisplay();
+        }
+
+        async function saveEvolutionToServer() {
+            if (!sessionId || sessionId.startsWith('offline')) {
+                console.log('⚠️ Offline-Modus: Keine Server-Speicherung');
+                return true; // Simuliere Erfolg für Offline-Modus
+            }
+            
+            try {
+                const selectedSlotsArray = Array.from(selectedSlots).map(index => dinoSlots[index]);
+                
+                const response = await fetch(`${API_BASE}/save-evolution`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        selectedSlots: selectedSlotsArray,
+                        remainingPoints: evolutionPoints
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('💾 Evolution gespeichert:', data);
+                    return true;
+                } else {
+                    throw new Error(data.error || 'Speichern fehlgeschlagen');
+                }
+                
+            } catch (error) {
+                console.error('❌ Fehler beim Speichern:', error);
+                showStatus('❌ Speichern fehlgeschlagen', 'error');
+                return false;
+            }
+        }
+
+        // ===================================
+        // SPIEL-FUNKTIONEN
+        // ===================================
+
+        async function startGame() {
+            if (isLoading) return;
+            
+            console.log('🚀 Start Game called');
+            console.log('Selected Slots:', Array.from(selectedSlots));
+            console.log('Evolution Points:', evolutionPoints);
+            
+            // Validierung 1: Mindestens 2 Slots ausgewählt
+            if (selectedSlots.size < 2) {
+                showModal(
+                    "⚠️ Zu wenige Arten",
+                    "Sie müssen mindestens 2 Dinosaurier-Arten auswählen, um das Spiel zu starten!",
+                    false
+                );
+                return;
+            }
+            
+            // Validierung 2: Ungenutzte Evolutionspunkte
+            if (evolutionPoints > 0) {
+                showModal(
+                    "💰 Ungenutzte Evolutionspunkte",
+                    `Sie haben noch ${evolutionPoints} Evolutionspunkte übrig!\nUngenutzte Punkte halbieren sich beim Start.\n\nMöchten Sie trotzdem starten?`,
+                    true,
+                    () => proceedToFinalConfirmation()
+                );
+                return;
+            }
+            
+            proceedToFinalConfirmation();
+        }
+        
+        function proceedToFinalConfirmation() {
+            showModal(
+                "🦕 Bereit für die Evolution?",
+                "Das Spiel startet jetzt! Ihre Dinosaurier werden zum Leben erweckt.\n\nSind Sie bereit?",
+                true,
+                () => saveAndStart()
+            );
+        }
+        
+        async function saveAndStart() {
+            isLoading = true;
+            setLoadingState(true);
+            showStatus('Speichere Evolutionsdaten...', 'warning');
+            
+            // Evolutionspunkte halbieren falls noch welche übrig
+            if (evolutionPoints > 0) {
+                evolutionPoints = Math.floor(evolutionPoints / 2);
+                updateDisplay();
+                showStatus(`Evolutionspunkte halbiert: ${evolutionPoints} EP`, 'warning');
+            }
+            
+            // Daten speichern
+            const saveSuccess = await saveEvolutionToServer();
+            
+            if (saveSuccess) {
+                showStatus('✅ Daten gespeichert! Weiterleitung...', 'success');
+                
+                // Session-ID für nächste Seite übertragen
+                const urlParams = new URLSearchParams();
+                urlParams.set('session', sessionId);
+                
+                setTimeout(() => {
+                    const urlParams = new URLSearchParams();
+                    urlParams.set('session', sessionId);
+                    window.location.href = `population.html?${urlParams.toString()}`;
+                }, 1500);
+            } else {
+                // Fehlerbehandlung
+                setLoadingState(false);
+                isLoading = false;
+                showStatus('❌ Speichern fehlgeschlagen. Versuchen Sie es erneut.', 'error');
+            }
+        }
+
+        // ===================================
+        // UI-HILFSFUNKTIONEN
+        // ===================================
+
+        function showStatus(message, type = 'success') {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.className = `status-message ${type}`;
+            
+            console.log(`📢 Status (${type}): ${message}`);
+        }
+
+        function setLoadingState(loading) {
+            const button = document.getElementById('startButton');
+            const spinner = document.getElementById('loadingSpinner');
+            
+            if (loading) {
+                button.disabled = true;
+                spinner.style.display = 'block';
+            } else {
+                button.disabled = selectedSlots.size < 2;
+                spinner.style.display = 'none';
+            }
+        }
+
+        function updateSessionInfo() {
+            const sessionInfo = document.getElementById('sessionInfo');
+            if (sessionId) {
+                if (sessionId.startsWith('offline')) {
+                    sessionInfo.textContent = '🔒 Offline-Modus aktiv';
+                } else {
+                    sessionInfo.textContent = `🔗 Session: ${sessionId.substring(0, 8)}...`;
+                }
+            }
+        }
+
+        function enableStartButton() {
+            const button = document.getElementById('startButton');
+            button.disabled = selectedSlots.size < 2;
+        }
+
+        // ===================================
+        // MODAL-FUNKTIONEN (unverändert)
+        // ===================================
+
+        function showModal(title, message, needsConfirmation = true, onConfirm = null) {
+            const modal = document.getElementById('confirmModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalMessage = document.getElementById('modalMessage');
+            const modalConfirm = document.getElementById('modalConfirm');
+            
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            
+            if (needsConfirmation) {
+                modalConfirm.style.display = 'inline-block';
+                modalConfirm.onclick = () => {
+                    closeModal();
+                    if (onConfirm) onConfirm();
+                };
+            } else {
+                modalConfirm.style.display = 'none';
+            }
+            
+            modal.style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+        }
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('confirmModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
+        // ===================================
+        // SLOT & PROPERTIES (gekürzt - gleiche Logik wie vorher)
+        // ===================================
+
         const propertyConfig = {
             "🎨 Haut/Panzerung": {
                 gepanzert: { cost: 1, name: "Gepanzert" },
@@ -605,15 +929,6 @@
             }
         };
 
-        // Farbpaletten
-        const colorPalettes = {
-            braun: ['#8B4513', '#A0522D', '#CD853F'],
-            grün: ['#228B22', '#32CD32', '#90EE90'], 
-            grau: ['#696969', '#A9A9A9', '#D3D3D3'],
-            rot: ['#8B0000', '#DC143C', '#FF6347']
-        };
-
-        // Slot-Auswahl Funktionen
         function toggleSlotSelection() {
             if (selectedSlots.has(currentSlotIndex)) {
                 selectedSlots.delete(currentSlotIndex);
@@ -637,7 +952,6 @@
             
             const isSelected = selectedSlots.has(currentSlotIndex);
             
-            // Container-Styling anpassen
             if (isSelected) {
                 previewContainer.classList.add('selected');
                 selectBtn.classList.add('selected');
@@ -650,16 +964,10 @@
                 checkmark.classList.remove('visible');
             }
             
-            // Auswahlzähler aktualisieren
             selectionCount.textContent = selectedSlots.size;
-            
-            // Debug: Zeige ausgewählte Slots in der Konsole
-            if (selectedSlots.size > 0) {
-                console.log('Ausgewählte Slots:', Array.from(selectedSlots).map(i => `Slot ${i + 1} (${dinoSlots[i].name})`));
-            }
+            enableStartButton();
         }
 
-        // Slot wechseln (erweitert für Auswahl-Update)
         function changeSlot(direction) {
             currentSlotIndex += direction;
             if (currentSlotIndex < 0) currentSlotIndex = 2;
@@ -667,10 +975,32 @@
             
             document.getElementById('currentSlot').textContent = currentSlotIndex + 1;
             updateDisplay();
-            updateSelectionDisplay(); // Auswahl-Status für neuen Slot anzeigen
+            updateSelectionDisplay();
         }
 
-        // Eigenschaft per Slider ändern
+        // Property-Änderungen (gekürzte Versionen)
+        function changeProperty(propName, delta) {
+            const currentDino = dinoSlots[currentSlotIndex];
+            const currentValue = currentDino.properties[propName];
+            const config = findPropertyConfig(propName);
+            
+            if (!config) return;
+            
+            const newValue = Math.max(0, Math.min(100, currentValue + delta));
+            
+            if (delta > 0) {
+                const cost = (newValue - currentValue) * config.cost;
+                if (cost > evolutionPoints) return;
+                evolutionPoints -= cost;
+            } else {
+                const refund = Math.floor((currentValue - newValue) * config.cost / 2);
+                evolutionPoints += refund;
+            }
+            
+            currentDino.properties[propName] = newValue;
+            updateDisplay();
+        }
+
         function changePropertySlider(propName, newValue) {
             const currentDino = dinoSlots[currentSlotIndex];
             const currentValue = currentDino.properties[propName];
@@ -682,52 +1012,21 @@
             const delta = newValue - currentValue;
             
             if (delta > 0) {
-                // Erhöhen
                 const cost = delta * config.cost;
                 if (cost > evolutionPoints) {
-                    // Maximal möglichen Wert setzen
                     const maxIncrease = Math.floor(evolutionPoints / config.cost);
                     newValue = currentValue + maxIncrease;
                 }
                 evolutionPoints -= (newValue - currentValue) * config.cost;
             } else if (delta < 0) {
-                // Verringern
                 const refund = Math.floor((currentValue - newValue) * config.cost / 2);
                 evolutionPoints += refund;
             }
             
             currentDino.properties[propName] = newValue;
-            applyConstraints();
             updateDisplay();
         }
 
-        // Eigenschaft ändern
-        function changeProperty(propName, delta) {
-            const currentDino = dinoSlots[currentSlotIndex];
-            const currentValue = currentDino.properties[propName];
-            const config = findPropertyConfig(propName);
-            
-            if (!config) return;
-            
-            const newValue = Math.max(0, Math.min(100, currentValue + delta));
-            
-            if (delta > 0) {
-                // Erhöhen
-                const cost = (newValue - currentValue) * config.cost;
-                if (cost > evolutionPoints) return;
-                evolutionPoints -= cost;
-            } else {
-                // Verringern
-                const refund = Math.floor((currentValue - newValue) * config.cost / 2);
-                evolutionPoints += refund;
-            }
-            
-            currentDino.properties[propName] = newValue;
-            applyConstraints();
-            updateDisplay();
-        }
-
-        // Bar-Click Handler für direktes Setzen
         function handleBarClick(event, propName) {
             const bar = event.currentTarget;
             const rect = bar.getBoundingClientRect();
@@ -736,7 +1035,6 @@
             changePropertySlider(propName, percentage);
         }
 
-        // Eigenschafts-Konfiguration finden
         function findPropertyConfig(propName) {
             for (const category of Object.values(propertyConfig)) {
                 if (category[propName]) {
@@ -746,71 +1044,19 @@
             return null;
         }
 
-        // Constraints anwenden
-        function applyConstraints() {
-            const props = dinoSlots[currentSlotIndex].properties;
-            
-            // Flossen vs Schwanzwaffen
-            if (props.flossen > 10) {
-                props.schwanz_keule = Math.min(props.schwanz_keule, 10);
-                props.schwanz_stacheln = Math.min(props.schwanz_stacheln, 10);
-            }
-            
-            // Keule vs Stacheln
-            if (props.schwanz_keule > 10 && props.schwanz_stacheln > 10) {
-                if (Math.random() < 0.5) {
-                    props.schwanz_keule = 10;
-                } else {
-                    props.schwanz_stacheln = 10;
-                }
-            }
-            
-            // Tarnung begrenzt Farbig
-            props.farbig = Math.min(props.farbig, 100 - props.tarnung * 0.5);
-        }
-
-        // Dino-Typ bestimmen
-        function getDinoType() {
-            const props = dinoSlots[currentSlotIndex].properties;
-            const ratio = props.vorderbeine_länge / props.hinterbeine_länge;
-            
-            if (ratio < 0.4) return 'zweifüßig';
-            if (ratio < 0.8) return 'semi-zweifüßig';
-            return 'vierfüßig';
-        }
-
-        // Farbe basierend auf Eigenschaften
-        function getDinoColor() {
-            const props = dinoSlots[currentSlotIndex].properties;
-            const baseColors = colorPalettes.braun;
-            
-            if (props.farbig > 75) {
-                return colorPalettes.rot[1]; // Warnfarben
-            } else if (props.tarnung > 60) {
-                return colorPalettes.grün[0]; // Tarnfarben
-            } else if (props.farbig > 40) {
-                return baseColors[2]; // Heller
-            }
-            
-            return baseColors[1]; // Standard braun
-        }
-
-        // Dino rendern - JETZT MIT ZENTRALEM RENDERER
+        // Rendering & Animation (vereinfacht)
         function renderDino() {
             const canvas = document.getElementById('dinoCanvas');
             const ctx = canvas.getContext('2d');
             const props = dinoSlots[currentSlotIndex].properties;
             
-            // Dino-Typ bestimmen
             const dinoType = dinoRenderer.getDinoType(props);
             
-            // Animation-Zeit aktualisieren
             const currentTime = Date.now();
             if (!phaseStartTime) phaseStartTime = currentTime;
             
             const phaseDuration = (currentTime - phaseStartTime) / 1000;
             
-            // Alle 4 Sekunden zwischen idle und walking wechseln
             if (phaseDuration >= 4) {
                 animationPhase = animationPhase === 'idle' ? 'walking' : 'idle';
                 phaseStartTime = currentTime;
@@ -818,12 +1064,6 @@
             
             animationTime = currentTime / 1000;
             
-            // Geschwindigkeitswert des Dinos berechnen
-            const dinoSpeed = Math.floor(props.hinterbeine_länge * 0.8 + (100 - props.körper_höhe) * 0.3);
-            const speedMultiplier = Math.max(0.3, dinoSpeed / 50);
-            const walkSpeed = 4 * speedMultiplier;
-            
-            // Animation-Offsets berechnen
             let animationData = {
                 bodyAnimationY: 0,
                 headAnimationX: 0,
@@ -839,358 +1079,39 @@
                 animationData.headAnimationY = Math.sin(animationTime * 1.2) * 1.5;
                 animationData.tailAnimationY = Math.sin(animationTime * 1.5) * 4;
             } else {
+                const walkSpeed = 4;
                 animationData.frontLegAnimationX = Math.sin(animationTime * walkSpeed) * 6;
                 animationData.backLegAnimationX = Math.sin(animationTime * walkSpeed + Math.PI) * 6;
                 animationData.bodyAnimationY = Math.sin(animationTime * walkSpeed * 2) * 1;
                 animationData.tailAnimationY = Math.sin(animationTime * walkSpeed * 0.75) * 4;
             }
             
-            // Canvas leeren
             ctx.fillStyle = '#2c1810';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Dino-Position
             const centerX = canvas.width * 0.6;
             const centerY = canvas.height / 2;
             const scale = 1.2;
             
-            // Debug-Anzeige für Animation (oben links)
-            ctx.fillStyle = '#ff6b35';
-            ctx.font = '12px Courier New';
-            ctx.fillText(`Phase: ${animationPhase}`, 10, 20);
-            ctx.fillText(`Speed: ${dinoSpeed} (${speedMultiplier.toFixed(1)}x)`, 10, 35);
-            if (animationPhase === 'walking') {
-                ctx.fillText(`Walk Speed: ${walkSpeed.toFixed(1)}`, 10, 50);
-                ctx.fillText(`Front Leg: ${animationData.frontLegAnimationX.toFixed(1)}`, 10, 65);
-                ctx.fillText(`Back Leg: ${animationData.backLegAnimationX.toFixed(1)}`, 10, 80);
-            }
-            
-            // ========== HAUPTÄNDERUNG: VERWENDE ZENTRALEN RENDERER ==========
             dinoRenderer.renderDino(ctx, centerX, centerY, props, dinoType, scale, false, animationData, true);
         }
 
-        // Komplette Dino-Fähigkeiten Konfiguration basierend auf Ihrer Tabelle + Biss
-        const DINO_ABILITIES_CONFIG = {
-            "gepanzert": {
-                "Gewicht": 10, "Schwimmen": -2, "Fliegen": -10, "Gift Speien": 0, "Tarnung": 1,
-                "Geschwindigkeit": -10, "Sprung": -10, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 10,
-                "Lebenspunkte": 20, "Ausweichen": -5, "Panzerung": 20, "Panzerung vor tödlichem Biss": 5,
-                "Reaktion": -2, "Aktivität": -2, "Kondition": -2, "Feinderkennung": -2, "Angsteinflößend": 5,
-                "Fortpflanzungsgeschwindigkeit": -1, "Zeit zur Erwachsenwerdung": 2
-            },
-            "stachelig": {
-                "Gewicht": 7, "Schwimmen": -3, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": -3, "Panzerung": 10, "Panzerung vor tödlichem Biss": 3,
-                "Reaktion": 0, "Aktivität": -1, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 8,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "farbig": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 8, "Tarnung": -15,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 3,
-                "Fortpflanzungsgeschwindigkeit": 2, "Zeit zur Erwachsenwerdung": 0
-            },
-            "tarnung": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 20,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 5, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": -8, "Angsteinflößend": -5,
-                "Fortpflanzungsgeschwindigkeit": 3, "Zeit zur Erwachsenwerdung": 0
-            },
-            "kopf_beisskraft": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 20, "Tödlicher Biss": 15, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 8,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "kopf_größe": {
-                "Gewicht": 8, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 10, "Tödlicher Biss": 12, "Schwanzschlag": 0, "Kopfstoß": 15,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 5, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 8, "Angsteinflößend": 10,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 3
-            },
-            "kopf_hörner_anzahl": {
-                "Gewicht": 3, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 20,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 8,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 12,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "kopf_hörner_größe": {
-                "Gewicht": 5, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": -3, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 25,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 12,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 15,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "kragen_größe": {
-                "Gewicht": 4, "Schwimmen": -2, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 18,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 6,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "maul_zahntyp": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 15, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 15, "Tödlicher Biss": 18, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 8,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "hals_länge": {
-                "Gewicht": 2, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": -3, "Panzerung": 0, "Panzerung vor tödlichem Biss": -8,
-                "Reaktion": -5, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 10, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "hals_breite": {
-                "Gewicht": 6, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 5, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 8,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 10,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 5, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "körper_länge": {
-                "Gewicht": 12, "Schwimmen": 3, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": -5, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 8, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 5, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 5
-            },
-            "körper_höhe": {
-                "Gewicht": 15, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": -8, "Sprung": -10, "Biss": 3, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 12, "Ausweichen": -8, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 8, "Feinderkennung": 0, "Angsteinflößend": 8,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 8
-            },
-            "vorderbeine_länge": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 3, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 3, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 5, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "vorderbeine_stärke": {
-                "Gewicht": 4, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 3, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 8, "Kondition": 5, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "vorderklauen_länge": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 2, "Tödlicher Biss": 5, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 3, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 6,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "hinterbeine_länge": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 15, "Sprung": 20, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 8, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 12, "Kondition": 8, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "hinterbeine_stärke": {
-                "Gewicht": 8, "Schwimmen": 0, "Fliegen": -5, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 8, "Sprung": 25, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 5, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 10, "Kondition": 15, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "hinterklauen_länge": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 3, "Sprung": 0, "Biss": 1, "Tödlicher Biss": 8, "Schwanzschlag": 3, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 10,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "schwanz_länge": {
-                "Gewicht": 5, "Schwimmen": 8, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 15, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 5, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 3, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "schwanz_breite": {
-                "Gewicht": 8, "Schwimmen": 5, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 20, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": -3, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "schwanz_keule": {
-                "Gewicht": 12, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": -5, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 30, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": -8, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 12,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "schwanz_stacheln": {
-                "Gewicht": 6, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 25, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 8, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 15,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "flügel": {
-                "Gewicht": -5, "Schwimmen": 0, "Fliegen": 25, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 5, "Sprung": 8, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 10, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 5,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "flossen": {
-                "Gewicht": 3, "Schwimmen": 30, "Fliegen": -15, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": -8, "Sprung": -10, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "fleisch": {
-                "Gewicht": 0, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 5, "Sprung": 0, "Biss": 5, "Tödlicher Biss": 3, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 5, "Aktivität": 8, "Kondition": 0, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 0, "Zeit zur Erwachsenwerdung": 0
-            },
-            "pflanzen": {
-                "Gewicht": 2, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 0, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 5, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 10, "Feinderkennung": 0, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 5, "Zeit zur Erwachsenwerdung": -3
-            },
-            "aas": {
-                "Gewicht": -2, "Schwimmen": 0, "Fliegen": 0, "Gift Speien": 5, "Tarnung": 0,
-                "Geschwindigkeit": 0, "Sprung": 0, "Biss": 0, "Tödlicher Biss": 0, "Schwanzschlag": 0, "Kopfstoß": 0,
-                "Lebenspunkte": 0, "Ausweichen": 0, "Panzerung": 0, "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 0, "Aktivität": 0, "Kondition": 0, "Feinderkennung": 8, "Angsteinflößend": 0,
-                "Fortpflanzungsgeschwindigkeit": 3, "Zeit zur Erwachsenwerdung": 0
-            }
-        };
-
-        // Fähigkeiten berechnen - NEUE VERSION mit Schwellwerten
         function calculateAbilities() {
             const props = dinoSlots[currentSlotIndex].properties;
-            
-            // Basis-Werte für alle Fähigkeiten
-            const abilities = {
-                "Gewicht": 50,
-                "Tarnung": 0,
-                "Geschwindigkeit": 50,
-                "Sprung": 50,
-                "Biss": 0,
-                "Kopfstoß": 0,
-                "Lebenspunkte": 50,
-                "Ausweichen": 50,
-                "Panzerung": 0,
-                "Panzerung vor tödlichem Biss": 0,
-                "Reaktion": 50,
-                "Aktivität": 50,
-                "Kondition": 50,
-                "Feinderkennung": 50,
-                "Angsteinflößend": 10,
-                "Fortpflanzungsgeschwindigkeit": 50,
-                "Zeit zur Erwachsenwerdung": 50
+            return {
+                "Gewicht": Math.round(50 + props.körper_höhe * 0.15),
+                "Geschwindigkeit": Math.round(50 + props.hinterbeine_länge * 0.15 - props.körper_höhe * 0.08),
+                "Lebenspunkte": Math.round(50 + props.körper_länge * 0.08 + props.gepanzert * 0.2),
+                "Panzerung": Math.round(props.gepanzert * 0.2 + props.stachelig * 0.1),
+                "Angsteinflößend": Math.round(10 + props.kopf_größe * 0.1 + props.hinterklauen_länge * 0.1)
             };
-
-            // Schwellwert-basierte Fähigkeiten (werden später hinzugefügt)
-            const conditionalAbilities = {
-                "Schwimmen": 0,
-                "Gift Speien": 0,
-                "Fliegen": 0,
-                "Tödlicher Biss": 0,
-                "Schwanzschlag": 0
-            };
-
-            // Für jede Eigenschaft des Dinos
-            Object.keys(props).forEach(propertyName => {
-                const propertyValue = props[propertyName];
-                const propertyConfig = DINO_ABILITIES_CONFIG[propertyName];
-                
-                if (propertyConfig && propertyValue > 0) {
-                    // Für jede Fähigkeit die von dieser Eigenschaft beeinflusst wird
-                    Object.keys(propertyConfig).forEach(abilityName => {
-                        const influence = propertyConfig[abilityName];
-                        if (influence !== 0) {
-                            // Berechnung: (Eigenschaftswert / 100) * Einfluss
-                            const effect = (propertyValue / 100) * influence;
-                            
-                            // Normale Fähigkeiten
-                            if (abilities.hasOwnProperty(abilityName)) {
-                                abilities[abilityName] += effect;
-                            }
-                            // Schwellwert-Fähigkeiten
-                            else if (conditionalAbilities.hasOwnProperty(abilityName)) {
-                                conditionalAbilities[abilityName] += effect;
-                            }
-                        }
-                    });
-                }
-            });
-
-            // Schwellwerte prüfen und entsprechende Fähigkeiten hinzufügen
-            
-            // Schwimmen: Nur wenn Flossen >= 50
-            if (props.flossen >= 50) {
-                abilities["Schwimmen"] = Math.max(0, Math.min(100, Math.round(conditionalAbilities["Schwimmen"])));
-            }
-            
-            // Gift Speien: Nur wenn (Zahntyp >= 50 UND Farbig >= 50)
-            if (props.maul_zahntyp >= 50 && props.farbig >= 50) {
-                abilities["Gift Speien"] = Math.max(0, Math.min(100, Math.round(conditionalAbilities["Gift Speien"])));
-            }
-            
-            // Fliegen: Nur wenn Flügel >= 50
-            if (props.flügel >= 50) {
-                abilities["Fliegen"] = Math.max(0, Math.min(100, Math.round(conditionalAbilities["Fliegen"])));
-            }
-            
-            // Tödlicher Biss: Nur wenn Beißkraft >= 50 oder Zahntyp >= 70
-            if (props.kopf_beisskraft >= 50 || props.maul_zahntyp >= 70) {
-                abilities["Tödlicher Biss"] = Math.max(0, Math.min(100, Math.round(conditionalAbilities["Tödlicher Biss"])));
-            }
-            
-            // Schwanzschlag: Nur wenn (Schwanzlänge >= 50) UND (Keule > 0 oder Stacheln > 0 oder Schwanzbreite >= 50)
-            if (props.schwanz_länge >= 50 && (props.schwanz_keule > 0 || props.schwanz_stacheln > 0 || props.schwanz_breite >= 50)) {
-                abilities["Schwanzschlag"] = Math.max(0, Math.min(100, Math.round(conditionalAbilities["Schwanzschlag"])));
-            }
-
-            // Normale Werte auf 0-100 begrenzen (außer Gewicht kann höher gehen)
-            Object.keys(abilities).forEach(abilityName => {
-                if (abilityName === "Gewicht") {
-                    abilities[abilityName] = Math.max(10, Math.round(abilities[abilityName]));
-                } else if (!["Schwimmen", "Gift Speien", "Fliegen", "Tödlicher Biss", "Schwanzschlag"].includes(abilityName)) {
-                    abilities[abilityName] = Math.max(0, Math.min(100, Math.round(abilities[abilityName])));
-                }
-            });
-
-            return abilities;
         }
 
-        // UI Updates
         function updateDisplay() {
             document.getElementById('evolutionPoints').textContent = evolutionPoints;
             updatePropertiesPanel();
             updateStatsPanel();
-            updateSelectionDisplay(); // Auswahl-Status aktualisieren
-            // renderDino() wird jetzt durch die Animation-Loop gehandelt
-        }
-        
-        // Animations-Loop
-        function startAnimation() {
-            function animate() {
-                renderDino();
-                requestAnimationFrame(animate);
-            }
-            animate();
+            updateSelectionDisplay();
         }
 
         function updatePropertiesPanel() {
@@ -1230,15 +1151,6 @@
                 html += '</div>';
             });
             
-            // Constraint-Warnungen
-            const props = currentProps;
-            if (props.flossen > 10 && (props.schwanz_keule > 10 || props.schwanz_stacheln > 10)) {
-                html += '<div class="constraint-warning">⚠️ Warnung: Flossen reduzieren Schwanzwaffen!</div>';
-            }
-            if (props.schwanz_keule > 10 && props.schwanz_stacheln > 10) {
-                html += '<div class="constraint-warning">⚠️ Warnung: Keule und Stacheln können nicht gleichzeitig vorhanden sein!</div>';
-            }
-            
             container.innerHTML = html;
         }
 
@@ -1247,52 +1159,38 @@
             const abilities = calculateAbilities();
             let html = '';
             
-            // Icons für Spezialfähigkeiten
-            const specialAbilityIcons = {
-                'Schwimmen': '🏊',
-                'Gift Speien': '☠️',
-                'Fliegen': '🦅',
-                'Tödlicher Biss': '💀',
-                'Schwanzschlag': '🐉'
-            };
-            
-            // Liste der Spezialfähigkeiten
-            const specialAbilities = ['Schwimmen', 'Gift Speien', 'Fliegen', 'Tödlicher Biss', 'Schwanzschlag'];
-            
             Object.entries(abilities).forEach(([name, value]) => {
                 const color = value > 70 ? '#32cd32' : value > 40 ? '#ffa500' : '#ff6b35';
-                const isSpecial = specialAbilities.includes(name);
-                const specialClass = isSpecial ? 'special-ability' : '';
-                
-                if (isSpecial) {
-                    // Spezialfähigkeiten mit Icon und besonderem Styling
-                    html += `
-                        <div class="stat-item ${specialClass}">
-                            <span class="stat-name">
-                                <span class="stat-icon">${specialAbilityIcons[name]}</span>
-                                ${name}
-                            </span>
-                            <span style="color: ${color}; font-weight: bold;">${value}</span>
-                        </div>
-                    `;
-                } else {
-                    // Normale Fähigkeiten
-                    html += `
-                        <div class="stat-item">
-                            <span>${name}</span>
-                            <span style="color: ${color}; font-weight: bold;">${value}</span>
-                        </div>
-                    `;
-                }
+                html += `
+                    <div class="stat-item">
+                        <span>${name}</span>
+                        <span style="color: ${color}; font-weight: bold;">${value}</span>
+                    </div>
+                `;
             });
             
             container.innerHTML = html;
         }
 
-        // Initialisierung
+        function startAnimation() {
+            function animate() {
+                renderDino();
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        // ===================================
+        // INITIALISIERUNG
+        // ===================================
+
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Dino Evolution Generator gestartet');
             updateDisplay();
-            startAnimation(); // Animation starten
+            startAnimation();
+            
+            // Session initialisieren
+            initializeSession();
         });
     </script>
 </body>

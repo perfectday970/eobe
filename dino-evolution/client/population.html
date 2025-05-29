@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Evolution - Population wird berechnet...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a3a1a, #2d5a2d);
+            color: #e8d5c4;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #32cd32;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #cd853f;
+            font-size: 1.2em;
+        }
+
+        .session-info {
+            color: #888;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .population-display {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #32cd32;
+            border-radius: 15px;
+            padding: 30px;
+            min-width: 600px;
+            max-width: 800px;
+            text-align: center;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .species-section {
+            margin-bottom: 30px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .species-section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .species-title {
+            color: #ff6b35;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #8b4513;
+            padding-bottom: 10px;
+        }
+
+        .species-title.enemy {
+            color: #ff4444;
+            border-bottom-color: #ff4444;
+        }
+
+        .dino-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .dino-counter {
+            background: rgba(50, 205, 50, 0.2);
+            border: 1px solid #32cd32;
+            border-radius: 8px;
+            padding: 15px;
+            min-width: 120px;
+            text-align: center;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s ease;
+        }
+
+        .dino-counter.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .dino-counter.adult {
+            border-color: #ffa500;
+            background: rgba(255, 165, 0, 0.2);
+        }
+
+        .dino-counter.juvenile {
+            border-color: #87ceeb;
+            background: rgba(135, 206, 235, 0.2);
+        }
+
+        .dino-counter.enemy {
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.2);
+        }
+
+        .dino-icon {
+            font-size: 2em;
+            margin-bottom: 8px;
+        }
+
+        .dino-label {
+            font-size: 0.9em;
+            color: #cd853f;
+            margin-bottom: 5px;
+        }
+
+        .dino-count {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #32cd32;
+        }
+
+        .enemy-section {
+            margin-top: 40px;
+            border-top: 2px solid #8b4513;
+            padding-top: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #32cd32, #228b22);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .skip-button {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(255, 107, 53, 0.8);
+            border: 2px solid #ff6b35;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .skip-button:hover {
+            background: rgba(255, 107, 53, 1);
+            transform: scale(1.05);
+        }
+
+        .final-message {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(50, 205, 50, 0.2);
+            border: 2px solid #32cd32;
+            border-radius: 10px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .final-message.visible {
+            opacity: 1;
+        }
+
+        .loading-text {
+            color: #32cd32;
+            font-size: 1.1em;
+            margin: 20px 0;
+        }
+
+        .error-message {
+            background: rgba(255, 68, 68, 0.2);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #ff4444;
+        }
+
+        .error-message h3 {
+            margin-bottom: 10px;
+        }
+
+        .retry-button {
+            background: #ff6b35;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-top: 15px;
+        }
+
+        .retry-button:hover {
+            background: #ff8c42;
+        }
+
+        /* Scrollbar für population-display */
+        .population-display::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .population-display::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .population-display::-webkit-scrollbar-thumb {
+            background: #32cd32;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧬 EVOLUTION IN PROGRESS 🧬</h1>
+            <div class="subtitle">Ihre Dinosaurier-Population wird berechnet...</div>
+            <div class="session-info" id="sessionInfo"></div>
+        </div>
+
+        <div class="population-display">
+            <div class="loading-text" id="loadingText">Verbinde mit Server...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div id="populationContainer"></div>
+            <div id="errorContainer"></div>
+            
+            <div class="final-message" id="finalMessage">
+                <h3>🦕 Population berechnet! 🦖</h3>
+                <p>Das Überleben beginnt jetzt...</p>
+            </div>
+        </div>
+
+        <button class="skip-button" onclick="skipAnimation()">⏩ Überspringen</button>
+    </div>
+
+    <script src="dino-renderer.js"></script>
+
+    <script>
+        // ===================================
+        // GLOBALE VARIABLEN
+        // ===================================
+        
+        let sessionId = null;
+        let selectedSlots = [];
+        let enemySlots = [];
+        let currentLevel = 1;
+        let animationSkipped = false;
+        let isLoading = false;
+        
+        // API Base URL
+        const API_BASE = 'http://localhost:3001/api/game';
+        
+        // ===================================
+        // GEGNER-SLOTS DEFINITION
+        // ===================================
+        
+        const ENEMY_SLOTS = [
+            {
+                name: "Kleine Räuber",
+                level: 1,
+                properties: {
+                    gepanzert: 5, stachelig: 0, farbig: 15, tarnung: 25,
+                    kopf_beisskraft: 35, kopf_größe: 40, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 0,
+                    maul_zahntyp: 45, hals_länge: 20, hals_breite: 30, körper_länge: 50, körper_höhe: 35,
+                    vorderbeine_länge: 25, vorderbeine_stärke: 20, vorderklauen_länge: 30,
+                    hinterbeine_länge: 60, hinterbeine_stärke: 45, hinterklauen_länge: 40,
+                    schwanz_länge: 45, schwanz_breite: 25, schwanz_keule: 0, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 70, pflanzen: 5, aas: 40
+                }
+            },
+            {
+                name: "Stachel-Verteidiger",
+                level: 2,
+                properties: {
+                    gepanzert: 25, stachelig: 35, farbig: 10, tarnung: 20,
+                    kopf_beisskraft: 25, kopf_größe: 50, kopf_hörner_anzahl: 1, kopf_hörner_größe: 25, kragen_größe: 30,
+                    maul_zahntyp: 20, hals_länge: 35, hals_breite: 40, körper_länge: 70, körper_höhe: 60,
+                    vorderbeine_länge: 55, vorderbeine_stärke: 45, vorderklauen_länge: 15,
+                    hinterbeine_länge: 60, hinterbeine_stärke: 55, hinterklauen_länge: 20,
+                    schwanz_länge: 55, schwanz_breite: 45, schwanz_keule: 0, schwanz_stacheln: 40,
+                    flügel: 0, flossen: 0, fleisch: 15, pflanzen: 75, aas: 20
+                }
+            },
+            {
+                name: "Gift-Speier",
+                level: 3,
+                properties: {
+                    gepanzert: 15, stachelig: 10, farbig: 65, tarnung: 35,
+                    kopf_beisskraft: 45, kopf_größe: 55, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 15,
+                    maul_zahntyp: 75, hals_länge: 40, hals_breite: 35, körper_länge: 60, körper_höhe: 45,
+                    vorderbeine_länge: 40, vorderbeine_stärke: 35, vorderklauen_länge: 45,
+                    hinterbeine_länge: 65, hinterbeine_stärke: 50, hinterklauen_länge: 55,
+                    schwanz_länge: 50, schwanz_breite: 35, schwanz_keule: 0, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 60, pflanzen: 25, aas: 65
+                }
+            },
+            {
+                name: "Keulenschwanz-Titan",
+                level: 4,
+                properties: {
+                    gepanzert: 45, stachelig: 20, farbig: 20, tarnung: 15,
+                    kopf_beisskraft: 35, kopf_größe: 70, kopf_hörner_anzahl: 2, kopf_hörner_größe: 40, kragen_größe: 50,
+                    maul_zahntyp: 30, hals_länge: 25, hals_breite: 55, körper_länge: 85, körper_höhe: 75,
+                    vorderbeine_länge: 65, vorderbeine_stärke: 70, vorderklauen_länge: 25,
+                    hinterbeine_länge: 70, hinterbeine_stärke: 80, hinterklauen_länge: 30,
+                    schwanz_länge: 70, schwanz_breite: 65, schwanz_keule: 60, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 25, pflanzen: 80, aas: 30
+                }
+            },
+            {
+                name: "Flug-Jäger",
+                level: 5,
+                properties: {
+                    gepanzert: 10, stachelig: 5, farbig: 40, tarnung: 45,
+                    kopf_beisskraft: 60, kopf_größe: 60, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 10,
+                    maul_zahntyp: 70, hals_länge: 35, hals_breite: 40, körper_länge: 65, körper_höhe: 50,
+                    vorderbeine_länge: 45, vorderbeine_stärke: 40, vorderklauen_länge: 65,
+                    hinterbeine_länge: 75, hinterbeine_stärke: 60, hinterklauen_länge: 70,
+                    schwanz_länge: 60, schwanz_breite: 40, schwanz_keule: 0, schwanz_stacheln: 0,
+                    flügel: 65, flossen: 0, fleisch: 75, pflanzen: 10, aas: 55
+                }
+            },
+            {
+                name: "Alpha-Räuber",
+                level: 6,
+                properties: {
+                    gepanzert: 35, stachelig: 25, farbig: 30, tarnung: 50,
+                    kopf_beisskraft: 85, kopf_größe: 85, kopf_hörner_anzahl: 1, kopf_hörner_größe: 45, kragen_größe: 25,
+                    maul_zahntyp: 90, hals_länge: 30, hals_breite: 60, körper_länge: 80, körper_höhe: 70,
+                    vorderbeine_länge: 40, vorderbeine_stärke: 45, vorderklauen_länge: 80,
+                    hinterbeine_länge: 85, hinterbeine_stärke: 85, hinterklauen_länge: 90,
+                    schwanz_länge: 75, schwanz_breite: 50, schwanz_keule: 0, schwanz_stacheln: 35,
+                    flügel: 0, flossen: 0, fleisch: 90, pflanzen: 5, aas: 70
+                }
+            }
+        ];
+
+        // ===================================
+        // DATEN LADEN
+        // ===================================
+
+        async function loadGameData() {
+            try {
+                // Session-ID aus URL-Parameter laden
+                const urlParams = new URLSearchParams(window.location.search);
+                sessionId = urlParams.get('session');
+                
+                if (!sessionId) {
+                    throw new Error('Keine Session-ID gefunden');
+                }
+                
+                updateSessionInfo();
+                setLoadingText('Lade Evolutionsdaten...');
+                
+                console.log(`📂 Lade Daten für Session: ${sessionId}`);
+                
+                const response = await fetch(`${API_BASE}/load-evolution/${sessionId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    selectedSlots = data.gameData.selectedSlots || [];
+                    currentLevel = data.gameData.currentLevel || 1;
+                    
+                    console.log('✅ Evolution-Daten geladen:', data.gameData);
+                    console.log(`📊 ${selectedSlots.length} Slots, Level: ${currentLevel}`);
+                    
+                    if (selectedSlots.length === 0) {
+                        throw new Error('Keine Dinosaurier-Arten ausgewählt');
+                    }
+                    
+                    return true;
+                } else {
+                    throw new Error(data.error || 'Fehler beim Laden der Daten');
+                }
+                
+            } catch (error) {
+                console.error('❌ Fehler beim Laden der Spieldaten:', error);
+                showError('Fehler beim Laden', error.message);
+                return false;
+            }
+        }
+
+        // ===================================
+        // POPULATION BERECHNUNG
+        // ===================================
+
+        function calculatePopulation(species) {
+            const props = species.properties;
+            
+            // Basis-Werte
+            const baseAdults = 2 + Math.floor(Math.random() * 3); // 2-4 Erwachsene
+            
+            // Fortpflanzungsgeschwindigkeit beeinflusst Kinder-Anzahl
+            const reproductionFactor = (props.fortpflanzungsgeschwindigkeit || 50) / 100;
+            const childrenMultiplier = 0.5 + reproductionFactor * 1.5; // 0.5 - 2.0x
+            
+            // Zeit zur Erwachsenwerdung beeinflusst Verhältnis
+            const maturationTime = (props.zeit_zur_erwachsenwerdung || 50) / 100;
+            const maturationFactor = 0.8 + maturationTime * 0.4; // 0.8 - 1.2x
+            
+            // Finale Berechnung mit Grenzen
+            let adults = Math.max(2, Math.min(20, Math.round(baseAdults * maturationFactor)));
+            let juveniles = Math.max(1, Math.min(15, Math.round(adults * childrenMultiplier)));
+            
+            return {
+                adults: adults,
+                juveniles: juveniles,
+                total: adults + juveniles
+            };
+        }
+
+        function selectEnemiesForLevel(level) {
+            const maxEnemyLevel = Math.min(level + 1, ENEMY_SLOTS.length);
+            const enemyCount = Math.min(2 + level, 4); // 2-4 Gegnerarten pro Level
+            
+            enemySlots = [];
+            for (let i = 0; i < enemyCount && i < maxEnemyLevel; i++) {
+                enemySlots.push(ENEMY_SLOTS[i]);
+            }
+            
+            console.log(`🎯 Level ${level}: ${enemySlots.length} Gegnerarten ausgewählt`);
+        }
+
+        // ===================================
+        // POPULATION-ANIMATION
+        // ===================================
+
+        async function startPopulationAnimation() {
+            if (selectedSlots.length === 0) {
+                showError('Keine Daten', 'Keine Dinosaurier-Arten gefunden');
+                return;
+            }
+            
+            setLoadingText('Berechne Populationen...');
+            
+            // Gegner für Level auswählen
+            selectEnemiesForLevel(currentLevel);
+            
+            // Populationen berechnen
+            const populationData = [];
+            selectedSlots.forEach(slot => {
+                const population = calculatePopulation(slot);
+                populationData.push({
+                    species: slot,
+                    population: population
+                });
+            });
+            
+            // Gegner-Populationen berechnen
+            const enemyPopulationData = [];
+            enemySlots.forEach(slot => {
+                const population = calculatePopulation(slot);
+                enemyPopulationData.push({
+                    species: slot,
+                    population: population
+                });
+            });
+            
+            console.log('🦕 Population Data:', populationData);
+            console.log('⚔️ Enemy Population Data:', enemyPopulationData);
+            
+            // Level-Daten für Server formatieren
+            const levelData = {
+                populationData: populationData.map(data => ({
+                    name: data.species.name,
+                    slotIndex: selectedSlots.indexOf(data.species),
+                    type: getDinoType(data.species.properties),
+                    properties: data.species.properties,
+                    population: {
+                        total: data.population.total,
+                        adults: data.population.adults,
+                        juveniles: data.population.juveniles,
+                        isExtinct: false
+                    }
+                })),
+                enemyData: enemyPopulationData.map(data => ({
+                    name: data.species.name,
+                    type: getDinoType(data.species.properties),
+                    properties: data.species.properties,
+                    population: {
+                        total: data.population.total,
+                        adults: data.population.adults,
+                        juveniles: data.population.juveniles,
+                        isExtinct: false
+                    }
+                })),
+                currentLevel: currentLevel
+            };
+            
+            // Population-Daten an Server senden
+            await savePopulationToServer(levelData);
+            
+            // Animation starten
+            animatePopulation(populationData, enemyPopulationData);
+        }
+
+        async function savePopulationToServer(levelData) {
+            if (sessionId && !sessionId.startsWith('offline')) {
+                try {
+                    setLoadingText('Speichere Population...');
+                    
+                    const response = await fetch(`${API_BASE}/save-population`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            sessionId: sessionId,
+                            populationData: levelData.populationData,
+                            enemyData: levelData.enemyData,
+                            currentLevel: levelData.currentLevel
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        console.log('💾 Population gespeichert:', data);
+                    } else {
+                        console.warn('⚠️ Speichern fehlgeschlagen:', data.error);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Fehler beim Speichern der Population:', error);
+                    // Weiter mit Animation auch wenn Speichern fehlschlägt
+                }
+            }
+        }
+
+        function animatePopulation(populationData, enemyPopulationData) {
+            const container = document.getElementById('populationContainer');
+            const progressFill = document.getElementById('progressFill');
+            
+            let totalSteps = 0;
+            populationData.forEach(data => {
+                totalSteps += data.population.adults + data.population.juveniles;
+            });
+            enemyPopulationData.forEach(data => {
+                totalSteps += data.population.adults + data.population.juveniles;
+            });
+            
+            let currentStep = 0;
+            let html = '';
+            
+            function updateProgress() {
+                const progress = (currentStep / totalSteps) * 100;
+                progressFill.style.width = `${progress}%`;
+            }
+            
+            function nextStep() {
+                if (animationSkipped) {
+                    finishAnimation();
+                    return;
+                }
+                
+                currentStep++;
+                updateProgress();
+                
+                if (currentStep >= totalSteps) {
+                    setTimeout(finishAnimation, 1000);
+                } else {
+                    setTimeout(nextStep, 200);
+                }
+            }
+            
+            // Eigene Arten anzeigen
+            setLoadingText('Ihre Dinosaurier erwachen...');
+            
+            populationData.forEach((data, index) => {
+                setTimeout(() => {
+                    if (animationSkipped) return;
+                    
+                    html += `
+                        <div class="species-section visible">
+                            <div class="species-title">🦕 ${data.species.name}</div>
+                            <div class="dino-grid">
+                                <div class="dino-counter adult visible">
+                                    <div class="dino-icon">🦖</div>
+                                    <div class="dino-label">Erwachsene</div>
+                                    <div class="dino-count">${data.population.adults}</div>
+                                </div>
+                                <div class="dino-counter juvenile visible">
+                                    <div class="dino-icon">🥚</div>
+                                    <div class="dino-label">Jungtiere</div>
+                                    <div class="dino-count">${data.population.juveniles}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML = html;
+                }, index * 1000);
+            });
+            
+            // Gegner anzeigen
+            setTimeout(() => {
+                if (animationSkipped) return;
+                
+                setLoadingText('Feindliche Kreaturen erscheinen...');
+                
+                html += '<div class="enemy-section">';
+                enemyPopulationData.forEach((data, index) => {
+                    html += `
+                        <div class="species-section visible">
+                            <div class="species-title enemy">⚔️ ${data.species.name}</div>
+                            <div class="dino-grid">
+                                <div class="dino-counter enemy visible">
+                                    <div class="dino-icon">💀</div>
+                                    <div class="dino-label">Erwachsene</div>
+                                    <div class="dino-count">${data.population.adults}</div>
+                                </div>
+                                <div class="dino-counter enemy visible">
+                                    <div class="dino-icon">☠️</div>
+                                    <div class="dino-label">Jungtiere</div>
+                                    <div class="dino-count">${data.population.juveniles}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                
+                setTimeout(nextStep, 500);
+                
+            }, populationData.length * 1000 + 1000);
+        }
+
+        function finishAnimation() {
+            const finalMessage = document.getElementById('finalMessage');
+            finalMessage.classList.add('visible');
+            
+            setLoadingText('Bereite Level vor...');
+            
+            setTimeout(() => {
+                const urlParams = new URLSearchParams();
+                urlParams.set('session', sessionId);
+                window.location.href = `level.html?${urlParams.toString()}`;
+            }, 2000);
+        }
+
+        // ===================================
+        // UI-HILFSFUNKTIONEN
+        // ===================================
+
+        function setLoadingText(text) {
+            const loadingText = document.getElementById('loadingText');
+            loadingText.textContent = text;
+        }
+
+        function updateSessionInfo() {
+            const sessionInfo = document.getElementById('sessionInfo');
+            if (sessionId) {
+                if (sessionId.startsWith('offline')) {
+                    sessionInfo.textContent = '🔒 Offline-Modus';
+                } else {
+                    sessionInfo.textContent = `🔗 Session: ${sessionId.substring(0, 8)}...`;
+                }
+            }
+        }
+
+        function showError(title, message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    <h3>❌ ${title}</h3>
+                    <p>${message}</p>
+                    <button class="retry-button" onclick="retryLoad()">🔄 Erneut versuchen</button>
+                    <button class="retry-button" onclick="goBackToIndex()" style="margin-left: 10px;">← Zurück zum Generator</button>
+                </div>
+            `;
+        }
+
+        function skipAnimation() {
+            animationSkipped = true;
+            finishAnimation();
+        }
+
+        function retryLoad() {
+            window.location.reload();
+        }
+
+        function goBackToIndex() {
+            window.location.href = 'index.html';
+        }
+
+        function getDinoType(properties) {
+            const ratio = properties.vorderbeine_länge / properties.hinterbeine_länge;
+            if (ratio < 0.4) return 'zweifüßig';
+            if (ratio < 0.8) return 'semi-zweifüßig';
+            return 'vierfüßig';
+        }
+
+        // ===================================
+        // INITIALISIERUNG
+        // ===================================
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🧬 Population Generator gestartet');
+            
+            const loadSuccess = await loadGameData();
+            
+            if (loadSuccess) {
+                setTimeout(startPopulationAnimation, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
