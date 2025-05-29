@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Evolution - Level 1</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a3a1a, #2d5a2d);
+            color: #e8d5c4;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 30%, #228B22 100%);
+        }
+
+        .game-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #32cd32;
+            min-width: 300px;
+        }
+
+        .hud h3 {
+            color: #32cd32;
+            margin-bottom: 10px;
+        }
+
+        .species-status {
+            margin-bottom: 8px;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        .species-name {
+            color: #ff6b35;
+            font-weight: bold;
+        }
+
+        .population-count {
+            color: #32cd32;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+
+        .control-btn {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #32cd32;
+            color: #e8d5c4;
+            padding: 12px 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(50, 205, 50, 0.2);
+            border-color: #228b22;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #32cd32;
+            font-size: 1.5em;
+        }
+
+        .demo-notice {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 165, 0, 0.9);
+            color: #000;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #8b4513;
+            max-width: 250px;
+        }
+
+        .info-panel h4 {
+            color: #ff6b35;
+            margin-bottom: 8px;
+        }
+
+        .info-item {
+            font-size: 12px;
+            margin-bottom: 3px;
+            color: #cd853f;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" class="game-canvas"></canvas>
+        
+        <div class="hud">
+            <h3>🎮 Level 1 - Überleben</h3>
+            <div id="speciesStatus"></div>
+        </div>
+
+        <div class="info-panel">
+            <h4>📋 Steuerung</h4>
+            <div class="info-item">🖱️ Klicken: Dino auswählen</div>
+            <div class="info-item">🎯 Ziel: Überleben & Nahrung finden</div>
+            <div class="info-item">⚔️ Rote Dinos sind Feinde</div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="pauseGame()">⏸️ Pause</button>
+            <button class="control-btn" onclick="speedUp()">⏩ Schneller</button>
+            <button class="control-btn" onclick="goBackToRound()">← Zurück</button>
+        </div>
+    </div>
+
+    <script>
+        // Globale Variablen
+        let canvas, ctx;
+        let levelData = null;
+        let gameObjects = [];
+        let gameSpeed = 1;
+        let isPaused = false;
+        let animationTime = 0;
+        let selectedDino = null;
+
+        // Standard-Fallback-Daten
+        const defaultLevelData = {
+            populationData: [
+                {
+                    name: "Fleischfresser",
+                    slotIndex: 0,
+                    type: "zweifüßig",
+                    properties: {
+                        gepanzert: 20, stachelig: 10, farbig: 30, tarnung: 20,
+                        kopf_beisskraft: 70, kopf_größe: 80, kopf_hörner_anzahl: 0,
+                        kopf_hörner_größe: 0, kragen_größe: 0, maul_zahntyp: 85,
+                        hals_länge: 15, hals_breite: 50, körper_länge: 80, körper_höhe: 60,
+                        vorderbeine_länge: 30, vorderbeine_stärke: 25, vorderklauen_länge: 60,
+                        hinterbeine_länge: 80, hinterbeine_stärke: 70, hinterklauen_länge: 85,
+                        schwanz_länge: 70, schwanz_breite: 40, schwanz_keule: 0, schwanz_stacheln: 0,
+                        flügel: 0, flossen: 0, fleisch: 80, pflanzen: 10, aas: 60
+                    },
+                    population: { total: 13, adults: 8, juveniles: 5, isExtinct: false }
+                },
+                {
+                    name: "Pflanzenfresser",
+                    slotIndex: 1,
+                    type: "vierfüßig",
+                    properties: {
+                        gepanzert: 40, stachelig: 0, farbig: 20, tarnung: 40,
+                        kopf_beisskraft: 20, kopf_größe: 60, kopf_hörner_anzahl: 2,
+                        kopf_hörner_größe: 40, kragen_größe: 60, maul_zahntyp: 15,
+                        hals_länge: 60, hals_breite: 40, körper_länge: 90, körper_höhe: 70,
+                        vorderbeine_länge: 70, vorderbeine_stärke: 60, vorderklauen_länge: 10,
+                        hinterbeine_länge: 75, hinterbeine_stärke: 80, hinterklauen_länge: 15,
+                        schwanz_länge: 50, schwanz_breite: 60, schwanz_keule: 40, schwanz_stacheln: 0,
+                        flügel: 0, flossen: 0, fleisch: 5, pflanzen: 85, aas: 10
+                    },
+                    population: { total: 15, adults: 5, juveniles: 10, isExtinct: false }
+                }
+            ]
+        };
+
+        // Dino-Klasse
+        class Dino {
+            constructor(x, y, species, isAdult, isEnemy = false) {
+                this.x = x;
+                this.y = y;
+                this.species = species;
+                this.isAdult = isAdult;
+                this.isEnemy = isEnemy;
+                this.health = isAdult ? 100 : 60;
+                this.energy = 100;
+                this.scale = isAdult ? 0.2 : 0.12; // 20% der ursprünglichen Größe
+                this.speed = (species.properties.hinterbeine_länge || 50) / 50;
+                this.targetX = x;
+                this.targetY = y;
+                this.animationPhase = 'idle';
+                this.phaseStartTime = Date.now();
+                this.selected = false;
+                this.dinoType = this.getDinoType(); // Berechne Dino-Typ
+                this.color = this.getDinoColor(); // Berechne Farbe
+                this.facingRight = !isEnemy; // Eigene schauen anfangs rechts, Gegner links
+                this.lastX = x; // Für Bewegungsrichtung
+                
+                // Anfangs im eigenen Territorium bleiben
+                this.chooseNewTarget();
+            }
+
+            getDinoColor() {
+                const props = this.species.properties;
+                const baseColors = ['#8B4513', '#A0522D', '#CD853F']; // colorPalettes.braun
+                
+                if (this.isEnemy) {
+                    // Feinde bekommen die gleiche Farblogik, aber in rot-tönen
+                    if (props.farbig > 75) {
+                        return '#8B0000'; // Dunkelrot für Warnfarben
+                    } else if (props.tarnung > 60) {
+                        return '#8B0000'; // Alle Feinde rot
+                    } else if (props.farbig > 40) {
+                        return '#DC143C'; // Heller rot
+                    }
+                    return '#8B0000'; // Standard-Feind-rot
+                } else {
+                    // EXAKT wie im Generator
+                    if (props.farbig > 75) {
+                        return '#DC143C'; // colorPalettes.rot[1] - Warnfarben
+                    } else if (props.tarnung > 60) {
+                        return '#228B22'; // colorPalettes.grün[0] - Tarnfarben
+                    } else if (props.farbig > 40) {
+                        return baseColors[2]; // Heller
+                    }
+                    return baseColors[1]; // Standard braun
+                }
+            }
+
+            // Dino-Typ bestimmen (EXAKT wie im Generator)
+            getDinoType() {
+                const props = this.species.properties;
+                const ratio = props.vorderbeine_länge / props.hinterbeine_länge;
+                
+                if (ratio < 0.4) return 'zweifüßig';
+                if (ratio < 0.8) return 'semi-zweifüßig';
+                return 'vierfüßig';
+            }
+
+            update() {
+                if (isPaused) return;
+                
+                // Alte Position speichern für Bewegungsrichtung
+                this.lastX = this.x;
+                
+                // Territoriale Bewegung - vorsichtiges Vorantasten
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 3) { // Kleinere Toleranz für häufigere Richtungsänderungen
+                    const moveX = (dx / distance) * this.speed * gameSpeed * 0.3; // Deutlich langsamer
+                    const moveY = (dy / distance) * this.speed * gameSpeed * 0.3;
+                    
+                    this.x += moveX;
+                    this.y += moveY;
+                    this.animationPhase = 'walking';
+                    
+                    // Blickrichtung basierend auf Bewegungsrichtung aktualisieren
+                    if (Math.abs(moveX) > 0.1) { // Nur bei bedeutsamer horizontaler Bewegung
+                        this.facingRight = moveX > 0;
+                    }
+                } else {
+                    this.animationPhase = 'idle';
+                    
+                    // Neues Ziel setzen - territoriales Verhalten
+                    if (Math.random() < 0.02) { // Häufigere Richtungsänderungen (2% pro Frame)
+                        this.chooseNewTarget();
+                    }
+                }
+                
+                // Grenzen überprüfen und zurückdrängen
+                this.x = Math.max(20, Math.min(canvas.width - 20, this.x));
+                this.y = Math.max(canvas.height * 0.3, Math.min(canvas.height - 20, this.y));
+            }
+
+            chooseNewTarget() {
+                const currentTime = Date.now();
+                
+                // Heimatgebiet definieren
+                let homeMinX, homeMaxX;
+                if (this.isEnemy) {
+                    homeMinX = canvas.width * 0.55;
+                    homeMaxX = canvas.width * 0.95;
+                } else {
+                    homeMinX = canvas.width * 0.05;
+                    homeMaxX = canvas.width * 0.45;
+                }
+                
+                // Aktuelle Position zur eigenen Seite
+                const distanceFromHome = this.isEnemy ? 
+                    Math.max(0, homeMinX - this.x) : 
+                    Math.max(0, this.x - homeMaxX);
+                
+                // Verschiedene Verhaltensmuster
+                const behavior = Math.random();
+                const isNearBorder = distanceFromHome < 50;
+                
+                if (distanceFromHome > 80) {
+                    // Zu weit von zu Hause - SOFORT zurückkehren
+                    this.targetX = this.isEnemy ? 
+                        homeMinX + 20 + Math.random() * 60 : 
+                        homeMaxX - 20 - Math.random() * 60;
+                    this.targetY = canvas.height * 0.4 + Math.random() * (canvas.height * 0.35);
+                } else if (behavior < 0.4) {
+                    // 40% - Patrouillieren im eigenen Gebiet
+                    this.targetX = homeMinX + Math.random() * (homeMaxX - homeMinX);
+                    this.targetY = this.y + (Math.random() - 0.5) * 80; // Seitlich bewegen
+                } else if (behavior < 0.55 && isNearBorder) {
+                    // 15% - Vorsichtig zur Mitte vortasten (nur wenn nah an Grenze)
+                    const centerDirection = this.isEnemy ? -1 : 1;
+                    this.targetX = this.x + centerDirection * (15 + Math.random() * 25); // 15-40px vorwärts
+                    this.targetY = this.y + (Math.random() - 0.5) * 50;
+                } else if (behavior < 0.7) {
+                    // 15% - Rückzug/defensive Bewegung
+                    const retreatDirection = this.isEnemy ? 1 : -1;
+                    this.targetX = this.x + retreatDirection * (20 + Math.random() * 40); // 20-60px zurück
+                    this.targetY = this.y + (Math.random() - 0.5) * 60;
+                } else {
+                    // 30% - Kleine zufällige Bewegung im aktuellen Bereich
+                    this.targetX = this.x + (Math.random() - 0.5) * 50; // ±25px um aktuelle Position
+                    this.targetY = this.y + (Math.random() - 0.5) * 40; // ±20px um aktuelle Position
+                }
+                
+                // Grenzen für Ziel überprüfen - STRIKT durchsetzen
+                this.targetX = Math.max(homeMinX, Math.min(homeMaxX, this.targetX));
+                this.targetY = Math.max(canvas.height * 0.35, Math.min(canvas.height - 50, this.targetY));
+                
+                // Seltener längere Pausen
+                if (Math.random() < 0.05) { // Nur 5% statt 10%
+                    this.targetX = this.x; // Bleib hier
+                    this.targetY = this.y;
+                }
+            }
+
+            render() {
+                this.renderDino(ctx, this.x, this.y, this.species.properties, this.dinoType, this.scale, this.isEnemy);
+                
+                // Auswahl-Ring (proportional zur neuen Größe)
+                if (this.selected) {
+                    ctx.strokeStyle = '#32cd32';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 15 * this.scale, 0, 2 * Math.PI); // Kleinerer Ring
+                    ctx.stroke();
+                }
+                
+                // Health Bar (proportional zur neuen Größe)
+                if (this.health < 100) {
+                    const barWidth = 20 * this.scale; // Kleinere Health Bar
+                    const barHeight = 3;
+                    const barX = this.x - barWidth/2;
+                    const barY = this.y - 20 * this.scale; // Näher zum Dino
+                    
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(barX, barY, barWidth, barHeight);
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillRect(barX, barY, barWidth * (this.health/100), barHeight);
+                }
+            }
+
+            renderDino(ctx, centerX, centerY, props, dinoType, scale, isEnemy) {
+                const color = this.color;
+                
+                // Spiegelung basierend auf Blickrichtung (nicht auf Teamzugehörigkeit)
+                // Standard-Dino zeigt nach links, spiegeln wenn nach rechts schauen soll
+                if (this.facingRight) {
+                    ctx.save();
+                    ctx.scale(-1, 1);
+                    centerX = -centerX;
+                }
+                
+                // Animation-Zeit (EXAKT wie im Generator)
+                const currentTime = Date.now();
+                const phaseDuration = (currentTime - this.phaseStartTime) / 1000;
+                
+                if (phaseDuration >= 4) {
+                    this.animationPhase = this.animationPhase === 'idle' ? 'walking' : 'idle';
+                    this.phaseStartTime = currentTime;
+                }
+                
+                const animationTime = currentTime / 1000;
+                const dinoSpeed = Math.floor(props.hinterbeine_länge * 0.8 + (100 - props.körper_höhe) * 0.3);
+                const speedMultiplier = Math.max(0.3, dinoSpeed / 50);
+                const walkSpeed = 4 * speedMultiplier;
+                
+                // Globale Animations-Offsets (EXAKT wie im Generator)
+                let bodyAnimationY = 0;
+                let headAnimationX = 0;
+                let headAnimationY = 0;
+                let tailAnimationY = 0;
+                let frontLegAnimationX = 0;
+                let backLegAnimationX = 0;
+                
+                if (this.animationPhase === 'idle') {
+                    bodyAnimationY = Math.sin(animationTime * 2) * 2;
+                    headAnimationX = Math.sin(animationTime * 0.8) * 3;
+                    headAnimationY = Math.sin(animationTime * 1.2) * 1.5;
+                    tailAnimationY = Math.sin(animationTime * 1.5) * 4;
+                } else {
+                    frontLegAnimationX = Math.sin(animationTime * walkSpeed) * 6;
+                    backLegAnimationX = Math.sin(animationTime * walkSpeed + Math.PI) * 6;
+                    bodyAnimationY = Math.sin(animationTime * walkSpeed * 2) * 1;
+                    tailAnimationY = Math.sin(animationTime * walkSpeed * 0.75) * 4;
+                }
+                
+                // Ebenen-Farben (EXAKT wie im Generator)
+                const backColor = this.darkenColor(color, 0.6);
+                const frontColor = this.lightenColor(color, 1.4);
+                
+                // Hintere Ebene
+                ctx.fillStyle = backColor;
+                this.renderDinoLayer(ctx, centerX - 5*scale, centerY, props, dinoType, 'back', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
+                
+                // Mittlere Ebene
+                ctx.fillStyle = color;
+                this.renderDinoLayer(ctx, centerX, centerY, props, dinoType, 'middle', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
+                
+                // Vordere Ebene
+                ctx.fillStyle = frontColor;
+                this.renderDinoLayer(ctx, centerX + 5*scale, centerY, props, dinoType, 'front', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
+                
+                if (this.facingRight) { // Restore nur wenn gespiegelt
+                    ctx.restore();
+                }
+            }
+
+            renderDinoLayer(ctx, baseX, baseY, props, dinoType, layer, scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX) {
+                const bodyScale = dinoType === 'vierfüßig' ? [1.2, 0.8] : [0.8, 1.2];
+                const color = this.color;
+                const backColor = this.darkenColor(color, 0.8);
+                const frontColor = this.lightenColor(color, 1.1);
+                
+                // Körper-Dimensionen für alle Layer definieren (EXAKT wie im Generator)
+                const bodyWidth = props.körper_länge * scale * 0.8;
+                const bodyHeight = props.körper_höhe * scale * 0.6;
+                
+                // Körper (drei Rechtecke) - angepasst nach Dino-Typ (EXAKT wie im Generator)
+                if (layer === 'middle') {
+                    // Körperhöhen-Anpassung basierend auf Dino-Typ
+                    let frontBodyOffset = 0;
+                    let backBodyOffset = 0;
+                    
+                    if (dinoType === 'zweifüßig') {
+                        // Zweifüßige: vorderer Körper höher, hinterer niedriger
+                        frontBodyOffset = -bodyHeight * 0.15; // Vorne 15% höher
+                        backBodyOffset = bodyHeight * 0.1;     // Hinten 10% niedriger
+                    } else if (dinoType === 'semi-zweifüßig') {
+                        // Semi-zweifüßige: leichte Neigung
+                        frontBodyOffset = -bodyHeight * 0.08; // Vorne etwas höher
+                        backBodyOffset = bodyHeight * 0.05;   // Hinten etwas niedriger
+                    }
+                    // Vierfüßige: keine Anpassung (etwa auf einer Ebene)
+                    
+                    // Hauptkörper (mit Atem-Animation)
+                    ctx.fillRect(
+                        baseX - bodyWidth/2, 
+                        baseY - bodyHeight/2 + bodyAnimationY, 
+                        bodyWidth * bodyScale[0], 
+                        bodyHeight * bodyScale[1]
+                    );
+                    
+                    // Vorderer Körperteil - mit Höhenanpassung
+                    ctx.fillRect(
+                        baseX - bodyWidth/2 - 15*scale, 
+                        baseY - bodyHeight/2 + 5*scale + frontBodyOffset + bodyAnimationY, 
+                        bodyWidth * 0.4, 
+                        bodyHeight * 0.8
+                    );
+                    
+                    // Hinterer Körperteil - mit Höhenanpassung
+                    ctx.fillRect(
+                        baseX + bodyWidth/2 - 10*scale, 
+                        baseY - bodyHeight/2 + 8*scale + backBodyOffset + bodyAnimationY, 
+                        bodyWidth * 0.3, 
+                        bodyHeight * 0.7
+                    );
+                }
+                
+                // Kopf (nur mittlere Ebene) (EXAKT wie im Generator)
+                if (layer === 'middle') {
+                    const headSize = props.kopf_größe * scale * 0.4;
+                    // Kopf am Ende des Halses positionieren - mit exponentieller Berechnung
+                    const neckLength = props.hals_länge;
+                    const baseSegments = Math.floor(neckLength / 25) + 1;
+                    const exponentialFactor = Math.pow(neckLength / 100, 1.5);
+                    const neckSegments = Math.max(baseSegments, Math.floor(baseSegments + exponentialFactor * 15));
+                    
+                    const segmentSpacing = (12 + (exponentialFactor * 8)) * scale;
+                    const curvatureStrength = Math.pow(neckLength / 100, 5) * 1000 * scale; // APOKALYPTISCHE Krümmung!
+                    const progress = Math.max(0, (neckSegments - 1)) / Math.max(1, neckSegments - 1);
+                    
+                    const headX = baseX - bodyWidth/2 - 25*scale - ((neckSegments - 1) * segmentSpacing) - headSize/2 + headAnimationX*scale;
+                    const baseHeadY = baseY - 10*scale; // Korrigiert: eindeutiger Name
+                    const curveY = progress * progress * curvatureStrength;
+                    const headY = baseHeadY - curveY + headAnimationY*scale;
+                    
+                    // Schädel (hinten)
+                    ctx.fillRect(headX - headSize/2, headY - headSize/2, headSize, headSize);
+                    
+                    // Schnauze (vorne)
+                    const snoutWidth = (headSize * 0.7 + props.kopf_beisskraft * 0.1 * scale);
+                    ctx.fillRect(headX - headSize/2 - 15*scale, headY - snoutWidth/4, 15*scale, snoutWidth/2);
+                    
+                    // Maul/Zähne (EXAKT wie im Generator)
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(headX - headSize/2 - 15*scale, headY + 5*scale, 12*scale, 6*scale);
+                    
+                    // Zähne
+                    ctx.fillStyle = '#ffffff';
+                    const teethSize = (props.maul_zahntyp > 70 ? 6 : props.maul_zahntyp > 30 ? 4 : 2) * scale;
+                    for (let i = 0; i < 4; i++) {
+                        ctx.fillRect(headX - headSize/2 - 12*scale + i * 3*scale, headY + 5*scale, 2*scale, teethSize);
+                    }
+                    ctx.fillStyle = color;
+                    
+                    // Kragen
+                    if (props.kragen_größe > 10) {
+                        ctx.fillRect(
+                            headX + headSize/2, 
+                            headY - props.kragen_größe * 0.2 * scale, 
+                            props.kragen_größe * 0.3 * scale, 
+                            props.kragen_größe * 0.4 * scale
+                        );
+                    }
+                }
+                
+                // Hörner (in allen Ebenen) (EXAKT wie im Generator)
+                if (props.kopf_hörner_anzahl > 0) {
+                    // Kopfposition für Hörner berechnen (gleiche Logik wie oben)
+                    const headSize = props.kopf_größe * scale * 0.4;
+                    const neckLength = props.hals_länge;
+                    const baseSegments = Math.floor(neckLength / 25) + 1;
+                    const exponentialFactor = Math.pow(neckLength / 100, 1.5);
+                    const neckSegments = Math.max(baseSegments, Math.floor(baseSegments + exponentialFactor * 15));
+                    
+                    const segmentSpacing = (12 + (exponentialFactor * 8)) * scale;
+                    const curvatureStrength = Math.pow(neckLength / 100, 5) * 1000 * scale;
+                    const progress = Math.max(0, (neckSegments - 1)) / Math.max(1, neckSegments - 1);
+                    
+                    const headX = baseX - bodyWidth/2 - 25*scale - ((neckSegments - 1) * segmentSpacing) - headSize/2 + headAnimationX*scale;
+                    const baseHeadY = baseY - 10*scale;
+                    const curveY = progress * progress * curvatureStrength;
+                    const headY = baseHeadY - curveY + headAnimationY*scale;
+                    
+                    const hornSize = props.kopf_hörner_größe * 0.3 * scale;
+                    const totalHorns = Math.floor(props.kopf_hörner_anzahl);
+                    
+                    // Hörner auf Ebenen verteilen
+                    if (layer === 'back') {
+                        // Hintere Hörner (abgedunkelte Klauen-Farbe)
+                        ctx.fillStyle = '#9c915c'; // Abgedunkeltes Grau-Gelb
+                        const backHorns = Math.floor(totalHorns / 2);
+                        for (let i = 0; i < backHorns; i++) {
+                            const hornX = headX + 12*scale - (i * 8*scale); // Näher zusammen: 8px statt 16px
+                            ctx.fillRect(hornX, headY - headSize/2 - hornSize, 4*scale, hornSize);
+                        }
+                    } else if (layer === 'front') {
+                        // Vordere Hörner (Klauen-Farbe)
+                        ctx.fillStyle = '#f0e68c';
+                        const frontHorns = Math.floor(totalHorns / 2);
+                        for (let i = 0; i < frontHorns; i++) {
+                            const hornX = headX + 7*scale - (i * 8*scale); // Näher zusammen: 8px statt 16px
+                            ctx.fillRect(hornX, headY - headSize/2 - hornSize, 4*scale, hornSize);
+                        }
+                    } else if (layer === 'middle' && totalHorns % 2 === 1) {
+                        // Mittleres Horn bei ungerader Anzahl (mittlere Klauen-Farbe)
+                        ctx.fillStyle = '#ddd077'; // Mittlere Farbe zwischen hell und dunkel
+                        const hornX = headX - 8*scale; // Etwas nach vorne versetzt
+                        const pairCount = Math.floor(totalHorns / 2);
+                        const middleHornX = hornX - (pairCount * 4*scale); // Position nach den Paaren (auch näher)
+                        ctx.fillRect(middleHornX, headY - headSize/2 - hornSize, 4*scale, hornSize);
+                    }
+                    ctx.fillStyle = layer === 'back' ? backColor : layer === 'front' ? frontColor : color;
+                }
+                
+                // Hals (gestapelte Rechtecke) (EXAKT wie im Generator)
+                if (layer === 'middle') {
+                    // Exponentiell mehr Segmente bei längeren Hälsen
+                    const neckLength = props.hals_länge;
+                    const baseSegments = Math.floor(neckLength / 25) + 1;
+                    const exponentialFactor = Math.pow(neckLength / 100, 1.5); // Exponentieller Faktor
+                    const neckSegments = Math.max(baseSegments, Math.floor(baseSegments + exponentialFactor * 15));
+                    
+                    const segmentWidth = props.hals_breite * 0.3 * scale;
+                    const segmentHeight = 15 * scale;
+                    
+                    // Exponentiell stärkere Krümmung nach oben bei längeren Hälsen
+                    const curvatureStrength = Math.pow(neckLength / 100, 5) * 1000 * scale; // DOPPELT SO STARK: Faktor 1000!
+                    
+                    for (let i = 0; i < neckSegments; i++) {
+                        const progress = i / Math.max(1, neckSegments - 1); // 0 bis 1
+                        
+                        // Exponentiell längere Abstände zwischen Segmenten
+                        const segmentSpacing = (12 + (exponentialFactor * 8)) * scale; // Mehr Abstand bei langen Hälsen
+                        const neckX = baseX - bodyWidth/2 - 25*scale - (i * segmentSpacing);
+                        
+                        // Exponentiell stärkere Aufwärtskrümmung
+                        const baseNeckY = baseY - 10*scale; // Korrigiert: baseNeckY statt baseY
+                        const curveY = progress * progress * curvatureStrength; // Quadratische Kurve nach oben
+                        const neckY = baseNeckY - curveY;
+                        
+                        ctx.fillRect(neckX - segmentWidth/2, neckY - segmentHeight/2, segmentWidth, segmentHeight);
+                    }
+                }
+                
+                // Beine (EXAKT wie im Generator)
+                if (layer === 'back' || layer === 'front') {
+                    // Unterschiedliche Offsets für Arme (näher) und Beine
+                    const armOffset = (layer === 'back' ? -1.5 : 1.5) * scale; // Arme noch näher zusammen
+                    const legOffset = (layer === 'back' ? -2 : 2) * scale; // Beine bleiben wie sie sind
+                    
+                    // Körperposition-Anpassung basierend auf Dino-Typ
+                    let frontAdjustment = 0;
+                    let backAdjustment = 0;
+                    
+                    if (dinoType === 'zweifüßig') {
+                        // Zweifüßige: beide Beinpaare mehr zur Mitte
+                        frontAdjustment = bodyWidth * 0.15; // Vorderbeine weiter nach hinten
+                        backAdjustment = -bodyWidth * 0.15; // Hinterbeine weiter nach vorne
+                    } else if (dinoType === 'semi-zweifüßig') {
+                        // Semi-zweifüßige: etwas weniger zur Mitte
+                        frontAdjustment = bodyWidth * 0.08; // Vorderbeine etwas nach hinten
+                        backAdjustment = -bodyWidth * 0.08; // Hinterbeine etwas nach vorne
+                    }
+                    
+                    // WALKING ANIMATION FIX - Animation-Offsets hinzufügen
+                    const frontLegWalkOffset = this.animationPhase === 'walking' ? frontLegAnimationX*scale : 0;
+                    const backLegWalkOffset = this.animationPhase === 'walking' ? backLegAnimationX*scale : 0;
+                    
+                    // Vorderbeine (Arme) - Start am unteren Rand des vorderen Körperteils
+                    const frontLegX = baseX - bodyWidth/2 - 8*scale + frontAdjustment + frontLegWalkOffset;
+                    const frontLegY = baseY + bodyHeight/2 * bodyScale[1] - 5*scale + bodyAnimationY; // Mit Körper-Animation
+                    const frontLegWidth = props.vorderbeine_stärke * 0.2 * scale;
+                    const frontLegHeight = props.vorderbeine_länge * 0.4 * scale;
+                    
+                    ctx.fillRect(
+                        frontLegX - frontLegWidth/2 + armOffset, 
+                        frontLegY, 
+                        frontLegWidth, 
+                        frontLegHeight
+                    );
+                    
+                    // Vorderklauen (Hände)
+                    if (props.vorderklauen_länge > 10) {
+                        ctx.fillStyle = '#f0e68c'; // Helles Grau-Gelb (Khaki)
+                        const clawLength = props.vorderklauen_länge * 0.15 * scale;
+                        ctx.fillRect(
+                            frontLegX - 2*scale + armOffset, 
+                            frontLegY + frontLegHeight, 
+                            4*scale, 
+                            clawLength
+                        );
+                        ctx.fillStyle = layer === 'back' ? backColor : frontColor;
+                    }
+                    
+                    // Hinterbeine - Start am unteren Rand des hinteren Körperteils
+                    const backLegX = baseX + bodyWidth/2 - 5*scale + backAdjustment + backLegWalkOffset;
+                    const backLegY = baseY + bodyHeight/2 * bodyScale[1] - 8*scale + bodyAnimationY; // Mit Körper-Animation
+                    const backLegWidth = props.hinterbeine_stärke * 0.25 * scale;
+                    const backLegHeight = props.hinterbeine_länge * 0.5 * scale;
+                    
+                    ctx.fillRect(
+                        backLegX - backLegWidth/2 + legOffset, 
+                        backLegY, 
+                        backLegWidth, 
+                        backLegHeight
+                    );
+                    
+                    // Hinterklauen
+                    if (props.hinterklauen_länge > 10) {
+                        ctx.fillStyle = '#f0e68c'; // Helles Grau-Gelb (Khaki)
+                        const clawLength = props.hinterklauen_länge * 0.2 * scale;
+                        const isSickle = props.hinterklauen_länge > 80;
+                        
+                        if (isSickle) {
+                            // Sichelklauen (gebogen)
+                            ctx.beginPath();
+                            ctx.arc(backLegX + legOffset, backLegY + backLegHeight, clawLength/2, 0, Math.PI);
+                            ctx.fill();
+                        } else {
+                            ctx.fillRect(
+                                backLegX - 2*scale + legOffset, 
+                                backLegY + backLegHeight, 
+                                4*scale, 
+                                clawLength
+                            );
+                        }
+                        ctx.fillStyle = layer === 'back' ? backColor : frontColor;
+                    }
+                }
+                
+                // Schwanz (nur mittlere Ebene) (EXAKT wie im Generator)
+                if (layer === 'middle') {
+                    // Körperhöhen-Anpassung basierend auf Dino-Typ
+                    let backBodyOffset = 0;
+                    
+                    if (dinoType === 'zweifüßig') {
+                        backBodyOffset = bodyHeight * 0.1; // Hinten 10% niedriger
+                    } else if (dinoType === 'semi-zweifüßig') {
+                        backBodyOffset = bodyHeight * 0.05; // Hinten etwas niedriger
+                    }
+                    
+                    const tailSegments = Math.floor(props.schwanz_länge / 15) + 1;
+                    const tailWidth = props.schwanz_breite * 0.3 * scale;
+                    
+                    for (let i = 0; i < tailSegments; i++) {
+                        const segmentSize = tailWidth * (1 - i * 0.1);
+                        const tailX = baseX + bodyWidth/2 + 10*scale + (i * 12*scale);
+                        
+                        // Schwanzwedeln: stärkere Bewegung am Ende des Schwanzes
+                        const segmentProgress = i / Math.max(1, tailSegments - 1);
+                        const segmentTailAnimation = tailAnimationY * segmentProgress * scale; // Bewegung verstärkt sich zum Ende
+                        
+                        const tailY = baseY + (i * 3*scale) + backBodyOffset + bodyAnimationY + segmentTailAnimation; // Mit Animationen
+                        
+                        ctx.fillRect(
+                            tailX - segmentSize/2, 
+                            tailY - segmentSize/2, 
+                            segmentSize, 
+                            segmentSize
+                        );
+                    }
+                    
+                    // Schwanzkeule
+                    if (props.schwanz_keule > 10 && props.schwanz_stacheln <= 10) {
+                        ctx.fillStyle = this.darkenColor(color, 0.7);
+                        const clubSize = props.schwanz_keule * 0.4 * scale;
+                        const clubX = baseX + bodyWidth/2 + 10*scale + (tailSegments * 12*scale);
+                        const clubY = baseY + (tailSegments * 3*scale) + backBodyOffset + bodyAnimationY + tailAnimationY*scale; // Mit Animationen
+                        
+                        ctx.beginPath();
+                        ctx.arc(clubX, clubY, clubSize/2, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.fillStyle = color;
+                    }
+                    
+                    // Schwanzstacheln
+                    if (props.schwanz_stacheln > 10 && props.schwanz_keule <= 10) {
+                        ctx.fillStyle = this.darkenColor(color, 0.6);
+                        const spikeCount = Math.floor(props.schwanz_stacheln / 10);
+                        const spikeSize = props.schwanz_stacheln * 0.1 * scale;
+                        
+                        for (let i = 0; i < spikeCount && i < tailSegments; i++) {
+                            const spikeX = baseX + bodyWidth/2 + 15*scale + (i * 12*scale);
+                            const segmentProgress = i / Math.max(1, tailSegments - 1);
+                            const segmentTailAnimation = tailAnimationY * segmentProgress * scale;
+                            const spikeY = baseY + (i * 3*scale) - 8*scale + backBodyOffset + bodyAnimationY + segmentTailAnimation; // Mit Animationen
+                            
+                            // Dreieck für Stachel
+                            ctx.beginPath();
+                            ctx.moveTo(spikeX, spikeY - spikeSize);
+                            ctx.lineTo(spikeX - 3*scale, spikeY);
+                            ctx.lineTo(spikeX + 3*scale, spikeY);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                        ctx.fillStyle = color;
+                    }
+                }
+                
+                // Flügel (nur mittlere Ebene) (EXAKT wie im Generator)
+                if (layer === 'middle' && props.flügel > 0) {
+                    ctx.fillStyle = this.lightenColor(color, 1.2);
+                    const wingSize = props.flügel * 0.5 * scale;
+                    const wingX = baseX - bodyWidth/4;
+                    const wingY = baseY - bodyHeight/4 + bodyAnimationY; // Mit Atem-Animation
+                    
+                    if (props.flügel > 50) {
+                        // Große Flügel
+                        ctx.beginPath();
+                        ctx.moveTo(wingX, wingY);
+                        ctx.lineTo(wingX - wingSize, wingY - wingSize/2);
+                        ctx.lineTo(wingX - wingSize/2, wingY + wingSize/4);
+                        ctx.closePath();
+                        ctx.fill();
+                    } else {
+                        // Stummelflügel
+                        ctx.fillRect(wingX - wingSize/2, wingY - wingSize/4, wingSize, wingSize/2);
+                    }
+                    ctx.fillStyle = color;
+                }
+                
+                // Flossen (nur sichtbar wenn vorhanden) (EXAKT wie im Generator)
+                if (props.flossen > 0) {
+                    ctx.fillStyle = this.lightenColor(color, 1.3);
+                    const finSize = props.flossen * 0.15 * scale;
+                    
+                    if (layer === 'middle') {
+                        // Schwanzflosse - mit Animation
+                        const tailSegments = Math.floor(props.schwanz_länge / 15) + 1;
+                        let backBodyOffset = 0;
+                        
+                        if (dinoType === 'zweifüßig') {
+                            backBodyOffset = bodyHeight * 0.1;
+                        } else if (dinoType === 'semi-zweifüßig') {
+                            backBodyOffset = bodyHeight * 0.05;
+                        }
+                        
+                        const tailEndX = baseX + bodyWidth/2 + 10*scale + (tailSegments * 12*scale);
+                        const tailEndY = baseY + (tailSegments * 3*scale) + backBodyOffset + bodyAnimationY + tailAnimationY*scale;
+                        
+                        ctx.beginPath();
+                        ctx.ellipse(tailEndX + 10*scale, tailEndY, finSize, finSize/2, 0, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                    
+                    // Beinflossen - WALKING ANIMATION FIX auch hier
+                    if (layer === 'back' || layer === 'front') {
+                        const armOffset = (layer === 'back' ? -1.5 : 1.5) * scale;
+                        const legOffset = (layer === 'back' ? -2 : 2) * scale;
+                        
+                        // Körperposition-Anpassung basierend auf Dino-Typ
+                        let frontAdjustment = 0;
+                        let backAdjustment = 0;
+                        
+                        if (dinoType === 'zweifüßig') {
+                            frontAdjustment = bodyWidth * 0.15;
+                            backAdjustment = -bodyWidth * 0.15;
+                        } else if (dinoType === 'semi-zweifüßig') {
+                            frontAdjustment = bodyWidth * 0.08;
+                            backAdjustment = -bodyWidth * 0.08;
+                        }
+                        
+                        // Walking-Animation auch für Flossen
+                        const frontLegWalkOffset = this.animationPhase === 'walking' ? frontLegAnimationX*scale : 0;
+                        const backLegWalkOffset = this.animationPhase === 'walking' ? backLegAnimationX*scale : 0;
+                        
+                        // Vorderbeinflossen (Armflossen)
+                        const frontLegX = baseX - bodyWidth/2 - 8*scale + frontAdjustment + frontLegWalkOffset;
+                        const frontLegY = baseY + bodyHeight/2 * bodyScale[1] - 5*scale + props.vorderbeine_länge * 0.4 * scale + bodyAnimationY;
+                        
+                        ctx.beginPath();
+                        ctx.ellipse(frontLegX + armOffset, frontLegY + 5*scale, finSize/2, finSize/3, 0, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        // Hinterbeinflossen
+                        const backLegX = baseX + bodyWidth/2 - 5*scale + backAdjustment + backLegWalkOffset;
+                        const backLegY = baseY + bodyHeight/2 * bodyScale[1] - 8*scale + props.hinterbeine_länge * 0.5 * scale + bodyAnimationY;
+                        
+                        ctx.beginPath();
+                        ctx.ellipse(backLegX + legOffset, backLegY + 5*scale, finSize/2, finSize/3, 0, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                    
+                    ctx.fillStyle = layer === 'back' ? backColor : layer === 'front' ? frontColor : color;
+                }
+            }
+
+            darkenColor(color, factor) {
+                const hex = color.replace('#', '');
+                const r = Math.floor(parseInt(hex.substr(0, 2), 16) * factor);
+                const g = Math.floor(parseInt(hex.substr(2, 2), 16) * factor);
+                const b = Math.floor(parseInt(hex.substr(4, 2), 16) * factor);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+
+            lightenColor(color, factor) {
+                const hex = color.replace('#', '');
+                const r = Math.min(255, Math.floor(parseInt(hex.substr(0, 2), 16) * factor));
+                const g = Math.min(255, Math.floor(parseInt(hex.substr(2, 2), 16) * factor));
+                const b = Math.min(255, Math.floor(parseInt(hex.substr(4, 2), 16) * factor));
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+
+            isClickedBy(mouseX, mouseY) {
+                const distance = Math.sqrt((mouseX - this.x)**2 + (mouseY - this.y)**2);
+                return distance < Math.max(15, 20 * this.scale); // Mindestens 15px für gute Klickbarkeit
+            }
+        }
+
+        // Umgebungsobjekte
+        class EnvironmentObject {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'tree', 'rock', 'rodent'
+                this.size = (Math.random() * 20 + 10) * 0.5; // Hälfte der ursprünglichen Größe (5-15)
+            }
+
+            render() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                switch(this.type) {
+                    case 'tree':
+                        // Stamm
+                        ctx.fillStyle = '#8B4513';
+                        ctx.fillRect(-3, 0, 6, this.size);
+                        // Krone
+                        ctx.fillStyle = '#228B22';
+                        ctx.beginPath();
+                        ctx.arc(0, -this.size/2, this.size/2, 0, 2 * Math.PI);
+                        ctx.fill();
+                        break;
+                        
+                    case 'rock':
+                        ctx.fillStyle = '#696969';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, this.size/2, 0, 2 * Math.PI);
+                        ctx.fill();
+                        break;
+                        
+                    case 'rodent':
+                        // Kleines Nagetier (angepasste Größe)
+                        ctx.fillStyle = '#8B4513';
+                        const rodentSize = this.size * 0.3; // Noch kleinere Nagetiere
+                        ctx.fillRect(-rodentSize/2, -rodentSize/2, rodentSize, rodentSize);
+                        // Bewegung (langsamere Bewegung für kleinere Größe)
+                        if (Math.random() < 0.01) { // Weniger häufige Bewegung
+                            this.x += (Math.random() - 0.5) * 1; // Langsamere Bewegung
+                            this.y += (Math.random() - 0.5) * 1;
+                        }
+                        break;
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        // Initialisierung
+        function initGame() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Canvas-Größe sofort setzen
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            console.log('Canvas initialisiert:', canvas.width, 'x', canvas.height);
+            
+            // Resize-Event
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Maus-Events
+            canvas.addEventListener('click', handleClick);
+            
+            // Level-Daten laden und generieren
+            loadLevelData();
+        }
+
+        function resizeCanvas() {
+            const oldWidth = canvas.width;
+            const oldHeight = canvas.height;
+            
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            console.log('Canvas resized von', oldWidth, 'x', oldHeight, 'zu', canvas.width, 'x', canvas.height);
+            
+            // Level neu generieren wenn sich die Größe deutlich geändert hat
+            if (Math.abs(oldWidth - canvas.width) > 100 || Math.abs(oldHeight - canvas.height) > 100) {
+                if (levelData) {
+                    console.log('Level wird wegen Größenänderung neu generiert');
+                    generateLevel();
+                }
+            }
+        }
+
+        function loadLevelData() {
+            let storedData = null;
+            
+            try {
+                storedData = localStorage.getItem('dinoLevelData');
+                if (storedData) {
+                    console.log('Level-Daten aus localStorage geladen');
+                }
+            } catch (error) {
+                console.warn('localStorage nicht verfügbar:', error);
+            }
+            
+            if (!storedData) {
+                console.log('Verwende Standard-Level-Daten');
+                levelData = defaultLevelData;
+                showDemoNotice();
+            } else {
+                try {
+                    levelData = JSON.parse(storedData);
+                } catch (error) {
+                    console.error('Fehler beim Parsen der Level-Daten:', error);
+                    levelData = defaultLevelData;
+                    showDemoNotice();
+                }
+            }
+
+            // Warte kurz, dann generiere Level (nach Canvas-Resize)
+            setTimeout(() => {
+                console.log('Canvas Größe beim Level-Generation:', canvas.width, 'x', canvas.height);
+                generateLevel();
+                startGameLoop();
+            }, 100);
+        }
+
+        function showDemoNotice() {
+            const notice = document.createElement('div');
+            notice.className = 'demo-notice';
+            notice.innerHTML = '📋 DEMO-MODUS';
+            document.body.appendChild(notice);
+        }
+
+        function generateLevel() {
+            console.log('=== LEVEL GENERATION START ===');
+            console.log('Canvas Größe:', canvas.width, 'x', canvas.height);
+            console.log('Level Data:', levelData);
+            
+            gameObjects = [];
+            let objectCounts = { trees: 0, rocks: 0, rodents: 0, ownDinos: 0, enemyDinos: 0 };
+            
+            // Umgebungsobjekte generieren - BESSERE VERTEILUNG
+            // Bäume - über das ganze Level verteilt, aber mehr in der oberen Hälfte
+            for (let i = 0; i < 25; i++) {
+                const x = 50 + Math.random() * (canvas.width - 100); // Abstand zu Rändern
+                const y = canvas.height * 0.3 + Math.random() * (canvas.height * 0.5); // Von 30% bis 80%
+                gameObjects.push(new EnvironmentObject(x, y, 'tree'));
+                objectCounts.trees++;
+            }
+            
+            // Steine - gleichmäßig verteilt
+            for (let i = 0; i < 35; i++) {
+                const x = Math.random() * canvas.width;
+                const y = canvas.height * 0.5 + Math.random() * (canvas.height * 0.4); // Von 50% bis 90%
+                gameObjects.push(new EnvironmentObject(x, y, 'rock'));
+                objectCounts.rocks++;
+            }
+            
+            // Nagetiere - kleine Gruppen, mehr verteilt
+            for (let i = 0; i < 12; i++) {
+                const centerX = Math.random() * canvas.width;
+                const centerY = canvas.height * 0.6 + Math.random() * (canvas.height * 0.3);
+                
+                // Kleine Gruppe um den Zenterpunkt (kleinere Verteilung)
+                for (let j = 0; j < Math.random() * 3 + 1; j++) {
+                    const x = centerX + (Math.random() - 0.5) * 40; // Kleinere Verteilung: ±20px um Zentrum
+                    const y = centerY + (Math.random() - 0.5) * 30; // Kleinere Verteilung: ±15px um Zentrum
+                    gameObjects.push(new EnvironmentObject(
+                        Math.max(20, Math.min(canvas.width - 20, x)),
+                        Math.max(canvas.height * 0.6, Math.min(canvas.height - 20, y)),
+                        'rodent'
+                    ));
+                    objectCounts.rodents++;
+                }
+            }
+            
+            // Eigene Dinos generieren - LINKE HÄLFTE, bessere Verteilung
+            levelData.populationData.forEach((species, speciesIndex) => {
+                if (!species.population.isExtinct) {
+                    console.log(`Generiere ${species.name}: ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
+                    
+                    // Erwachsene - in Gruppen platzieren
+                    const adultGroups = Math.ceil(species.population.adults / 4); // Gruppen von max. 4
+                    let adultsPlaced = 0;
+                    
+                    for (let group = 0; group < adultGroups; group++) {
+                        const groupSize = Math.min(4, species.population.adults - adultsPlaced);
+                        const groupCenterX = 80 + Math.random() * (canvas.width * 0.35); // Linke 40% mit Puffer
+                        const groupCenterY = canvas.height * 0.4 + Math.random() * (canvas.height * 0.4); // Von 40% bis 80%
+                        
+                        console.log(`Erwachsene Gruppe ${group + 1} bei (${Math.round(groupCenterX)}, ${Math.round(groupCenterY)})`);
+                        
+                        for (let i = 0; i < groupSize; i++) {
+                            const x = groupCenterX + (Math.random() - 0.5) * 60; // Kleinere Verteilung: ±30px um Gruppenzentrum
+                            const y = groupCenterY + (Math.random() - 0.5) * 40;  // Kleinere Verteilung: ±20px um Gruppenzentrum
+                            
+                            const finalX = Math.max(50, Math.min(canvas.width * 0.45, x));
+                            const finalY = Math.max(canvas.height * 0.35, Math.min(canvas.height - 50, y));
+                            
+                            gameObjects.push(new Dino(finalX, finalY, species, true, false));
+                            objectCounts.ownDinos++;
+                            adultsPlaced++;
+                        }
+                    }
+                    
+                    // Jungtiere - näher zu Erwachsenen, aber etwas verstreuter
+                    const juvenileGroups = Math.ceil(species.population.juveniles / 6); // Kleinere Gruppen
+                    let juvenilesPlaced = 0;
+                    
+                    for (let group = 0; group < juvenileGroups; group++) {
+                        const groupSize = Math.min(6, species.population.juveniles - juvenilesPlaced);
+                        const groupCenterX = 60 + Math.random() * (canvas.width * 0.4); // Etwas weiter verteilt
+                        const groupCenterY = canvas.height * 0.45 + Math.random() * (canvas.height * 0.35);
+                        
+                        for (let i = 0; i < groupSize; i++) {
+                            const x = groupCenterX + (Math.random() - 0.5) * 50; // Kleinere Verteilung: ±25px
+                            const y = groupCenterY + (Math.random() - 0.5) * 35;  // Kleinere Verteilung: ±17.5px
+                            
+                            const finalX = Math.max(40, Math.min(canvas.width * 0.45, x));
+                            const finalY = Math.max(canvas.height * 0.4, Math.min(canvas.height - 40, y));
+                            
+                            gameObjects.push(new Dino(finalX, finalY, species, false, false));
+                            objectCounts.ownDinos++;
+                            juvenilesPlaced++;
+                        }
+                    }
+                }
+            });
+            
+            // Gegner-Dinos generieren - RECHTE HÄLFTE, spiegelverkehrt
+            levelData.populationData.forEach((species, speciesIndex) => {
+                if (!species.population.isExtinct) {
+                    // Weniger Gegner-Dinos für Balance
+                    const enemyAdults = Math.ceil(species.population.adults * 0.7);
+                    const enemyJuveniles = Math.ceil(species.population.juveniles * 0.5);
+                    
+                    console.log(`Generiere Gegner ${species.name}: ${enemyAdults} Erwachsene, ${enemyJuveniles} Jungtiere`);
+                    
+                    // Erwachsene Gegner - in lockeren Gruppen
+                    const enemyAdultGroups = Math.ceil(enemyAdults / 3);
+                    let enemyAdultsPlaced = 0;
+                    
+                    for (let group = 0; group < enemyAdultGroups; group++) {
+                        const groupSize = Math.min(3, enemyAdults - enemyAdultsPlaced);
+                        const groupCenterX = canvas.width * 0.6 + Math.random() * (canvas.width * 0.35); // Rechte 40%
+                        const groupCenterY = canvas.height * 0.4 + Math.random() * (canvas.height * 0.4);
+                        
+                        for (let i = 0; i < groupSize; i++) {
+                            const x = groupCenterX + (Math.random() - 0.5) * 50; // Kleinere Verteilung
+                            const y = groupCenterY + (Math.random() - 0.5) * 40; // Kleinere Verteilung
+                            
+                            const finalX = Math.max(canvas.width * 0.55, Math.min(canvas.width - 50, x));
+                            const finalY = Math.max(canvas.height * 0.35, Math.min(canvas.height - 50, y));
+                            
+                            gameObjects.push(new Dino(finalX, finalY, species, true, true));
+                            objectCounts.enemyDinos++;
+                            enemyAdultsPlaced++;
+                        }
+                    }
+                    
+                    // Junge Gegner - verstreuter
+                    const enemyJuvenileGroups = Math.ceil(enemyJuveniles / 4);
+                    let enemyJuvenilesPlaced = 0;
+                    
+                    for (let group = 0; group < enemyJuvenileGroups; group++) {
+                        const groupSize = Math.min(4, enemyJuveniles - enemyJuvenilesPlaced);
+                        const groupCenterX = canvas.width * 0.65 + Math.random() * (canvas.width * 0.3);
+                        const groupCenterY = canvas.height * 0.45 + Math.random() * (canvas.height * 0.35);
+                        
+                        for (let i = 0; i < groupSize; i++) {
+                            const x = groupCenterX + (Math.random() - 0.5) * 45; // Kleinere Verteilung
+                            const y = groupCenterY + (Math.random() - 0.5) * 30; // Kleinere Verteilung
+                            
+                            const finalX = Math.max(canvas.width * 0.55, Math.min(canvas.width - 40, x));
+                            const finalY = Math.max(canvas.height * 0.4, Math.min(canvas.height - 40, y));
+                            
+                            gameObjects.push(new Dino(finalX, finalY, species, false, true));
+                            objectCounts.enemyDinos++;
+                            enemyJuvenilesPlaced++;
+                        }
+                    }
+                }
+            });
+            
+            console.log('=== OBJEKT COUNTS ===');
+            console.log('Bäume:', objectCounts.trees);
+            console.log('Steine:', objectCounts.rocks);
+            console.log('Nagetiere:', objectCounts.rodents);
+            console.log('Eigene Dinos:', objectCounts.ownDinos);
+            console.log('Gegner Dinos:', objectCounts.enemyDinos);
+            console.log('Gesamt Objekte:', gameObjects.length);
+            console.log('=== LEVEL GENERATION END ===');
+            
+            updateHUD();
+        }
+
+        function startGameLoop() {
+            function gameLoop() {
+                update();
+                render();
+                requestAnimationFrame(gameLoop);
+            }
+            gameLoop();
+        }
+
+        function update() {
+            if (!isPaused) {
+                animationTime += 0.016 * gameSpeed;
+                
+                gameObjects.forEach(obj => {
+                    if (obj.update) obj.update();
+                });
+            }
+        }
+
+        function render() {
+            // Himmel
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(0.3, '#98FB98');
+            gradient.addColorStop(1, '#228B22');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Objekte nach Y-Position sortieren (Z-Order)
+            gameObjects.sort((a, b) => a.y - b.y);
+            
+            // Alle Objekte rendern
+            gameObjects.forEach(obj => obj.render());
+        }
+
+        function updateHUD() {
+            const statusContainer = document.getElementById('speciesStatus');
+            let html = '';
+            
+            // Eigene Dinos zählen
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy);
+            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy);
+            
+            levelData.populationData.forEach(species => {
+                const ownCount = ownDinos.filter(d => d.species.name === species.name).length;
+                const enemyCount = enemyDinos.filter(d => d.species.name === species.name).length;
+                
+                html += `
+                    <div class="species-status">
+                        <span class="species-name">${species.name}:</span>
+                        <span class="population-count">Eigene: ${ownCount}</span> | 
+                        <span style="color: #ff6b35;">Feinde: ${enemyCount}</span>
+                    </div>
+                `;
+            });
+            
+            statusContainer.innerHTML = html;
+        }
+
+        function handleClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            
+            // Deselektiere alle
+            if (selectedDino) selectedDino.selected = false;
+            selectedDino = null;
+            
+            // Prüfe Klick auf Dinos
+            const dinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy);
+            for (let dino of dinos) {
+                if (dino.isClickedBy(mouseX, mouseY)) {
+                    selectedDino = dino;
+                    dino.selected = true;
+                    break;
+                }
+            }
+        }
+
+        // Steuerung
+        function pauseGame() {
+            isPaused = !isPaused;
+            document.querySelector('.controls button').textContent = isPaused ? '▶️ Weiter' : '⏸️ Pause';
+        }
+
+        function speedUp() {
+            gameSpeed = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 4 : 1;
+            document.querySelector('.controls button:nth-child(2)').textContent = 
+                gameSpeed === 1 ? '⏩ Schneller' : 
+                gameSpeed === 2 ? '⏩⏩ Sehr schnell' : '⏩ Normal';
+        }
+
+        function goBackToRound() {
+            window.location.href = 'round.html';
+        }
+
+        // Start
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>

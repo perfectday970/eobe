@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Evolution Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #2c1810, #4a2c1a);
+            color: #e8d5c4;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #ff6b35;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 10px;
+        }
+
+        .slot-selector {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .slot-nav {
+            background: #8b4513;
+            border: none;
+            color: #e8d5c4;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 18px;
+        }
+
+        .slot-nav:hover {
+            background: #a0522d;
+        }
+
+        .slot-info {
+            font-size: 1.2em;
+            color: #ff6b35;
+        }
+
+        .top-section {
+            display: grid;
+            grid-template-columns: 1fr 400px 300px;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .evolution-points {
+            background: #3d2817;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #8b4513;
+        }
+
+        .evolution-points h3 {
+            color: #ff6b35;
+            margin-bottom: 10px;
+        }
+
+        .points-display {
+            font-size: 1.5em;
+            color: #32cd32;
+        }
+
+        .preview-container {
+            background: #3d2817;
+            border: 2px solid #8b4513;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            position: sticky;
+            top: 20px;
+            z-index: 100;
+        }
+
+        .preview-canvas {
+            border: 1px solid #8b4513;
+            background: #2c1810;
+            border-radius: 5px;
+        }
+
+        .stats-panel {
+            background: #3d2817;
+            border: 2px solid #8b4513;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .stats-panel h3 {
+            color: #ff6b35;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 3px;
+        }
+
+        .properties-panel {
+            background: #3d2817;
+            border: 2px solid #8b4513;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px;
+        }
+
+        .property-category {
+            margin-bottom: 25px;
+        }
+
+        .category-title {
+            color: #ff6b35;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(139, 69, 19, 0.3);
+            border-radius: 5px;
+        }
+
+        .property-row {
+            display: grid;
+            grid-template-columns: 150px 1fr 60px 40px 40px;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+
+        .property-name {
+            font-weight: bold;
+        }
+
+        .property-bar {
+            background: #2c1810;
+            height: 20px;
+            border-radius: 10px;
+
+            border: 1px solid #8b4513;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .property-bar:hover {
+            border-color: #cd853f;
+        }
+
+        .property-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #8b4513, #cd853f);
+            transition: width 0.2s ease;
+            pointer-events: none;
+        }
+
+        .property-slider {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .property-value {
+            text-align: center;
+            min-width: 30px;
+        }
+
+        .property-btn {
+            background: #8b4513;
+            border: 1px solid #a0522d;
+            color: #e8d5c4;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-family: inherit;
+            font-weight: bold;
+        }
+
+        .property-btn:hover {
+            background: #a0522d;
+        }
+
+        .property-btn:disabled {
+            background: #444;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .cost-indicator {
+            font-size: 0.9em;
+            color: #ffa500;
+            text-align: center;
+        }
+
+        .constraint-warning {
+            background: rgba(255, 0, 0, 0.2);
+            border-left: 3px solid #ff0000;
+            padding: 8px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 1200px) {
+            .top-section {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sticky-header">
+        <div class="container">
+            <div class="header">
+                <h1>🦕 DINO EVOLUTION GENERATOR 🦖</h1>
+                <div class="slot-selector">
+                    <button class="slot-nav" onclick="changeSlot(-1)">◀</button>
+                    <div class="slot-info">SLOT <span id="currentSlot">1</span>/3</div>
+                    <button class="slot-nav" onclick="changeSlot(1)">▶</button>
+                </div>
+            </div>
+
+            <div class="top-section">
+                <div class="evolution-points">
+                    <h3>🧬 Evolutionspunkte</h3>
+                    <div class="points-display"><span id="evolutionPoints">47</span> EP</div>
+                </div>
+
+                <div class="preview-container">
+                    <h3>Dino Vorschau</h3>
+                    <canvas id="dinoCanvas" class="preview-canvas" width="350" height="250"></canvas>
+                </div>
+
+                <div class="stats-panel">
+                    <h3>📊 Fähigkeiten</h3>
+                    <div id="statsContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="properties-panel">
+            <div id="propertiesContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Globale Variablen
+        let currentSlotIndex = 0;
+        let evolutionPoints = 47;
+        
+        // Dino-Slots
+        const dinoSlots = [
+            {
+                name: "Fleischfresser",
+                properties: {
+                    // Haut/Panzerung
+                    gepanzert: 20,
+                    gefiedert: 0,
+                    stachelig: 10,
+                    farbig: 30,
+                    tarnung: 20,
+                    // Kopf
+                    kopf_beisskraft: 70,
+                    kopf_stabilität: 60,
+                    kopf_größe: 80,
+                    kopf_hörner_anzahl: 0,
+                    kopf_hörner_größe: 0,
+                    kragen_größe: 0,
+                    // Maul/Zähne
+                    maul_zahntyp: 85,
+                    maul_größe: 60,
+                    // Hals
+                    hals_länge: 40,
+                    hals_breite: 50,
+                    // Körper
+                    körper_länge: 70,
+                    körper_höhe: 60,
+                    // Vorderbeine
+                    vorderbeine_länge: 30,
+                    vorderbeine_stärke: 25,
+                    vorderklauen_länge: 60,
+                    // Hinterbeine
+                    hinterbeine_länge: 80,
+                    hinterbeine_stärke: 70,
+                    hinterklauen_länge: 85,
+                    // Schwanz
+                    schwanz_länge: 70,
+                    schwanz_breite: 40,
+                    schwanz_keule: 0,
+                    schwanz_stacheln: 0,
+                    // Spezial
+                    flügel: 0,
+                    flossen: 0,
+                    // Nahrung
+                    fleisch: 80,
+                    pflanzen: 10,
+                    aas: 60
+                }
+            },
+            {
+                name: "Pflanzenfresser",
+                properties: {
+                    gepanzert: 40,
+                    gefiedert: 0,
+                    stachelig: 0,
+                    farbig: 20,
+                    tarnung: 40,
+                    kopf_beisskraft: 20,
+                    kopf_stabilität: 70,
+                    kopf_größe: 60,
+                    kopf_hörner_anzahl: 2,
+                    kopf_hörner_größe: 40,
+                    kragen_größe: 60,
+                    maul_zahntyp: 15,
+                    maul_größe: 40,
+                    hals_länge: 80,
+                    hals_breite: 40,
+                    körper_länge: 90,
+                    körper_höhe: 70,
+                    vorderbeine_länge: 70,
+                    vorderbeine_stärke: 60,
+                    vorderklauen_länge: 10,
+                    hinterbeine_länge: 75,
+                    hinterbeine_stärke: 80,
+                    hinterklauen_länge: 15,
+                    schwanz_länge: 50,
+                    schwanz_breite: 60,
+                    schwanz_keule: 40,
+                    schwanz_stacheln: 0,
+                    flügel: 0,
+                    flossen: 0,
+                    fleisch: 5,
+                    pflanzen: 85,
+                    aas: 10
+                }
+            },
+            {
+                name: "Allesfresser",
+                properties: {
+                    gepanzert: 30,
+                    gefiedert: 20,
+                    stachelig: 0,
+                    farbig: 50,
+                    tarnung: 30,
+                    kopf_beisskraft: 45,
+                    kopf_stabilität: 55,
+                    kopf_größe: 65,
+                    kopf_hörner_anzahl: 1,
+                    kopf_hörner_größe: 20,
+                    kragen_größe: 20,
+                    maul_zahntyp: 50,
+                    maul_größe: 50,
+                    hals_länge: 60,
+                    hals_breite: 45,
+                    körper_länge: 75,
+                    körper_höhe: 65,
+                    vorderbeine_länge: 55,
+                    vorderbeine_stärke: 50,
+                    vorderklauen_länge: 40,
+                    hinterbeine_länge: 70,
+                    hinterbeine_stärke: 65,
+                    hinterklauen_länge: 45,
+                    schwanz_länge: 60,
+                    schwanz_breite: 50,
+                    schwanz_keule: 0,
+                    schwanz_stacheln: 20,
+                    flügel: 0,
+                    flossen: 0,
+                    fleisch: 50,
+                    pflanzen: 60,
+                    aas: 40
+                }
+            }
+        ];
+
+        // Eigenschafts-Konfiguration
+        const propertyConfig = {
+            "🎨 Haut/Panzerung": {
+                gepanzert: { cost: 1, name: "Gepanzert" },
+                gefiedert: { cost: 2, name: "Gefiedert" },
+                stachelig: { cost: 1, name: "Stachelig" },
+                farbig: { cost: 1, name: "Farbig" },
+                tarnung: { cost: 3, name: "Tarnung" }
+            },
+            "🦕 Kopf": {
+                kopf_beisskraft: { cost: 1, name: "Beißkraft" },
+                kopf_stabilität: { cost: 1, name: "Stabilität" },
+                kopf_größe: { cost: 1, name: "Größe" },
+                kopf_hörner_anzahl: { cost: 2, name: "Hörner (Anzahl)" },
+                kopf_hörner_größe: { cost: 2, name: "Hörner (Größe)" },
+                kragen_größe: { cost: 1, name: "Kragen" }
+            },
+            "🦷 Maul/Zähne": {
+                maul_zahntyp: { cost: 2, name: "Zahntyp" },
+                maul_größe: { cost: 1, name: "Maul Größe" }
+            },
+            "🐍 Hals": {
+                hals_länge: { cost: 1, name: "Länge" },
+                hals_breite: { cost: 1, name: "Breite" }
+            },
+            "🦴 Körper": {
+                körper_länge: { cost: 1, name: "Länge" },
+                körper_höhe: { cost: 1, name: "Höhe/Breite" }
+            },
+            "🦾 Vorderbeine": {
+                vorderbeine_länge: { cost: 1, name: "Länge" },
+                vorderbeine_stärke: { cost: 1, name: "Stärke" },
+                vorderklauen_länge: { cost: 2, name: "Klauen" }
+            },
+            "🦵 Hinterbeine": {
+                hinterbeine_länge: { cost: 1, name: "Länge" },
+                hinterbeine_stärke: { cost: 1, name: "Stärke" },
+                hinterklauen_länge: { cost: 2, name: "Klauen" }
+            },
+            "🐲 Schwanz": {
+                schwanz_länge: { cost: 1, name: "Länge" },
+                schwanz_breite: { cost: 1, name: "Breite" },
+                schwanz_keule: { cost: 3, name: "Keule" },
+                schwanz_stacheln: { cost: 2, name: "Stacheln" }
+            },
+            "🦅 Spezial": {
+                flügel: { cost: 3, name: "Flügel" },
+                flossen: { cost: 2, name: "Flossen" }
+            },
+            "🍖 Nahrung": {
+                fleisch: { cost: 1, name: "Fleisch" },
+                pflanzen: { cost: 1, name: "Pflanzen" },
+                aas: { cost: 2, name: "Aas" }
+            }
+        };
+
+        // Farbpaletten
+        const colorPalettes = {
+            braun: ['#8B4513', '#A0522D', '#CD853F'],
+            grün: ['#228B22', '#32CD32', '#90EE90'], 
+            grau: ['#696969', '#A9A9A9', '#D3D3D3'],
+            rot: ['#8B0000', '#DC143C', '#FF6347']
+        };
+
+        // Slot wechseln
+        function changeSlot(direction) {
+            currentSlotIndex += direction;
+            if (currentSlotIndex < 0) currentSlotIndex = 2;
+            if (currentSlotIndex > 2) currentSlotIndex = 0;
+            
+            document.getElementById('currentSlot').textContent = currentSlotIndex + 1;
+            updateDisplay();
+        }
+
+        // Eigenschaft per Slider ändern
+        function changePropertySlider(propName, newValue) {
+            const currentDino = dinoSlots[currentSlotIndex];
+            const currentValue = currentDino.properties[propName];
+            const config = findPropertyConfig(propName);
+            
+            if (!config) return;
+            
+            newValue = Math.max(0, Math.min(100, Math.round(newValue)));
+            const delta = newValue - currentValue;
+            
+            if (delta > 0) {
+                // Erhöhen
+                const cost = delta * config.cost;
+                if (cost > evolutionPoints) {
+                    // Maximal möglichen Wert setzen
+                    const maxIncrease = Math.floor(evolutionPoints / config.cost);
+                    newValue = currentValue + maxIncrease;
+                }
+                evolutionPoints -= (newValue - currentValue) * config.cost;
+            } else if (delta < 0) {
+                // Verringern
+                const refund = Math.floor((currentValue - newValue) * config.cost / 2);
+                evolutionPoints += refund;
+            }
+            
+            currentDino.properties[propName] = newValue;
+            applyConstraints();
+            updateDisplay();
+        }
+
+        // Eigenschaft ändern
+        function changeProperty(propName, delta) {
+            const currentDino = dinoSlots[currentSlotIndex];
+            const currentValue = currentDino.properties[propName];
+            const config = findPropertyConfig(propName);
+            
+            if (!config) return;
+            
+            const newValue = Math.max(0, Math.min(100, currentValue + delta));
+            
+            if (delta > 0) {
+                // Erhöhen
+                const cost = (newValue - currentValue) * config.cost;
+                if (cost > evolutionPoints) return;
+                evolutionPoints -= cost;
+            } else {
+                // Verringern
+                const refund = Math.floor((currentValue - newValue) * config.cost / 2);
+                evolutionPoints += refund;
+            }
+            
+            currentDino.properties[propName] = newValue;
+            applyConstraints();
+            updateDisplay();
+        }
+
+        // Bar-Click Handler für direktes Setzen
+        function handleBarClick(event, propName) {
+            const bar = event.currentTarget;
+            const rect = bar.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const percentage = (clickX / rect.width) * 100;
+            changePropertySlider(propName, percentage);
+        }
+
+        // Eigenschafts-Konfiguration finden
+        function findPropertyConfig(propName) {
+            for (const category of Object.values(propertyConfig)) {
+                if (category[propName]) {
+                    return category[propName];
+                }
+            }
+            return null;
+        }
+
+        // Constraints anwenden
+        function applyConstraints() {
+            const props = dinoSlots[currentSlotIndex].properties;
+            
+            // Flossen vs Schwanzwaffen
+            if (props.flossen > 10) {
+                props.schwanz_keule = Math.min(props.schwanz_keule, 10);
+                props.schwanz_stacheln = Math.min(props.schwanz_stacheln, 10);
+            }
+            
+            // Keule vs Stacheln
+            if (props.schwanz_keule > 10 && props.schwanz_stacheln > 10) {
+                if (Math.random() < 0.5) {
+                    props.schwanz_keule = 10;
+                } else {
+                    props.schwanz_stacheln = 10;
+                }
+            }
+            
+            // Tarnung begrenzt Farbig
+            props.farbig = Math.min(props.farbig, 100 - props.tarnung * 0.5);
+        }
+
+        // Dino-Typ bestimmen
+        function getDinoType() {
+            const props = dinoSlots[currentSlotIndex].properties;
+            const ratio = props.vorderbeine_länge / props.hinterbeine_länge;
+            
+            if (ratio < 0.4) return 'zweifüßig';
+            if (ratio < 0.8) return 'semi-zweifüßig';
+            return 'vierfüßig';
+        }
+
+        // Farbe basierend auf Eigenschaften
+        function getDinoColor() {
+            const props = dinoSlots[currentSlotIndex].properties;
+            const baseColors = colorPalettes.braun;
+            
+            if (props.farbig > 75) {
+                return colorPalettes.rot[1]; // Warnfarben
+            } else if (props.tarnung > 60) {
+                return colorPalettes.grün[0]; // Tarnfarben
+            } else if (props.farbig > 40) {
+                return baseColors[2]; // Heller
+            }
+            
+            return baseColors[1]; // Standard braun
+        }
+
+        // Dino rendern
+        function renderDino() {
+            const canvas = document.getElementById('dinoCanvas');
+            const ctx = canvas.getContext('2d');
+            const props = dinoSlots[currentSlotIndex].properties;
+            const dinoType = getDinoType();
+            const color = getDinoColor();
+            
+            // Canvas leeren
+            ctx.fillStyle = '#2c1810';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // Skalierungsfaktor
+            const scale = 1.5;
+            
+            // Ebenen-Farben
+            const backColor = darkenColor(color, 0.8);
+            const frontColor = lightenColor(color, 1.1);
+            
+            // Hintere Ebene
+            ctx.fillStyle = backColor;
+            renderDinoLayer(ctx, centerX - 10, centerY, props, dinoType, 'back', scale);
+            
+            // Mittlere Ebene
+            ctx.fillStyle = color;
+            renderDinoLayer(ctx, centerX, centerY, props, dinoType, 'middle', scale);
+            
+            // Vordere Ebene
+            ctx.fillStyle = frontColor;
+            renderDinoLayer(ctx, centerX + 10, centerY, props, dinoType, 'front', scale);
+        }
+
+        function renderDinoLayer(ctx, baseX, baseY, props, dinoType, layer, scale) {
+            const bodyScale = dinoType === 'vierfüßig' ? [1.2, 0.8] : [0.8, 1.2];
+            const color = getDinoColor();
+            const backColor = darkenColor(color, 0.8);
+            const frontColor = lightenColor(color, 1.1);
+            
+            // Körper (drei Rechtecke)
+            const bodyWidth = props.körper_länge * scale * 0.8;
+            const bodyHeight = props.körper_höhe * scale * 0.6;
+            
+            if (layer === 'middle') {
+                // Hauptkörper
+                ctx.fillRect(
+                    baseX - bodyWidth/2, 
+                    baseY - bodyHeight/2, 
+                    bodyWidth * bodyScale[0], 
+                    bodyHeight * bodyScale[1]
+                );
+                
+                // Vorderer Körperteil
+                ctx.fillRect(
+                    baseX - bodyWidth/2 - 15, 
+                    baseY - bodyHeight/2 + 5, 
+                    bodyWidth * 0.4, 
+                    bodyHeight * 0.8
+                );
+                
+                // Hinterer Körperteil
+                ctx.fillRect(
+                    baseX + bodyWidth/2 - 10, 
+                    baseY - bodyHeight/2 + 8, 
+                    bodyWidth * 0.3, 
+                    bodyHeight * 0.7
+                );
+            }
+            
+            // Kopf (nur mittlere Ebene)
+            if (layer === 'middle') {
+                const headSize = props.kopf_größe * scale * 0.4;
+                const headX = baseX - bodyWidth/2 - 25 - props.hals_länge * 0.3;
+                const headY = baseY - 20;
+                
+                // Schädel (hinten)
+                ctx.fillRect(headX - headSize/2, headY - headSize/2, headSize, headSize);
+                
+                // Schnauze (vorne)
+                const snoutWidth = headSize * 0.7 + props.kopf_beisskraft * 0.1;
+                ctx.fillRect(headX - headSize/2 - 15, headY - snoutWidth/4, 15, snoutWidth/2);
+                
+                // Maul/Zähne
+                if (props.maul_größe > 10) {
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(headX - headSize/2 - 15, headY + 5, 12, 8);
+                    
+                    // Zähne
+                    ctx.fillStyle = '#ffffff';
+                    const teethSize = props.maul_zahntyp > 70 ? 6 : props.maul_zahntyp > 30 ? 4 : 2;
+                    for (let i = 0; i < 4; i++) {
+                        ctx.fillRect(headX - headSize/2 - 12 + i * 3, headY + 5, 2, teethSize);
+                    }
+                    ctx.fillStyle = color;
+                }
+                
+                // Hörner
+                if (props.kopf_hörner_anzahl > 0) {
+                    ctx.fillStyle = darkenColor(color, 0.7);
+                    const hornSize = props.kopf_hörner_größe * 0.3;
+                    for (let i = 0; i < props.kopf_hörner_anzahl; i++) {
+                        const hornX = headX - 10 + (i * 8);
+                        ctx.fillRect(hornX, headY - headSize/2 - hornSize, 4, hornSize);
+                    }
+                    ctx.fillStyle = color;
+                }
+                
+                // Kragen
+                if (props.kragen_größe > 10) {
+                    ctx.fillRect(
+                        headX + headSize/2, 
+                        headY - props.kragen_größe * 0.2, 
+                        props.kragen_größe * 0.3, 
+                        props.kragen_größe * 0.4
+                    );
+                }
+            }
+            
+            // Hals (gestapelte Rechtecke)
+            if (layer === 'middle') {
+                const neckSegments = Math.floor(props.hals_länge / 25) + 1;
+                const segmentWidth = props.hals_breite * 0.3;
+                const segmentHeight = 15;
+                
+                for (let i = 0; i < neckSegments; i++) {
+                    const neckX = baseX - bodyWidth/2 - 25 - (i * 12);
+                    const neckY = baseY - 10 + (i * -5); // Leichte Krümmung nach oben
+                    ctx.fillRect(neckX - segmentWidth/2, neckY - segmentHeight/2, segmentWidth, segmentHeight);
+                }
+            }
+            
+            // Beine
+            if (layer === 'back' || layer === 'front') {
+                const legOffset = layer === 'back' ? -5 : 5;
+                
+                // Vorderbeine
+                const frontLegX = baseX - bodyWidth/4;
+                const frontLegY = baseY + bodyHeight/2;
+                const frontLegWidth = props.vorderbeine_stärke * 0.2;
+                const frontLegHeight = props.vorderbeine_länge * 0.4;
+                
+                ctx.fillRect(
+                    frontLegX - frontLegWidth/2 + legOffset, 
+                    frontLegY, 
+                    frontLegWidth, 
+                    frontLegHeight
+                );
+                
+                // Vorderklauen
+                if (props.vorderklauen_länge > 10) {
+                    ctx.fillStyle = darkenColor(color, 0.6);
+                    const clawLength = props.vorderklauen_länge * 0.15;
+                    ctx.fillRect(
+                        frontLegX - 2 + legOffset, 
+                        frontLegY + frontLegHeight, 
+                        4, 
+                        clawLength
+                    );
+                    ctx.fillStyle = layer === 'back' ? backColor : frontColor;
+                }
+                
+                // Hinterbeine
+                const backLegX = baseX + bodyWidth/4;
+                const backLegY = baseY + bodyHeight/2;
+                const backLegWidth = props.hinterbeine_stärke * 0.25;
+                const backLegHeight = props.hinterbeine_länge * 0.5;
+                
+                ctx.fillRect(
+                    backLegX - backLegWidth/2 + legOffset, 
+                    backLegY, 
+                    backLegWidth, 
+                    backLegHeight
+                );
+                
+                // Hinterklauen
+                if (props.hinterklauen_länge > 10) {
+                    ctx.fillStyle = darkenColor(color, 0.6);
+                    const clawLength = props.hinterklauen_länge * 0.2;
+                    const isSickle = props.hinterklauen_länge > 80;
+                    
+                    if (isSickle) {
+                        // Sichelklauen (gebogen)
+                        ctx.beginPath();
+                        ctx.arc(backLegX + legOffset, backLegY + backLegHeight, clawLength/2, 0, Math.PI);
+                        ctx.fill();
+                    } else {
+                        ctx.fillRect(
+                            backLegX - 2 + legOffset, 
+                            backLegY + backLegHeight, 
+                            4, 
+                            clawLength
+                        );
+                    }
+                    ctx.fillStyle = layer === 'back' ? backColor : frontColor;
+                }
+            }
+            
+            // Schwanz (nur mittlere Ebene)
+            if (layer === 'middle') {
+                const tailSegments = Math.floor(props.schwanz_länge / 15) + 1;
+                const tailWidth = props.schwanz_breite * 0.3;
+                
+                for (let i = 0; i < tailSegments; i++) {
+                    const segmentSize = tailWidth * (1 - i * 0.1);
+                    const tailX = baseX + bodyWidth/2 + 10 + (i * 12);
+                    const tailY = baseY + (i * 3); // Leichte Krümmung nach unten
+                    
+                    ctx.fillRect(
+                        tailX - segmentSize/2, 
+                        tailY - segmentSize/2, 
+                        segmentSize, 
+                        segmentSize
+                    );
+                }
+                
+                // Schwanzkeule
+                if (props.schwanz_keule > 10 && props.schwanz_stacheln <= 10) {
+                    ctx.fillStyle = darkenColor(color, 0.7);
+                    const clubSize = props.schwanz_keule * 0.4;
+                    const clubX = baseX + bodyWidth/2 + 10 + (tailSegments * 12);
+                    const clubY = baseY + (tailSegments * 3);
+                    
+                    ctx.beginPath();
+                    ctx.arc(clubX, clubY, clubSize/2, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.fillStyle = color;
+                }
+                
+                // Schwanzstacheln
+                if (props.schwanz_stacheln > 10 && props.schwanz_keule <= 10) {
+                    ctx.fillStyle = darkenColor(color, 0.6);
+                    const spikeCount = Math.floor(props.schwanz_stacheln / 10);
+                    const spikeSize = props.schwanz_stacheln * 0.1;
+                    
+                    for (let i = 0; i < spikeCount && i < tailSegments; i++) {
+                        const spikeX = baseX + bodyWidth/2 + 15 + (i * 12);
+                        const spikeY = baseY + (i * 3) - 8;
+                        
+                        // Dreieck für Stachel
+                        ctx.beginPath();
+                        ctx.moveTo(spikeX, spikeY - spikeSize);
+                        ctx.lineTo(spikeX - 3, spikeY);
+                        ctx.lineTo(spikeX + 3, spikeY);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    ctx.fillStyle = color;
+                }
+            }
+            
+            // Flügel (nur mittlere Ebene)
+            if (layer === 'middle' && props.flügel > 0) {
+                ctx.fillStyle = lightenColor(color, 1.2);
+                const wingSize = props.flügel * 0.5;
+                const wingX = baseX - bodyWidth/4;
+                const wingY = baseY - bodyHeight/4;
+                
+                if (props.flügel > 50) {
+                    // Große Flügel
+                    ctx.beginPath();
+                    ctx.moveTo(wingX, wingY);
+                    ctx.lineTo(wingX - wingSize, wingY - wingSize/2);
+                    ctx.lineTo(wingX - wingSize/2, wingY + wingSize/4);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Stummelflügel
+                    ctx.fillRect(wingX - wingSize/2, wingY - wingSize/4, wingSize, wingSize/2);
+                }
+                ctx.fillStyle = color;
+            }
+            
+            // Flossen (nur sichtbar wenn vorhanden)
+            if (props.flossen > 0) {
+                ctx.fillStyle = lightenColor(color, 1.3);
+                const finSize = props.flossen * 0.15;
+                
+                if (layer === 'middle') {
+                    // Schwanzflosse
+                    const tailEndX = baseX + bodyWidth/2 + 10 + (Math.floor(props.schwanz_länge / 15) * 12);
+                    const tailEndY = baseY + (Math.floor(props.schwanz_länge / 15) * 3);
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(tailEndX + 10, tailEndY, finSize, finSize/2, 0, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+                
+                // Beinflossen
+                if (layer === 'back' || layer === 'front') {
+                    const legOffset = layer === 'back' ? -5 : 5;
+                    
+                    // Vorderbeinflossen
+                    const frontLegX = baseX - bodyWidth/4;
+                    const frontLegY = baseY + bodyHeight/2 + props.vorderbeine_länge * 0.4;
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(frontLegX + legOffset, frontLegY + 5, finSize/2, finSize/3, 0, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Hinterbeinflossen
+                    const backLegX = baseX + bodyWidth/4;
+                    const backLegY = baseY + bodyHeight/2 + props.hinterbeine_länge * 0.5;
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(backLegX + legOffset, backLegY + 5, finSize/2, finSize/3, 0, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = layer === 'back' ? backColor : layer === 'front' ? frontColor : color;
+            }
+        }
+
+        // Hilfsfunktionen für Farben
+        function darkenColor(color, factor) {
+            const hex = color.replace('#', '');
+            const r = Math.floor(parseInt(hex.substr(0, 2), 16) * factor);
+            const g = Math.floor(parseInt(hex.substr(2, 2), 16) * factor);
+            const b = Math.floor(parseInt(hex.substr(4, 2), 16) * factor);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function lightenColor(color, factor) {
+            const hex = color.replace('#', '');
+            const r = Math.min(255, Math.floor(parseInt(hex.substr(0, 2), 16) * factor));
+            const g = Math.min(255, Math.floor(parseInt(hex.substr(2, 2), 16) * factor));
+            const b = Math.min(255, Math.floor(parseInt(hex.substr(4, 2), 16) * factor));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // Fähigkeiten berechnen
+        function calculateAbilities() {
+            const props = dinoSlots[currentSlotIndex].properties;
+            
+            return {
+                'HP': Math.floor(props.körper_höhe + props.gepanzert * 0.8 + props.körper_länge * 0.5),
+                'Angriff': Math.floor(props.kopf_beisskraft + props.vorderklauen_länge * 0.5 + props.hinterklauen_länge * 0.3),
+                'Geschwindigkeit': Math.floor(props.hinterbeine_länge * 0.8 + (100 - props.körper_höhe) * 0.3),
+                'Panzerung': Math.floor(props.gepanzert + props.stachelig * 0.5),
+                'Schwimmen': props.flossen > 70 ? Math.floor(props.flossen) : 0,
+                'Fliegen': (props.flügel > 100 && props.hinterbeine_stärke < 30) ? Math.floor(props.flügel * 0.8) : 0,
+                'Tarnung': Math.floor(props.tarnung + (100 - props.farbig) * 0.3),
+                'Fortpflanzung': Math.floor(100 - props.körper_höhe * 0.5 - props.körper_länge * 0.3),
+                'Fleisch-Effizienz': props.fleisch,
+                'Pflanzen-Effizienz': props.pflanzen,
+                'Aas-Effizienz': props.aas
+            };
+        }
+
+        // UI Updates
+        function updateDisplay() {
+            document.getElementById('evolutionPoints').textContent = evolutionPoints;
+            updatePropertiesPanel();
+            updateStatsPanel();
+            renderDino();
+        }
+
+        function updatePropertiesPanel() {
+            const container = document.getElementById('propertiesContainer');
+            const currentProps = dinoSlots[currentSlotIndex].properties;
+            let html = '';
+            
+            Object.entries(propertyConfig).forEach(([categoryName, properties]) => {
+                html += `<div class="property-category">
+                    <div class="category-title">${categoryName}</div>`;
+                
+                Object.entries(properties).forEach(([propKey, config]) => {
+                    const value = currentProps[propKey];
+                    const canIncrease = value < 100 && evolutionPoints >= config.cost;
+                    const canDecrease = value > 0;
+                    
+                    html += `
+                        <div class="property-row">
+                            <div class="property-name">${config.name}</div>
+                            <div class="property-bar" onclick="handleBarClick(event, '${propKey}')">
+                                <div class="property-fill" style="width: ${value}%"></div>
+                                <input type="range" class="property-slider" 
+                                       min="0" max="100" value="${value}" 
+                                       oninput="changePropertySlider('${propKey}', this.value)"
+                                       onchange="changePropertySlider('${propKey}', this.value)">
+                            </div>
+                            <div class="property-value">${value}</div>
+                            <button class="property-btn" ${!canDecrease ? 'disabled' : ''} 
+                                    onclick="changeProperty('${propKey}', -1)">-</button>
+                            <button class="property-btn" ${!canIncrease ? 'disabled' : ''} 
+                                    onclick="changeProperty('${propKey}', 1)">+</button>
+                        </div>
+                        <div class="cost-indicator">Kosten: 1:${config.cost}</div>
+                    `;
+                });
+                
+                html += '</div>';
+            });
+            
+            // Constraint-Warnungen
+            const props = currentProps;
+            if (props.flossen > 10 && (props.schwanz_keule > 10 || props.schwanz_stacheln > 10)) {
+                html += '<div class="constraint-warning">⚠️ Warnung: Flossen reduzieren Schwanzwaffen!</div>';
+            }
+            if (props.schwanz_keule > 10 && props.schwanz_stacheln > 10) {
+                html += '<div class="constraint-warning">⚠️ Warnung: Keule und Stacheln können nicht gleichzeitig vorhanden sein!</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+
+        function updateStatsPanel() {
+            const container = document.getElementById('statsContainer');
+            const abilities = calculateAbilities();
+            let html = '';
+            
+            Object.entries(abilities).forEach(([name, value]) => {
+                const color = value > 70 ? '#32cd32' : value > 40 ? '#ffa500' : '#ff6b35';
+                html += `
+                    <div class="stat-item">
+                        <span>${name}</span>
+                        <span style="color: ${color}; font-weight: bold;">${value}</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Initialisierung
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDisplay();
+        });
+    </script>
+</body>
+</html>
