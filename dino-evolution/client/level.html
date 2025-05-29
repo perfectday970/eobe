@@ -159,6 +159,8 @@
         </div>
     </div>
 
+    <script src="dino-renderer.js"></script>
+
     <script>
         // Globale Variablen
         let canvas, ctx;
@@ -882,26 +884,26 @@
                 this.health = isAdult ? 100 : 60;
                 this.energy = 100;
                 
-                // NEUE Skalierungs-Properties: Basis-Werte relativ zu baseTileSize (Dinos 50% größer)
-                this.baseScale = isAdult ? 0.192 : 0.1152; // Dinos 50% größer: 0.128->0.192, 0.0768->0.1152
-                this.scale = this.baseScale; // Aktuelle Scale (wird bei updateScale angepasst)
-                
+                 // Skalierungs-Properties
+                this.baseScale = isAdult ? 0.192 : 0.1152; 
+                this.scale = this.baseScale;
+
                 this.speed = (species.properties.hinterbeine_länge || 50) / 2667; // 3x schneller: /8000 -> /2667
                 this.targetTileX = tileX;
                 this.targetTileY = tileY;
                 this.selected = false;
-                this.dinoType = this.getDinoType();
-                this.color = this.getDinoColor();
+
+                this.dinoType = dinoRenderer.getDinoType(species.properties);
+                this.color = dinoRenderer.getDinoColor(species.properties, isEnemy);
+  
                 this.facingRight = !isEnemy; // Anfangs basierend auf Team
                 this.lastTileX = tileX;
                 
-                // NEUES INDIVIDUELLES BEWEGUNGSVERHALTEN
+                // Bewegungsverhalten initialisieren
                 this.initializeMovementBehavior();
                 
                 // Bewegungsrichtung (vereinfacht)
                 this.isMovingForward = true; // Vorwärts oder rückwärts
-                
-                // Animation-Kopplung an Verhalten
                 this.animationPhase = 'idle'; // Startet immer mit idle
                 this.phaseStartTime = Date.now();
             }
@@ -1128,44 +1130,7 @@
                 }
             }
 
-            getDinoColor() {
-                const props = this.species.properties;
-                const baseColors = ['#8B4513', '#A0522D', '#CD853F']; // colorPalettes.braun
-                
-                if (this.isEnemy) {
-                    // Feinde bekommen die gleiche Farblogik, aber in rot-tönen
-                    if (props.farbig > 75) {
-                        return '#8B0000'; // Dunkelrot für Warnfarben
-                    } else if (props.tarnung > 60) {
-                        return '#8B0000'; // Alle Feinde rot
-                    } else if (props.farbig > 40) {
-                        return '#DC143C'; // Heller rot
-                    }
-                    return '#8B0000'; // Standard-Feind-rot
-                } else {
-                    // EXAKT wie im Generator
-                    if (props.farbig > 75) {
-                        return '#DC143C'; // colorPalettes.rot[1] - Warnfarben
-                    } else if (props.tarnung > 60) {
-                        return '#228B22'; // colorPalettes.grün[0] - Tarnfarben
-                    } else if (props.farbig > 40) {
-                        return baseColors[2]; // Heller
-                    }
-                    return baseColors[1]; // Standard braun
-                }
-            }
-
-            // Dino-Typ bestimmen (EXAKT wie im Generator)
-            getDinoType() {
-                const props = this.species.properties;
-                const ratio = props.vorderbeine_länge / props.hinterbeine_länge;
-                
-                if (ratio < 0.4) return 'zweifüßig';
-                if (ratio < 0.8) return 'semi-zweifüßig';
-                return 'vierfüßig';
-            }
-
-            render() {
+           render() {
                 // Kachel-Koordinaten zu Pixel-Koordinaten konvertieren
                 const pixelX = this.tileX * tileSize + tileSize / 2;
                 const pixelY = this.tileY * tileSize + tileSize / 2;
@@ -1173,23 +1138,28 @@
                 // Schatten unter dem Dino rendern (ZUERST für Z-Order)
                 this.renderShadow(pixelX, pixelY);
                 
-                this.renderDino(ctx, pixelX, pixelY, this.species.properties, this.dinoType, this.scale, this.isEnemy);
+                // ========== HAUPTÄNDERUNG: VERWENDE ZENTRALEN RENDERER ==========
+                // Animation-Daten vorbereiten
+                const animationData = this.getAnimationData();
                 
-                // Auswahl-Ring (proportional zur neuen Größe, Dinos 50% größer)
+                // Dino mit zentralem Renderer rendern
+                dinoRenderer.renderDino(ctx, pixelX, pixelY, this.species.properties, this.dinoType, this.scale, this.isEnemy, animationData, this.facingRight);
+                
+                // Auswahl-Ring (proportional zur neuen Größe)
                 if (this.selected) {
                     ctx.strokeStyle = '#32cd32';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(pixelX, pixelY, 14.4 * this.scale, 0, 2 * Math.PI); // Dinos 50% größer: 9.6->14.4
+                    ctx.arc(pixelX, pixelY, 14.4 * this.scale, 0, 2 * Math.PI);
                     ctx.stroke();
                 }
                 
-                // Health Bar (proportional zur neuen Größe, Dinos 50% größer)
+                // Health Bar (proportional zur neuen Größe)
                 if (this.health < 100) {
-                    const barWidth = 19.2 * this.scale; // Dinos 50% größer: 12.8->19.2
+                    const barWidth = 19.2 * this.scale;
                     const barHeight = 3;
                     const barX = pixelX - barWidth/2;
-                    const barY = pixelY - 19.2 * this.scale; // Dinos 50% größer: 12.8->19.2
+                    const barY = pixelY - 19.2 * this.scale;
                     
                     ctx.fillStyle = '#ff0000';
                     ctx.fillRect(barX, barY, barWidth, barHeight);
@@ -1198,43 +1168,9 @@
                 }
             }
 
-            renderShadow(pixelX, pixelY) {
-                // Schatten-Parameter basierend auf Dino-Größe und -Typ (Dinos 50% größer)
-                const shadowWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.768; // Dinos 50% größer: 0.512->0.768
-                const shadowHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.384; // Dinos 50% größer: 0.256->0.384
-                
-                // Schatten-Position leicht versetzt (als würde die Sonne von oben-links scheinen)
-                const shadowOffsetX = 2.88 * this.scale; // Dinos 50% größer: 1.92->2.88
-                const shadowOffsetY = 7.68 * this.scale; // Dinos 50% größer: 5.12->7.68
-                const shadowX = pixelX + shadowOffsetX - shadowWidth / 2;
-                const shadowY = pixelY + shadowOffsetY - shadowHeight / 2;
-                
-                // Schatten-Stil
-                ctx.save();
-                ctx.globalAlpha = 0.3; // Semi-transparent
-                ctx.fillStyle = '#000000';
-                
-                // Elliptischen Schatten rendern
-                ctx.beginPath();
-                ctx.ellipse(shadowX + shadowWidth/2, shadowY + shadowHeight/2, 
-                          shadowWidth/2, shadowHeight/2, 0, 0, 2 * Math.PI);
-                ctx.fill();
-                
-                ctx.restore(); // Alpha zurücksetzen
-            }
 
-            renderDino(ctx, centerX, centerY, props, dinoType, scale, isEnemy) {
-                const color = this.color;
-                
-                // Spiegelung basierend auf Blickrichtung
-                // Standard-Dino zeigt nach rechts, spiegeln wenn nach links schauen soll
-                if (!this.facingRight) { // Spiegeln für Links-Blick
-                    ctx.save();
-                    ctx.scale(-1, 1);
-                    centerX = -centerX;
-                }
-                
-                // Animation-Zeit (EXAKT wie im Generator)
+            getAnimationData() {
+                // Animation-Zeit berechnen
                 const currentTime = Date.now();
                 const phaseDuration = (currentTime - this.phaseStartTime) / 1000;
                 
@@ -1244,488 +1180,60 @@
                 }
                 
                 const animationTime = currentTime / 1000;
-                const dinoSpeed = Math.floor(props.hinterbeine_länge * 0.8 + (100 - props.körper_höhe) * 0.3);
+                const dinoSpeed = Math.floor(this.species.properties.hinterbeine_länge * 0.8 + (100 - this.species.properties.körper_höhe) * 0.3);
                 const speedMultiplier = Math.max(0.3, dinoSpeed / 50);
                 const walkSpeed = 4 * speedMultiplier;
                 
-                // Globale Animations-Offsets (EXAKT wie im Generator)
-                let bodyAnimationY = 0;
-                let headAnimationX = 0;
-                let headAnimationY = 0;
-                let tailAnimationY = 0;
-                let frontLegAnimationX = 0;
-                let backLegAnimationX = 0;
+                // Animation-Offsets berechnen
+                let animationData = {
+                    bodyAnimationY: 0,
+                    headAnimationX: 0,
+                    headAnimationY: 0,
+                    tailAnimationY: 0,
+                    frontLegAnimationX: 0,
+                    backLegAnimationX: 0
+                };
                 
                 if (this.animationPhase === 'idle') {
-                    bodyAnimationY = Math.sin(animationTime * 2) * 2;
-                    headAnimationX = Math.sin(animationTime * 0.8) * 3;
-                    headAnimationY = Math.sin(animationTime * 1.2) * 1.5;
-                    tailAnimationY = Math.sin(animationTime * 1.5) * 4;
+                    animationData.bodyAnimationY = Math.sin(animationTime * 2) * 2;
+                    animationData.headAnimationX = Math.sin(animationTime * 0.8) * 3;
+                    animationData.headAnimationY = Math.sin(animationTime * 1.2) * 1.5;
+                    animationData.tailAnimationY = Math.sin(animationTime * 1.5) * 4;
                 } else {
-                    frontLegAnimationX = Math.sin(animationTime * walkSpeed) * 6;
-                    backLegAnimationX = Math.sin(animationTime * walkSpeed + Math.PI) * 6;
-                    bodyAnimationY = Math.sin(animationTime * walkSpeed * 2) * 1;
-                    tailAnimationY = Math.sin(animationTime * walkSpeed * 0.75) * 4;
+                    animationData.frontLegAnimationX = Math.sin(animationTime * walkSpeed) * 6;
+                    animationData.backLegAnimationX = Math.sin(animationTime * walkSpeed + Math.PI) * 6;
+                    animationData.bodyAnimationY = Math.sin(animationTime * walkSpeed * 2) * 1;
+                    animationData.tailAnimationY = Math.sin(animationTime * walkSpeed * 0.75) * 4;
                 }
                 
-                // Ebenen-Farben (EXAKT wie im Generator)
-                const backColor = this.darkenColor(color, 0.6);
-                const frontColor = this.lightenColor(color, 1.4);
-                
-                // Hintere Ebene
-                ctx.fillStyle = backColor;
-                this.renderDinoLayer(ctx, centerX - 5*scale, centerY, props, dinoType, 'back', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
-                
-                // Mittlere Ebene
-                ctx.fillStyle = color;
-                this.renderDinoLayer(ctx, centerX, centerY, props, dinoType, 'middle', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
-                
-                // Vordere Ebene
-                ctx.fillStyle = frontColor;
-                this.renderDinoLayer(ctx, centerX + 5*scale, centerY, props, dinoType, 'front', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
-                
-                if (!this.facingRight) { // Restore nur wenn gespiegelt
-                    ctx.restore();
-                }
+                return animationData;
             }
 
-            renderDinoLayer(ctx, baseX, baseY, props, dinoType, layer, scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX) {
-                const bodyScale = dinoType === 'vierfüßig' ? [1.2, 0.8] : [0.8, 1.2];
-                const color = this.color;
-                const backColor = this.darkenColor(color, 0.8);
-                const frontColor = this.lightenColor(color, 1.1);
+            renderShadow(pixelX, pixelY) {
+                // Schatten-Parameter basierend auf Dino-Größe und -Typ
+                const shadowWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.768;
+                const shadowHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.384;
                 
-                // Körper-Dimensionen für alle Layer definieren (EXAKT wie im Generator)
-                const bodyWidth = props.körper_länge * scale * 0.8;
-                const bodyHeight = props.körper_höhe * scale * 0.6;
+                // Schatten-Position leicht versetzt
+                const shadowOffsetX = 2.88 * this.scale;
+                const shadowOffsetY = 7.68 * this.scale;
+                const shadowX = pixelX + shadowOffsetX - shadowWidth / 2;
+                const shadowY = pixelY + shadowOffsetY - shadowHeight / 2;
                 
-                // Körper (drei Rechtecke) - angepasst nach Dino-Typ (EXAKT wie im Generator)
-                if (layer === 'middle') {
-                    // Körperhöhen-Anpassung basierend auf Dino-Typ
-                    let frontBodyOffset = 0;
-                    let backBodyOffset = 0;
-                    
-                    if (dinoType === 'zweifüßig') {
-                        // Zweifüßige: vorderer Körper höher, hinterer niedriger
-                        frontBodyOffset = -bodyHeight * 0.15; // Vorne 15% höher
-                        backBodyOffset = bodyHeight * 0.1;     // Hinten 10% niedriger
-                    } else if (dinoType === 'semi-zweifüßig') {
-                        // Semi-zweifüßige: leichte Neigung
-                        frontBodyOffset = -bodyHeight * 0.08; // Vorne etwas höher
-                        backBodyOffset = bodyHeight * 0.05;   // Hinten etwas niedriger
-                    }
-                    // Vierfüßige: keine Anpassung (etwa auf einer Ebene)
-                    
-                    // Hauptkörper (mit Atem-Animation)
-                    ctx.fillRect(
-                        baseX - bodyWidth/2, 
-                        baseY - bodyHeight/2 + bodyAnimationY, 
-                        bodyWidth * bodyScale[0], 
-                        bodyHeight * bodyScale[1]
-                    );
-                    
-                    // Vorderer Körperteil - mit Höhenanpassung
-                    ctx.fillRect(
-                        baseX - bodyWidth/2 - 15*scale, 
-                        baseY - bodyHeight/2 + 5*scale + frontBodyOffset + bodyAnimationY, 
-                        bodyWidth * 0.4, 
-                        bodyHeight * 0.8
-                    );
-                    
-                    // Hinterer Körperteil - mit Höhenanpassung
-                    ctx.fillRect(
-                        baseX + bodyWidth/2 - 10*scale, 
-                        baseY - bodyHeight/2 + 8*scale + backBodyOffset + bodyAnimationY, 
-                        bodyWidth * 0.3, 
-                        bodyHeight * 0.7
-                    );
-                }
+                // Schatten-Stil
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                ctx.fillStyle = '#000000';
                 
-                // Kopf (nur mittlere Ebene) (EXAKT wie im Generator)
-                if (layer === 'middle') {
-                    const headSize = props.kopf_größe * scale * 0.4;
-                    // Kopf am Ende des Halses positionieren - mit exponentieller Berechnung
-                    const neckLength = props.hals_länge;
-                    const baseSegments = Math.floor(neckLength / 25) + 1;
-                    const exponentialFactor = Math.pow(neckLength / 100, 1.5);
-                    const neckSegments = Math.max(baseSegments, Math.floor(baseSegments + exponentialFactor * 15));
-                    
-                    const segmentSpacing = (12 + (exponentialFactor * 8)) * scale;
-                    const curvatureStrength = Math.pow(neckLength / 100, 5) * 1000 * scale; // APOKALYPTISCHE Krümmung!
-                    const progress = Math.max(0, (neckSegments - 1)) / Math.max(1, neckSegments - 1);
-                    
-                    const headX = baseX - bodyWidth/2 - 25*scale - ((neckSegments - 1) * segmentSpacing) - headSize/2 + headAnimationX*scale;
-                    const baseHeadY = baseY - 10*scale; // Korrigiert: eindeutiger Name
-                    const curveY = progress * progress * curvatureStrength;
-                    const headY = baseHeadY - curveY + headAnimationY*scale;
-                    
-                    // Schädel (hinten)
-                    ctx.fillRect(headX - headSize/2, headY - headSize/2, headSize, headSize);
-                    
-                    // Schnauze (vorne)
-                    const snoutWidth = (headSize * 0.7 + props.kopf_beisskraft * 0.1 * scale);
-                    ctx.fillRect(headX - headSize/2 - 15*scale, headY - snoutWidth/4, 15*scale, snoutWidth/2);
-                    
-                    // Maul/Zähne (EXAKT wie im Generator)
-                    ctx.fillStyle = '#333';
-                    ctx.fillRect(headX - headSize/2 - 15*scale, headY + 5*scale, 12*scale, 6*scale);
-                    
-                    // Zähne
-                    ctx.fillStyle = '#ffffff';
-                    const teethSize = (props.maul_zahntyp > 70 ? 6 : props.maul_zahntyp > 30 ? 4 : 2) * scale;
-                    for (let i = 0; i < 4; i++) {
-                        ctx.fillRect(headX - headSize/2 - 12*scale + i * 3*scale, headY + 5*scale, 2*scale, teethSize);
-                    }
-                    ctx.fillStyle = color;
-                    
-                    // Kragen
-                    if (props.kragen_größe > 10) {
-                        ctx.fillRect(
-                            headX + headSize/2, 
-                            headY - props.kragen_größe * 0.2 * scale, 
-                            props.kragen_größe * 0.3 * scale, 
-                            props.kragen_größe * 0.4 * scale
-                        );
-                    }
-                }
+                // Elliptischen Schatten rendern
+                ctx.beginPath();
+                ctx.ellipse(shadowX + shadowWidth/2, shadowY + shadowHeight/2, 
+                          shadowWidth/2, shadowHeight/2, 0, 0, 2 * Math.PI);
+                ctx.fill();
                 
-                // Hörner (in allen Ebenen) (EXAKT wie im Generator)
-                if (props.kopf_hörner_anzahl > 0) {
-                    // Kopfposition für Hörner berechnen (gleiche Logik wie oben)
-                    const headSize = props.kopf_größe * scale * 0.4;
-                    const neckLength = props.hals_länge;
-                    const baseSegments = Math.floor(neckLength / 25) + 1;
-                    const exponentialFactor = Math.pow(neckLength / 100, 1.5);
-                    const neckSegments = Math.max(baseSegments, Math.floor(baseSegments + exponentialFactor * 15));
-                    
-                    const segmentSpacing = (12 + (exponentialFactor * 8)) * scale;
-                    const curvatureStrength = Math.pow(neckLength / 100, 5) * 1000 * scale;
-                    const progress = Math.max(0, (neckSegments - 1)) / Math.max(1, neckSegments - 1);
-                    
-                    const headX = baseX - bodyWidth/2 - 25*scale - ((neckSegments - 1) * segmentSpacing) - headSize/2 + headAnimationX*scale;
-                    const baseHeadY = baseY - 10*scale;
-                    const curveY = progress * progress * curvatureStrength;
-                    const headY = baseHeadY - curveY + headAnimationY*scale;
-                    
-                    const hornSize = props.kopf_hörner_größe * 0.3 * scale;
-                    const totalHorns = Math.floor(props.kopf_hörner_anzahl);
-                    
-                    // Hörner auf Ebenen verteilen
-                    if (layer === 'back') {
-                        // Hintere Hörner (abgedunkelte Klauen-Farbe)
-                        ctx.fillStyle = '#9c915c'; // Abgedunkeltes Grau-Gelb
-                        const backHorns = Math.floor(totalHorns / 2);
-                        for (let i = 0; i < backHorns; i++) {
-                            const hornX = headX + 12*scale - (i * 8*scale); // Näher zusammen: 8px statt 16px
-                            ctx.fillRect(hornX, headY - headSize/2 - hornSize, 4*scale, hornSize);
-                        }
-                    } else if (layer === 'front') {
-                        // Vordere Hörner (Klauen-Farbe)
-                        ctx.fillStyle = '#f0e68c';
-                        const frontHorns = Math.floor(totalHorns / 2);
-                        for (let i = 0; i < frontHorns; i++) {
-                            const hornX = headX + 7*scale - (i * 8*scale); // Näher zusammen: 8px statt 16px
-                            ctx.fillRect(hornX, headY - headSize/2 - hornSize, 4*scale, hornSize);
-                        }
-                    } else if (layer === 'middle' && totalHorns % 2 === 1) {
-                        // Mittleres Horn bei ungerader Anzahl (mittlere Klauen-Farbe)
-                        ctx.fillStyle = '#ddd077'; // Mittlere Farbe zwischen hell und dunkel
-                        const hornX = headX - 8*scale; // Etwas nach vorne versetzt
-                        const pairCount = Math.floor(totalHorns / 2);
-                        const middleHornX = hornX - (pairCount * 4*scale); // Position nach den Paaren (auch näher)
-                        ctx.fillRect(middleHornX, headY - headSize/2 - hornSize, 4*scale, hornSize);
-                    }
-                    ctx.fillStyle = layer === 'back' ? backColor : layer === 'front' ? frontColor : color;
-                }
-                
-                // Hals (gestapelte Rechtecke) (EXAKT wie im Generator)
-                if (layer === 'middle') {
-                    // Exponentiell mehr Segmente bei längeren Hälsen
-                    const neckLength = props.hals_länge;
-                    const baseSegments = Math.floor(neckLength / 25) + 1;
-                    const exponentialFactor = Math.pow(neckLength / 100, 1.5); // Exponentieller Faktor
-                    const neckSegments = Math.max(baseSegments, Math.floor(baseSegments + exponentialFactor * 15));
-                    
-                    const segmentWidth = props.hals_breite * 0.3 * scale;
-                    const segmentHeight = 15 * scale;
-                    
-                    // Exponentiell stärkere Krümmung nach oben bei längeren Hälsen
-                    const curvatureStrength = Math.pow(neckLength / 100, 5) * 1000 * scale; // DOPPELT SO STARK: Faktor 1000!
-                    
-                    for (let i = 0; i < neckSegments; i++) {
-                        const progress = i / Math.max(1, neckSegments - 1); // 0 bis 1
-                        
-                        // Exponentiell längere Abstände zwischen Segmenten
-                        const segmentSpacing = (12 + (exponentialFactor * 8)) * scale; // Mehr Abstand bei langen Hälsen
-                        const neckX = baseX - bodyWidth/2 - 25*scale - (i * segmentSpacing);
-                        
-                        // Exponentiell stärkere Aufwärtskrümmung
-                        const baseNeckY = baseY - 10*scale; // Korrigiert: baseNeckY statt baseY
-                        const curveY = progress * progress * curvatureStrength; // Quadratische Kurve nach oben
-                        const neckY = baseNeckY - curveY;
-                        
-                        ctx.fillRect(neckX - segmentWidth/2, neckY - segmentHeight/2, segmentWidth, segmentHeight);
-                    }
-                }
-                
-                // Beine (EXAKT wie im Generator)
-                if (layer === 'back' || layer === 'front') {
-                    // Unterschiedliche Offsets für Arme (näher) und Beine
-                    const armOffset = (layer === 'back' ? -1.5 : 1.5) * scale; // Arme noch näher zusammen
-                    const legOffset = (layer === 'back' ? -2 : 2) * scale; // Beine bleiben wie sie sind
-                    
-                    // Körperposition-Anpassung basierend auf Dino-Typ
-                    let frontAdjustment = 0;
-                    let backAdjustment = 0;
-                    
-                    if (dinoType === 'zweifüßig') {
-                        // Zweifüßige: beide Beinpaare mehr zur Mitte
-                        frontAdjustment = bodyWidth * 0.15; // Vorderbeine weiter nach hinten
-                        backAdjustment = -bodyWidth * 0.15; // Hinterbeine weiter nach vorne
-                    } else if (dinoType === 'semi-zweifüßig') {
-                        // Semi-zweifüßige: etwas weniger zur Mitte
-                        frontAdjustment = bodyWidth * 0.08; // Vorderbeine etwas nach hinten
-                        backAdjustment = -bodyWidth * 0.08; // Hinterbeine etwas nach vorne
-                    }
-                    
-                    // WALKING ANIMATION FIX - Animation-Offsets hinzufügen
-                    const frontLegWalkOffset = this.animationPhase === 'walking' ? frontLegAnimationX*scale : 0;
-                    const backLegWalkOffset = this.animationPhase === 'walking' ? backLegAnimationX*scale : 0;
-                    
-                    // Vorderbeine (Arme) - Start am unteren Rand des vorderen Körperteils
-                    const frontLegX = baseX - bodyWidth/2 - 8*scale + frontAdjustment + frontLegWalkOffset;
-                    const frontLegY = baseY + bodyHeight/2 * bodyScale[1] - 5*scale + bodyAnimationY; // Mit Körper-Animation
-                    const frontLegWidth = props.vorderbeine_stärke * 0.2 * scale;
-                    const frontLegHeight = props.vorderbeine_länge * 0.4 * scale;
-                    
-                    ctx.fillRect(
-                        frontLegX - frontLegWidth/2 + armOffset, 
-                        frontLegY, 
-                        frontLegWidth, 
-                        frontLegHeight
-                    );
-                    
-                    // Vorderklauen (Hände)
-                    if (props.vorderklauen_länge > 10) {
-                        ctx.fillStyle = '#f0e68c'; // Helles Grau-Gelb (Khaki)
-                        const clawLength = props.vorderklauen_länge * 0.15 * scale;
-                        ctx.fillRect(
-                            frontLegX - 2*scale + armOffset, 
-                            frontLegY + frontLegHeight, 
-                            4*scale, 
-                            clawLength
-                        );
-                        ctx.fillStyle = layer === 'back' ? backColor : frontColor;
-                    }
-                    
-                    // Hinterbeine - Start am unteren Rand des hinteren Körperteils
-                    const backLegX = baseX + bodyWidth/2 - 5*scale + backAdjustment + backLegWalkOffset;
-                    const backLegY = baseY + bodyHeight/2 * bodyScale[1] - 8*scale + bodyAnimationY; // Mit Körper-Animation
-                    const backLegWidth = props.hinterbeine_stärke * 0.25 * scale;
-                    const backLegHeight = props.hinterbeine_länge * 0.5 * scale;
-                    
-                    ctx.fillRect(
-                        backLegX - backLegWidth/2 + legOffset, 
-                        backLegY, 
-                        backLegWidth, 
-                        backLegHeight
-                    );
-                    
-                    // Hinterklauen
-                    if (props.hinterklauen_länge > 10) {
-                        ctx.fillStyle = '#f0e68c'; // Helles Grau-Gelb (Khaki)
-                        const clawLength = props.hinterklauen_länge * 0.2 * scale;
-                        const isSickle = props.hinterklauen_länge > 80;
-                        
-                        if (isSickle) {
-                            // Sichelklauen (gebogen)
-                            ctx.beginPath();
-                            ctx.arc(backLegX + legOffset, backLegY + backLegHeight, clawLength/2, 0, Math.PI);
-                            ctx.fill();
-                        } else {
-                            ctx.fillRect(
-                                backLegX - 2*scale + legOffset, 
-                                backLegY + backLegHeight, 
-                                4*scale, 
-                                clawLength
-                            );
-                        }
-                        ctx.fillStyle = layer === 'back' ? backColor : frontColor;
-                    }
-                }
-                
-                // Schwanz (nur mittlere Ebene) (EXAKT wie im Generator)
-                if (layer === 'middle') {
-                    // Körperhöhen-Anpassung basierend auf Dino-Typ
-                    let backBodyOffset = 0;
-                    
-                    if (dinoType === 'zweifüßig') {
-                        backBodyOffset = bodyHeight * 0.1; // Hinten 10% niedriger
-                    } else if (dinoType === 'semi-zweifüßig') {
-                        backBodyOffset = bodyHeight * 0.05; // Hinten etwas niedriger
-                    }
-                    
-                    const tailSegments = Math.floor(props.schwanz_länge / 15) + 1;
-                    const tailWidth = props.schwanz_breite * 0.3 * scale;
-                    
-                    for (let i = 0; i < tailSegments; i++) {
-                        const segmentSize = tailWidth * (1 - i * 0.1);
-                        const tailX = baseX + bodyWidth/2 + 10*scale + (i * 12*scale);
-                        
-                        // Schwanzwedeln: stärkere Bewegung am Ende des Schwanzes
-                        const segmentProgress = i / Math.max(1, tailSegments - 1);
-                        const segmentTailAnimation = tailAnimationY * segmentProgress * scale; // Bewegung verstärkt sich zum Ende
-                        
-                        const tailY = baseY + (i * 3*scale) + backBodyOffset + bodyAnimationY + segmentTailAnimation; // Mit Animationen
-                        
-                        ctx.fillRect(
-                            tailX - segmentSize/2, 
-                            tailY - segmentSize/2, 
-                            segmentSize, 
-                            segmentSize
-                        );
-                    }
-                    
-                    // Schwanzkeule
-                    if (props.schwanz_keule > 10 && props.schwanz_stacheln <= 10) {
-                        ctx.fillStyle = this.darkenColor(color, 0.7);
-                        const clubSize = props.schwanz_keule * 0.4 * scale;
-                        const clubX = baseX + bodyWidth/2 + 10*scale + (tailSegments * 12*scale);
-                        const clubY = baseY + (tailSegments * 3*scale) + backBodyOffset + bodyAnimationY + tailAnimationY*scale; // Mit Animationen
-                        
-                        ctx.beginPath();
-                        ctx.arc(clubX, clubY, clubSize/2, 0, 2 * Math.PI);
-                        ctx.fill();
-                        ctx.fillStyle = color;
-                    }
-                    
-                    // Schwanzstacheln
-                    if (props.schwanz_stacheln > 10 && props.schwanz_keule <= 10) {
-                        ctx.fillStyle = this.darkenColor(color, 0.6);
-                        const spikeCount = Math.floor(props.schwanz_stacheln / 10);
-                        const spikeSize = props.schwanz_stacheln * 0.1 * scale;
-                        
-                        for (let i = 0; i < spikeCount && i < tailSegments; i++) {
-                            const spikeX = baseX + bodyWidth/2 + 15*scale + (i * 12*scale);
-                            const segmentProgress = i / Math.max(1, tailSegments - 1);
-                            const segmentTailAnimation = tailAnimationY * segmentProgress * scale;
-                            const spikeY = baseY + (i * 3*scale) - 8*scale + backBodyOffset + bodyAnimationY + segmentTailAnimation; // Mit Animationen
-                            
-                            // Dreieck für Stachel
-                            ctx.beginPath();
-                            ctx.moveTo(spikeX, spikeY - spikeSize);
-                            ctx.lineTo(spikeX - 3*scale, spikeY);
-                            ctx.lineTo(spikeX + 3*scale, spikeY);
-                            ctx.closePath();
-                            ctx.fill();
-                        }
-                        ctx.fillStyle = color;
-                    }
-                }
-                
-                // Flügel (nur mittlere Ebene) (EXAKT wie im Generator)
-                if (layer === 'middle' && props.flügel > 0) {
-                    ctx.fillStyle = this.lightenColor(color, 1.2);
-                    const wingSize = props.flügel * 0.5 * scale;
-                    const wingX = baseX - bodyWidth/4;
-                    const wingY = baseY - bodyHeight/4 + bodyAnimationY; // Mit Atem-Animation
-                    
-                    if (props.flügel > 50) {
-                        // Große Flügel
-                        ctx.beginPath();
-                        ctx.moveTo(wingX, wingY);
-                        ctx.lineTo(wingX - wingSize, wingY - wingSize/2);
-                        ctx.lineTo(wingX - wingSize/2, wingY + wingSize/4);
-                        ctx.closePath();
-                        ctx.fill();
-                    } else {
-                        // Stummelflügel
-                        ctx.fillRect(wingX - wingSize/2, wingY - wingSize/4, wingSize, wingSize/2);
-                    }
-                    ctx.fillStyle = color;
-                }
-                
-                // Flossen (nur sichtbar wenn vorhanden) (EXAKT wie im Generator)
-                if (props.flossen > 0) {
-                    ctx.fillStyle = this.lightenColor(color, 1.3);
-                    const finSize = props.flossen * 0.15 * scale;
-                    
-                    if (layer === 'middle') {
-                        // Schwanzflosse - mit Animation
-                        const tailSegments = Math.floor(props.schwanz_länge / 15) + 1;
-                        let backBodyOffset = 0;
-                        
-                        if (dinoType === 'zweifüßig') {
-                            backBodyOffset = bodyHeight * 0.1;
-                        } else if (dinoType === 'semi-zweifüßig') {
-                            backBodyOffset = bodyHeight * 0.05;
-                        }
-                        
-                        const tailEndX = baseX + bodyWidth/2 + 10*scale + (tailSegments * 12*scale);
-                        const tailEndY = baseY + (tailSegments * 3*scale) + backBodyOffset + bodyAnimationY + tailAnimationY*scale;
-                        
-                        ctx.beginPath();
-                        ctx.ellipse(tailEndX + 10*scale, tailEndY, finSize, finSize/2, 0, 0, 2 * Math.PI);
-                        ctx.fill();
-                    }
-                    
-                    // Beinflossen - WALKING ANIMATION FIX auch hier
-                    if (layer === 'back' || layer === 'front') {
-                        const armOffset = (layer === 'back' ? -1.5 : 1.5) * scale;
-                        const legOffset = (layer === 'back' ? -2 : 2) * scale;
-                        
-                        // Körperposition-Anpassung basierend auf Dino-Typ
-                        let frontAdjustment = 0;
-                        let backAdjustment = 0;
-                        
-                        if (dinoType === 'zweifüßig') {
-                            frontAdjustment = bodyWidth * 0.15;
-                            backAdjustment = -bodyWidth * 0.15;
-                        } else if (dinoType === 'semi-zweifüßig') {
-                            frontAdjustment = bodyWidth * 0.08;
-                            backAdjustment = -bodyWidth * 0.08;
-                        }
-                        
-                        // Walking-Animation auch für Flossen
-                        const frontLegWalkOffset = this.animationPhase === 'walking' ? frontLegAnimationX*scale : 0;
-                        const backLegWalkOffset = this.animationPhase === 'walking' ? backLegAnimationX*scale : 0;
-                        
-                        // Vorderbeinflossen (Armflossen)
-                        const frontLegX = baseX - bodyWidth/2 - 8*scale + frontAdjustment + frontLegWalkOffset;
-                        const frontLegY = baseY + bodyHeight/2 * bodyScale[1] - 5*scale + props.vorderbeine_länge * 0.4 * scale + bodyAnimationY;
-                        
-                        ctx.beginPath();
-                        ctx.ellipse(frontLegX + armOffset, frontLegY + 5*scale, finSize/2, finSize/3, 0, 0, 2 * Math.PI);
-                        ctx.fill();
-                        
-                        // Hinterbeinflossen
-                        const backLegX = baseX + bodyWidth/2 - 5*scale + backAdjustment + backLegWalkOffset;
-                        const backLegY = baseY + bodyHeight/2 * bodyScale[1] - 8*scale + props.hinterbeine_länge * 0.5 * scale + bodyAnimationY;
-                        
-                        ctx.beginPath();
-                        ctx.ellipse(backLegX + legOffset, backLegY + 5*scale, finSize/2, finSize/3, 0, 0, 2 * Math.PI);
-                        ctx.fill();
-                    }
-                    
-                    ctx.fillStyle = layer === 'back' ? backColor : layer === 'front' ? frontColor : color;
-                }
+                ctx.restore();
             }
 
-            darkenColor(color, factor) {
-                const hex = color.replace('#', '');
-                const r = Math.floor(parseInt(hex.substr(0, 2), 16) * factor);
-                const g = Math.floor(parseInt(hex.substr(2, 2), 16) * factor);
-                const b = Math.floor(parseInt(hex.substr(4, 2), 16) * factor);
-                return `rgb(${r}, ${g}, ${b})`;
-            }
-
-            lightenColor(color, factor) {
-                const hex = color.replace('#', '');
-                const r = Math.min(255, Math.floor(parseInt(hex.substr(0, 2), 16) * factor));
-                const g = Math.min(255, Math.floor(parseInt(hex.substr(2, 2), 16) * factor));
-                const b = Math.min(255, Math.floor(parseInt(hex.substr(4, 2), 16) * factor));
-                return `rgb(${r}, ${g}, ${b})`;
-            }
 
             isClickedBy(mouseX, mouseY) {
                 // Kachel-Koordinaten zu Pixel-Koordinaten konvertieren
