@@ -168,6 +168,19 @@
         let isPaused = false;
         let animationTime = 0;
         let selectedDino = null;
+        
+        // Kachel-System Variablen
+        let tileMap = [];
+        let tileSize = 32; // Wird dynamisch berechnet
+        let baseTileSize = 32; // NEUE Variable: Referenz-Größe für Skalierung
+        let mapWidth = 60; // FESTE Anzahl Kacheln horizontal
+        let mapHeight = 40; // FESTE Anzahl Kacheln vertikal
+        
+        // NEUES SYSTEM: Alles basiert auf Kachel-Koordinaten
+        // - Level hat immer 60x40 Kacheln
+        // - Alle Objekte verwenden Kachel-Koordinaten (0-59, 0-39)
+        // - Alle Größen sind relativ zu tileSize
+        // - Beim Rendering: pixelX = tileX * tileSize, pixelY = tileY * tileSize
 
         // Standard-Fallback-Daten
         const defaultLevelData = {
@@ -207,30 +220,912 @@
             ]
         };
 
-        // Dino-Klasse
+        // Kachel-Typen
+        const TILE_TYPES = {
+            GRASS: 0,
+            DIRT: 1,
+            WATER: 2
+        };
+
+        // Kachel-Farben
+        const TILE_COLORS = {
+            [TILE_TYPES.GRASS]: {
+                base: '#228B22',      // Basis-Grün
+                highlight: '#32CD32',  // Helles Grün (oben/links)
+                shadow: '#006400'      // Dunkles Grün (unten/rechts)
+            },
+            [TILE_TYPES.DIRT]: {
+                base: '#8B7355',      // Grau-Braun statt reines Braun
+                highlight: '#A0957A',  // Helles Grau-Braun (oben/links)
+                shadow: '#5D4E37'      // Dunkles Grau-Braun (unten/rechts)
+            },
+            [TILE_TYPES.WATER]: {
+                base: '#4682B4',      // Basis-Blau
+                highlight: '#87CEEB',  // Helles Blau (oben/links)
+                shadow: '#2F4F4F'      // Dunkles Blau (unten/rechts)
+            }
+        };
+
+        // Deterministischer Noise-Generator mit besserer Verteilung
+        function simpleNoise(x, y, seed = 1000) {
+            // Besserer Hash für Determinismus
+            let n = Math.sin((x * 127.1 + y * 311.7) * 43758.5453 + seed);
+            return (n - Math.floor(n)); // Nur Nachkommastellen (0-1)
+        }
+
+        // Kachel-Map generieren - nur einmal pro Level!
+        function getTileTypeAtPosition(tileX, tileY) {
+            // Prüfe Grenzen
+            if (tileY < 0 || tileY >= mapHeight || tileX < 0 || tileX >= mapWidth) {
+                return TILE_TYPES.GRASS; // Standard außerhalb
+            }
+            
+            if (tileMap[tileY] && tileMap[tileY][tileX] !== undefined) {
+                return tileMap[tileY][tileX];
+            }
+            
+            return TILE_TYPES.GRASS; // Standard-Fallback
+        }
+
+        // Hilfsfunktion: Finde Position nicht auf Wasser (in Kachel-Koordinaten)
+        function findValidRockPosition(centerTileX, centerTileY, maxDistanceInTiles, attempts = 20) {
+            for (let attempt = 0; attempt < attempts; attempt++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = Math.random() * maxDistanceInTiles;
+                const testTileX = Math.round(centerTileX + Math.cos(angle) * distance);
+                const testTileY = Math.round(centerTileY + Math.sin(angle) * distance);
+                
+                // Grenzen prüfen
+                const boundedTileX = Math.max(1, Math.min(mapWidth - 2, testTileX));
+                const boundedTileY = Math.max(mapHeight * 0.5, Math.min(mapHeight - 2, testTileY));
+                
+                // Prüfe ob Position auf Wasser ist
+                const tileType = getTileTypeAtPosition(boundedTileX, boundedTileY);
+                if (tileType !== TILE_TYPES.WATER) {
+                    return { tileX: boundedTileX, tileY: boundedTileY, valid: true };
+                }
+            }
+            
+            // Fallback: Finde nächste Nicht-Wasser Position
+            const boundedTileX = Math.max(1, Math.min(mapWidth - 2, centerTileX));
+            const boundedTileY = Math.max(mapHeight * 0.5, Math.min(mapHeight - 2, centerTileY));
+            
+            // Spirale nach außen suchen
+            for (let radius = 1; radius <= 10; radius++) {
+                for (let angle = 0; angle < 2 * Math.PI; angle += 0.5) {
+                    const searchTileX = Math.round(boundedTileX + Math.cos(angle) * radius);
+                    const searchTileY = Math.round(boundedTileY + Math.sin(angle) * radius);
+                    
+                    if (searchTileX >= 1 && searchTileX <= mapWidth - 2 && 
+                        searchTileY >= mapHeight * 0.5 && searchTileY <= mapHeight - 2) {
+                        
+                        const tileType = getTileTypeAtPosition(searchTileX, searchTileY);
+                        if (tileType !== TILE_TYPES.WATER) {
+                            return { tileX: searchTileX, tileY: searchTileY, valid: true };
+                        }
+                    }
+                }
+            }
+            
+            return { tileX: boundedTileX, tileY: boundedTileY, valid: false }; // Notfall
+        }
+
+        function generateTileMap() {
+            // Basis-Kachelgröße setzen (erste Initialisierung)
+            if (!baseTileSize) {
+                baseTileSize = Math.min(canvas.width / mapWidth, canvas.height / mapHeight);
+            }
+            
+            // Aktuelle Kachelgröße dynamisch basierend auf Canvas und fester Kachelanzahl berechnen
+            tileSize = Math.min(canvas.width / mapWidth, canvas.height / mapHeight);
+            
+            console.log(`Generiere natürliche Kachel-Map: ${mapWidth}x${mapHeight} Kacheln mit Größe ${tileSize.toFixed(1)}px (Basis: ${baseTileSize.toFixed(1)}px)`);
+            
+            // Schritt 1: Initialisiere mit Erde
+            tileMap = [];
+            for (let y = 0; y < mapHeight; y++) {
+                tileMap[y] = [];
+                for (let x = 0; x < mapWidth; x++) {
+                    tileMap[y][x] = TILE_TYPES.DIRT; // Standard: Erde
+                }
+            }
+            
+            // Schritt 2: Generiere Seen (zusammenhängende Wasserflächen)
+            generateLakes();
+            
+            // Schritt 3: Generiere Wiesen um Wasser herum
+            generateGrassAroundWater();
+            
+            // Schritt 4: Garantiere Durchgänge
+            ensurePassages();
+            
+            // Schritt 5: Nachbearbeitung für natürlichere Übergänge
+            smoothTerrain();
+            
+            console.log('Natürliche Kachel-Map generiert');
+        }
+
+        function generateLakes() {
+            const lakeCount = 2 + Math.floor(Math.random() * 3); // 2-4 Seen (weniger aber größer)
+            console.log(`Generiere ${lakeCount} größere Seen...`);
+            
+            for (let i = 0; i < lakeCount; i++) {
+                // Zufällige Startposition für See (nicht zu nah an Rändern)
+                const seedX = 10 + Math.floor(Math.random() * (mapWidth - 20));
+                const seedY = 10 + Math.floor(Math.random() * (mapHeight - 20));
+                
+                // See-Größe (mittlere bis große Seen)
+                const targetSize = 40 + Math.floor(Math.random() * 60); // 40-100 Kacheln (viel größer!)
+                
+                // Wachse See organisch
+                growLake(seedX, seedY, targetSize);
+            }
+        }
+
+        function growLake(startX, startY, targetSize) {
+            const waterTiles = [{x: startX, y: startY}];
+            
+            // Startpunkt setzen
+            if (isValidPosition(startX, startY)) {
+                tileMap[startY][startX] = TILE_TYPES.WATER;
+            }
+            
+            console.log(`Starte See-Wachstum von (${startX}, ${startY}) mit Ziel ${targetSize} Kacheln...`);
+            
+            // EINFACHER ANSATZ: Iterative Expansion
+            while (waterTiles.length < targetSize) {
+                const expansion = [];
+                
+                // Für jede existierende Wasserkachel: finde Nachbarn
+                for (const waterTile of waterTiles) {
+                    const directions = [[-1,0], [1,0], [0,-1], [0,1]]; // 4-Nachbarschaft
+                    
+                    for (const [dx, dy] of directions) {
+                        const newX = waterTile.x + dx;
+                        const newY = waterTile.y + dy;
+                        
+                        // Prüfe ob gültige Position und noch nicht Wasser
+                        if (isValidPosition(newX, newY) && 
+                            tileMap[newY][newX] !== TILE_TYPES.WATER) {
+                            
+                            // Prüfe ob schon in der Expansions-Liste
+                            if (!expansion.some(e => e.x === newX && e.y === newY)) {
+                                expansion.push({x: newX, y: newY});
+                            }
+                        }
+                    }
+                }
+                
+                // Wenn keine Expansion möglich, stoppe
+                if (expansion.length === 0) {
+                    console.log(`See-Wachstum gestoppt bei ${waterTiles.length} Kacheln (keine weiteren Nachbarn)`);
+                    break;
+                }
+                
+                // Wähle zufällige Kacheln aus der Expansion
+                const expansionsThisRound = Math.min(
+                    expansion.length, 
+                    targetSize - waterTiles.length,
+                    1 + Math.floor(Math.random() * 4) // 1-4 Kacheln pro Runde
+                );
+                
+                for (let i = 0; i < expansionsThisRound; i++) {
+                    // Zufälligen Kandidaten wählen
+                    const randomIndex = Math.floor(Math.random() * expansion.length);
+                    const candidate = expansion.splice(randomIndex, 1)[0];
+                    
+                    // Zu Wasser machen
+                    tileMap[candidate.y][candidate.x] = TILE_TYPES.WATER;
+                    waterTiles.push(candidate);
+                    
+                    // Prüfe ob Ziel erreicht
+                    if (waterTiles.length >= targetSize) {
+                        break;
+                    }
+                }
+                
+                // Debug: Zeige Fortschritt
+                if (waterTiles.length % 10 === 0) {
+                    console.log(`See wächst: ${waterTiles.length}/${targetSize} Kacheln`);
+                }
+            }
+            
+            console.log(`See fertig: ${waterTiles.length}/${targetSize} Wasserkacheln erstellt`);
+        }
+
+        function countNearbyWater(x, y) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const checkX = x + dx;
+                    const checkY = y + dy;
+                    
+                    if (isValidPosition(checkX, checkY) && 
+                        tileMap[checkY][checkX] === TILE_TYPES.WATER) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function generateGrassAroundWater() {
+            console.log('Generiere Wiesen um Wasser...');
+            
+            // Erstelle Kopie der aktuellen Map
+            const newMap = JSON.parse(JSON.stringify(tileMap));
+            
+            for (let y = 0; y < mapHeight; y++) {
+                for (let x = 0; x < mapWidth; x++) {
+                    if (tileMap[y][x] !== TILE_TYPES.WATER) {
+                        // Berechne Distanz zum nächsten Wasser
+                        const waterDistance = getDistanceToWater(x, y);
+                        
+                        // Wahrscheinlichkeit für Gras basierend auf Wasser-Nähe
+                        let grassProbability = 0;
+                        if (waterDistance === 1) {
+                            grassProbability = 0.9; // 90% Gras direkt am Wasser
+                        } else if (waterDistance === 2) {
+                            grassProbability = 0.7; // 70% Gras 2 Kacheln entfernt
+                        } else if (waterDistance === 3) {
+                            grassProbability = 0.4; // 40% Gras 3 Kacheln entfernt
+                        } else if (waterDistance <= 5) {
+                            grassProbability = 0.2; // 20% Gras bis 5 Kacheln entfernt
+                        } else {
+                            grassProbability = 0.1; // 10% Gras überall sonst
+                        }
+                        
+                        if (Math.random() < grassProbability) {
+                            newMap[y][x] = TILE_TYPES.GRASS;
+                        }
+                        // Sonst bleibt es Erde (DIRT)
+                    }
+                }
+            }
+            
+            tileMap = newMap;
+        }
+
+        function getDistanceToWater(x, y) {
+            let minDistance = Infinity;
+            
+            // Suche in einem 8x8 Radius nach Wasser (effizient für kleine Distanzen)
+            for (let dy = -8; dy <= 8; dy++) {
+                for (let dx = -8; dx <= 8; dx++) {
+                    const checkX = x + dx;
+                    const checkY = y + dy;
+                    
+                    if (isValidPosition(checkX, checkY) && 
+                        tileMap[checkY][checkX] === TILE_TYPES.WATER) {
+                        const distance = Math.abs(dx) + Math.abs(dy); // Manhattan-Distanz
+                        minDistance = Math.min(minDistance, distance);
+                    }
+                }
+            }
+            
+            return minDistance === Infinity ? 999 : minDistance;
+        }
+
+        function ensurePassages() {
+            console.log('Stelle Durchgänge sicher...');
+            
+            // Horizontaler Durchgang (links nach rechts)
+            ensureHorizontalPassage();
+            
+            // Vertikaler Durchgang (unten nach oben)
+            ensureVerticalPassage();
+        }
+
+        function ensureHorizontalPassage() {
+            // Prüfe ob es einen Pfad von links nach rechts gibt
+            const startY = Math.floor(mapHeight * 0.5); // Mittlere Höhe
+            const leftStart = { x: 0, y: startY };
+            const rightEnd = { x: mapWidth - 1, y: startY };
+            
+            if (!hasPath(leftStart, rightEnd)) {
+                console.log('Erstelle horizontalen Durchgang...');
+                // Erstelle Pfad in der Mitte (etwa)
+                const passageY = Math.floor(mapHeight * 0.5);
+                for (let x = 0; x < mapWidth; x++) {
+                    if (tileMap[passageY][x] === TILE_TYPES.WATER) {
+                        tileMap[passageY][x] = TILE_TYPES.GRASS; // Ändere Wasser zu Gras
+                    }
+                }
+            }
+        }
+
+        function ensureVerticalPassage() {
+            // Prüfe ob es einen Pfad von unten nach oben gibt
+            const startX = Math.floor(mapWidth * 0.5); // Mittlere Breite
+            const bottomStart = { x: startX, y: mapHeight - 1 };
+            const topEnd = { x: startX, y: 0 };
+            
+            if (!hasPath(bottomStart, topEnd)) {
+                console.log('Erstelle vertikalen Durchgang...');
+                // Erstelle Pfad in der Mitte (etwa)
+                const passageX = Math.floor(mapWidth * 0.5);
+                for (let y = 0; y < mapHeight; y++) {
+                    if (tileMap[y][passageX] === TILE_TYPES.WATER) {
+                        tileMap[y][passageX] = TILE_TYPES.GRASS; // Ändere Wasser zu Gras
+                    }
+                }
+            }
+        }
+
+        function hasPath(start, end) {
+            // Einfacher Pathfinding (BFS) - nur prüft ob Pfad existiert
+            if (!isValidPosition(start.x, start.y) || !isValidPosition(end.x, end.y)) {
+                return false;
+            }
+            
+            const visited = new Set();
+            const queue = [start];
+            visited.add(`${start.x},${start.y}`);
+            
+            const directions = [[-1,0], [1,0], [0,-1], [0,1]];
+            
+            while (queue.length > 0) {
+                const current = queue.shift();
+                
+                // Ziel erreicht?
+                if (current.x === end.x && current.y === end.y) {
+                    return true;
+                }
+                
+                // Nachbarn prüfen
+                for (const [dx, dy] of directions) {
+                    const newX = current.x + dx;
+                    const newY = current.y + dy;
+                    const key = `${newX},${newY}`;
+                    
+                    if (isValidPosition(newX, newY) && 
+                        !visited.has(key) &&
+                        tileMap[newY][newX] !== TILE_TYPES.WATER) { // Nur Land-Kacheln
+                        
+                        visited.add(key);
+                        queue.push({ x: newX, y: newY });
+                    }
+                }
+            }
+            
+            return false; // Kein Pfad gefunden
+        }
+
+        function smoothTerrain() {
+            // Leichte Nachbearbeitung für natürlichere Übergänge (optional)
+            console.log('Glätte Terrain...');
+            
+            const iterations = 1; // Nur eine Runde
+            
+            for (let iter = 0; iter < iterations; iter++) {
+                const newMap = JSON.parse(JSON.stringify(tileMap));
+                
+                for (let y = 1; y < mapHeight - 1; y++) {
+                    for (let x = 1; x < mapWidth - 1; x++) {
+                        // Nur für Erde-Kacheln: ändere zu Gras wenn von Gras umgeben
+                        if (tileMap[y][x] === TILE_TYPES.DIRT) {
+                            const nearbyGrass = countNearbyType(x, y, TILE_TYPES.GRASS);
+                            if (nearbyGrass >= 6) { // Wenn 6+ von 8 Nachbarn Gras sind
+                                newMap[y][x] = TILE_TYPES.GRASS;
+                            }
+                        }
+                    }
+                }
+                
+                tileMap = newMap;
+            }
+        }
+
+        function countNearbyType(x, y, tileType) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const checkX = x + dx;
+                    const checkY = y + dy;
+                    
+                    if (isValidPosition(checkX, checkY) && 
+                        tileMap[checkY][checkX] === tileType) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function isValidPosition(x, y) {
+            return x >= 0 && x < mapWidth && y >= 0 && y < mapHeight;
+        }
+
+        // Einzelne Kachel rendern mit deterministischen Details
+        function renderTile(x, y, tileType, time = 0) {
+            const tileX = x * tileSize;
+            const tileY = y * tileSize;
+            const colors = TILE_COLORS[tileType];
+            
+            // Basis-Kachel
+            ctx.fillStyle = colors.base;
+            ctx.fillRect(tileX, tileY, tileSize, tileSize);
+            
+            // Schattierung für 3D-Effekt - SUBTILER!
+            const shadowSize = Math.max(1, Math.floor(tileSize / 32)); // SKALIERT mit tileSize!
+            
+            // Highlight (oben und links)
+            ctx.fillStyle = colors.highlight;
+            ctx.fillRect(tileX, tileY, tileSize, shadowSize); // Oben
+            ctx.fillRect(tileX, tileY, shadowSize, tileSize); // Links
+            
+            // Shadow (unten und rechts)
+            ctx.fillStyle = colors.shadow;
+            ctx.fillRect(tileX, tileY + tileSize - shadowSize, tileSize, shadowSize); // Unten
+            ctx.fillRect(tileX + tileSize - shadowSize, tileY, shadowSize, tileSize); // Rechts
+            
+            // MEHR NOISE für alle Kachel-Typen - ALLE Größen skaliert!
+            const noiseSeed = x * 73 + y * 149;
+            const scale = tileSize / baseTileSize; // Skalierungsfaktor
+            
+            // Gras mit weniger, aber größeren Details für Pixel-Look - BESSER VERTEILT & DEZENTER
+            if (tileType === TILE_TYPES.GRASS) {
+                // Weniger, aber größere Grashalme für Pixel-Art-Look
+                // DEZENTERE Farbe - näher zur Basis-Farbe
+                const grassColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.15)}, 
+                                         ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.15)}, 
+                                         ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.15)})`;
+                ctx.fillStyle = grassColor;
+                
+                const grassBlades = 2; // Reduziert von 6 auf 2 für weniger Details
+                for (let i = 0; i < grassBlades; i++) {
+                    const randomX = ((noiseSeed + i * 37) % 100) / 100;
+                    const randomY = ((noiseSeed + i * 67) % 100) / 100;
+                    const randomHeight = ((noiseSeed + i * 23) % 100) / 100;
+                    
+                    // BESSERE VERTEILUNG - über die ganze Kachel verteilt
+                    const bladeX = tileX + (2 * scale) + (randomX * (tileSize - 6 * scale));
+                    const bladeY = tileY + (2 * scale) + (randomY * (tileSize - 12 * scale));
+                    const bladeWidth = 2 * scale; // Breitere Grashalme: 2x statt 1x
+                    const bladeHeight = 4 * scale + randomHeight * 8 * scale; // Höher: 4-12 statt 2-6
+                    
+                    // Prüfe dass Grashalm nicht über Kachel-Rand reicht
+                    if (bladeX >= tileX && bladeX + bladeWidth <= tileX + tileSize &&
+                        bladeY >= tileY && bladeY + bladeHeight <= tileY + tileSize) {
+                        ctx.fillRect(bladeX, bladeY, bladeWidth, bladeHeight);
+                    }
+                }
+                
+                // Weniger, aber größere Blumen/Punkte
+                // DEZENTERE Farbe - näher zur Basis-Farbe
+                const flowerColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.85)}, 
+                                          ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.85)}, 
+                                          ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.85)})`;
+                ctx.fillStyle = flowerColor;
+                
+                const flowers = 1; // Reduziert von 3 auf 1
+                for (let i = 0; i < flowers; i++) {
+                    const randomX = ((noiseSeed + i * 91) % 100) / 100;
+                    const randomY = ((noiseSeed + i * 113) % 100) / 100;
+                    
+                    // BESSERE VERTEILUNG - über die ganze Kachel verteilt
+                    const flowerSize = 3 * scale; // 3x3 statt 1x1
+                    const flowerX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - flowerSize));
+                    const flowerY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - flowerSize));
+                    
+                    // Prüfe dass Blume nicht über Kachel-Rand reicht
+                    if (flowerX >= tileX && flowerX + flowerSize <= tileX + tileSize &&
+                        flowerY >= tileY && flowerY + flowerSize <= tileY + tileSize) {
+                        ctx.fillRect(flowerX, flowerY, flowerSize, flowerSize);
+                    }
+                }
+            }
+            
+            // Erde mit weniger, aber größeren Details für Pixel-Look - BESSER VERTEILT & DEZENTER
+            if (tileType === TILE_TYPES.DIRT) {
+                // Weniger, aber größere Erdklumpen für Pixel-Art-Look
+                // DEZENTERE Farbe - näher zur Basis-Farbe
+                const rockColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
+                                        ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
+                                        ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`;
+                ctx.fillStyle = rockColor;
+                
+                const rocks = 2; // Reduziert von 5 auf 2 für weniger Details
+                for (let i = 0; i < rocks; i++) {
+                    const randomX = ((noiseSeed + i * 41) % 100) / 100;
+                    const randomY = ((noiseSeed + i * 83) % 100) / 100;
+                    const randomSize = ((noiseSeed + i * 29) % 100) / 100;
+                    
+                    // GRÖSSERE Erdklumpen für Pixel-Look
+                    const rockSize = (4 + randomSize * 6) * scale; // Größer: 4-10 statt 1-3
+                    // BESSERE VERTEILUNG - über die ganze Kachel verteilt
+                    const rockX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - rockSize));
+                    const rockY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - rockSize));
+                    
+                    // Prüfe dass Erdklumpen nicht über Kachel-Rand reicht
+                    if (rockX >= tileX && rockX + rockSize <= tileX + tileSize &&
+                        rockY >= tileY && rockY + rockSize <= tileY + tileSize) {
+                        ctx.fillRect(rockX, rockY, rockSize, rockSize);
+                    }
+                }
+                
+                // Weniger, aber größere Erdkrümel
+                // DEZENTERE Farbe - näher zur Basis-Farbe
+                const crumbColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.1)}, 
+                                         ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.1)}, 
+                                         ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.1)})`;
+                ctx.fillStyle = crumbColor;
+                
+                const crumbs = 3; // Reduziert von 8 auf 3
+                for (let i = 0; i < crumbs; i++) {
+                    const randomX = ((noiseSeed + i * 127) % 100) / 100;
+                    const randomY = ((noiseSeed + i * 179) % 100) / 100;
+                    
+                    // GRÖSSERE Krümel für Pixel-Look
+                    const crumbSize = 2 * scale; // 2x2 statt 1x1
+                    // BESSERE VERTEILUNG - über die ganze Kachel verteilt
+                    const crumbX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - crumbSize));
+                    const crumbY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - crumbSize));
+                    
+                    // Prüfe dass Krümel nicht über Kachel-Rand reicht
+                    if (crumbX >= tileX && crumbX + crumbSize <= tileX + tileSize &&
+                        crumbY >= tileY && crumbY + crumbSize <= tileY + tileSize) {
+                        ctx.fillRect(crumbX, crumbY, crumbSize, crumbSize);
+                    }
+                }
+            }
+            
+            // Wasser mit weniger, aber größeren Details für Pixel-Look - DEZENTER
+            if (tileType === TILE_TYPES.WATER) {
+                // Weniger Wellen-Schichten, aber größere Elemente für Pixel-Art-Look
+                for (let layer = 0; layer < 2; layer++) { // Reduziert von 3 auf 2 Layer
+                    const waveSpeed = 1.0 + layer * 0.5;
+                    const waveFreq = 0.15 + layer * 0.08;
+                    const waveAmplitude = (4 - layer * 1) * scale; // Größere Amplitude für chunky Look
+                    
+                    // DEZENTERE Wellenfarben - näher zur Basis-Farbe
+                    const waveColors = [
+                        `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.1)}, 
+                              ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.1)}, 
+                              ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.1)})`,
+                        `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
+                              ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
+                              ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`
+                    ];
+                    ctx.fillStyle = waveColors[layer];
+                    
+                    // Weniger, aber größere Wellenlinien für Pixel-Look
+                    for (let i = 0; i < 2; i++) { // Reduziert von 4 auf 2 für weniger Details
+                        const baseY = tileY + (8 + i * 12) * scale; // Mehr Abstand zwischen Wellen
+                        const waveY = baseY + Math.sin((x * waveFreq + time * waveSpeed + layer * 0.8)) * waveAmplitude;
+                        
+                        // Prüfe dass Welle innerhalb der Kachel bleibt
+                        if (waveY >= tileY + 2 * scale && waveY <= tileY + tileSize - 4 * scale) {
+                            // Weniger, aber größere Wellen-Chunks
+                            const segments = 3; // Reduziert von 8 auf 3 für chunky Look
+                            for (let seg = 0; seg < segments; seg++) {
+                                const segWidth = tileSize / segments;
+                                const segX = tileX + seg * segWidth;
+                                const segWaveY = waveY + Math.sin((segX * 0.08 + time * waveSpeed)) * (waveAmplitude * 0.6);
+                                
+                                // Prüfe dass Segment innerhalb der Kachel bleibt
+                                if (segX >= tileX && segX + segWidth <= tileX + tileSize &&
+                                    segWaveY >= tileY && segWaveY + 3 * scale <= tileY + tileSize) {
+                                    
+                                    // GRÖSSERE Wellen-Chunks für Pixel-Look
+                                    if (((noiseSeed + seg + layer * 10) % 2) === 0) {
+                                        // Größere, chunky Wellen-Blöcke
+                                        ctx.fillRect(segX, segWaveY, segWidth * 0.8, 3 * scale); // 3x hoch statt 1x
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Weniger, aber größere Wasser-Details für Pixel-Look - DEZENTER
+                // DEZENTERE Farbe für Blasen
+                const bubbleColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.85)}, 
+                                          ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.85)}, 
+                                          ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.85)})`;
+                ctx.fillStyle = bubbleColor;
+                
+                const bubbles = 1; // Reduziert von 4 auf 1
+                for (let i = 0; i < bubbles; i++) {
+                    const randomX = ((noiseSeed + i * 157) % 100) / 100;
+                    const randomY = ((noiseSeed + i * 193) % 100) / 100;
+                    
+                    // GRÖSSERE Blasen für Pixel-Look
+                    const bubbleSize = 4 * scale; // 4x4 statt 1x1
+                    // BESSERE VERTEILUNG - über die ganze Kachel verteilt
+                    const bubbleX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - bubbleSize));
+                    const bubbleY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - bubbleSize));
+                    
+                    // Prüfe dass Blase nicht über Kachel-Rand reicht
+                    if (bubbleX >= tileX && bubbleX + bubbleSize <= tileX + tileSize &&
+                        bubbleY >= tileY && bubbleY + bubbleSize <= tileY + tileSize) {
+                        ctx.fillRect(bubbleX, bubbleY, bubbleSize, bubbleSize);
+                    }
+                }
+            }
+        }
+
+        // FIXED: Gesamten Untergrund rendern
+        function renderTerrain() {
+            // FIXED: Himmel in fester Anzahl von Kacheln definieren (statt Prozent der Canvas-Höhe)
+            const skyTileRows = 12; // Immer 12 Kachel-Reihen für den Himmel
+            const skyHeight = skyTileRows * tileSize; // Himmel-Höhe in Pixeln
+            const startTileY = skyTileRows; // Kacheln ab Reihe 12
+            
+            // Himmel-Gradient rendern
+            const gradient = ctx.createLinearGradient(0, 0, 0, skyHeight);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#B0E0E6');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, skyHeight);
+            
+            // Kacheln rendern (ab definierter Kachel-Reihe)
+            for (let y = startTileY; y < mapHeight; y++) {
+                for (let x = 0; x < mapWidth; x++) {
+                    if (tileMap[y] && tileMap[y][x] !== undefined) {
+                        renderTile(x, y, tileMap[y][x], animationTime);
+                    }
+                }
+            }
+        }
+
+        // Verbesserte Dino-Klasse mit komplett überarbeitetem Bewegungsverhalten
         class Dino {
-            constructor(x, y, species, isAdult, isEnemy = false) {
-                this.x = x;
-                this.y = y;
+            constructor(tileX, tileY, species, isAdult, isEnemy = false) {
+                this.tileX = tileX;
+                this.tileY = tileY;
                 this.species = species;
                 this.isAdult = isAdult;
                 this.isEnemy = isEnemy;
                 this.health = isAdult ? 100 : 60;
                 this.energy = 100;
-                this.scale = isAdult ? 0.2 : 0.12; // 20% der ursprünglichen Größe
-                this.speed = (species.properties.hinterbeine_länge || 50) / 50;
-                this.targetX = x;
-                this.targetY = y;
-                this.animationPhase = 'idle';
-                this.phaseStartTime = Date.now();
-                this.selected = false;
-                this.dinoType = this.getDinoType(); // Berechne Dino-Typ
-                this.color = this.getDinoColor(); // Berechne Farbe
-                this.facingRight = !isEnemy; // Eigene schauen anfangs rechts, Gegner links
-                this.lastX = x; // Für Bewegungsrichtung
                 
-                // Anfangs im eigenen Territorium bleiben
-                this.chooseNewTarget();
+                // NEUE Skalierungs-Properties: Basis-Werte relativ zu baseTileSize (Dinos 50% größer)
+                this.baseScale = isAdult ? 0.192 : 0.1152; // Dinos 50% größer: 0.128->0.192, 0.0768->0.1152
+                this.scale = this.baseScale; // Aktuelle Scale (wird bei updateScale angepasst)
+                
+                this.speed = (species.properties.hinterbeine_länge || 50) / 2667; // 3x schneller: /8000 -> /2667
+                this.targetTileX = tileX;
+                this.targetTileY = tileY;
+                this.selected = false;
+                this.dinoType = this.getDinoType();
+                this.color = this.getDinoColor();
+                this.facingRight = !isEnemy; // Anfangs basierend auf Team
+                this.lastTileX = tileX;
+                
+                // NEUES INDIVIDUELLES BEWEGUNGSVERHALTEN
+                this.initializeMovementBehavior();
+                
+                // Bewegungsrichtung (vereinfacht)
+                this.isMovingForward = true; // Vorwärts oder rückwärts
+                
+                // Animation-Kopplung an Verhalten
+                this.animationPhase = 'idle'; // Startet immer mit idle
+                this.phaseStartTime = Date.now();
+            }
+
+            // NEUE METHODE: Skalierung anpassen
+            updateScale() {
+                const scaleFactor = tileSize / baseTileSize;
+                this.scale = this.baseScale * scaleFactor;
+            }
+
+            initializeMovementBehavior() {
+                // INDIVIDUELLE BEWEGUNGS-CHARAKTERISTIK pro Dino
+                // Jeder Dino hat seine eigene "Persönlichkeit"
+                const personalitySeed = this.tileX * 127 + this.tileY * 313 + (this.isEnemy ? 1000 : 0);
+                
+                // Persönlichkeits-Faktoren (deterministische Zufälligkeit basierend auf Position)
+                this.personality = {
+                    restfulness: 0.3 + (Math.sin(personalitySeed * 0.01) + 1) * 0.35, // 0.3 - 1.0 (ruhiger vs aktiver)
+                    exploration: 0.2 + (Math.sin(personalitySeed * 0.013) + 1) * 0.4, // 0.2 - 1.0 (vorsichtig vs erkundungsfreudig)
+                    direction_preference: Math.sin(personalitySeed * 0.017), // -1 bis 1 (links vs rechts Präferenz)
+                    movement_style: Math.sin(personalitySeed * 0.019) // -1 bis 1 (kurze vs lange Bewegungen)
+                };
+                
+                // INDIVIDUELLE TIMER-BEREICHE basierend auf Persönlichkeit (häufigere Wechsel)
+                // Ruhige Dinos ruhen länger, aktive bewegen sich länger
+                this.restDurationMin = 0.8 + this.personality.restfulness * 1.2; // 0.8-2.0 Sekunden (verkürzt von 2-5)
+                this.restDurationMax = 1.5 + this.personality.restfulness * 2.5; // 1.5-4.0 Sekunden (verkürzt von 4-10)
+                
+                this.moveDurationMin = 0.6 + (1 - this.personality.restfulness) * 1.0; // 0.6-1.6 Sekunden (verkürzt von 1.5-3.5)
+                this.moveDurationMax = 1.2 + (1 - this.personality.restfulness) * 2.0; // 1.2-3.2 Sekunden (verkürzt von 3-8)
+                
+                // BEWEGUNGS-DISTANZ basierend auf Exploration
+                this.minMoveDistance = 1.5 + this.personality.exploration * 1.5; // 1.5-3 Kacheln
+                this.maxMoveDistance = 3.0 + this.personality.exploration * 5.0; // 3-8 Kacheln
+                
+                // Startverhalten zufällig wählen mit Persönlichkeits-Bias
+                const startMoving = Math.random() < (1 - this.personality.restfulness * 0.7);
+                
+                this.behaviorState = startMoving ? 'moving' : 'resting';
+                this.behaviorTimer = Math.random() * 2; // Zufälliger Offset
+                
+                if (this.behaviorState === 'resting') {
+                    this.currentBehaviorDuration = this.getRandomRestDuration();
+                    this.animationPhase = 'idle';
+                    this.targetTileX = this.tileX;
+                    this.targetTileY = this.tileY;
+                } else {
+                    this.currentBehaviorDuration = this.getRandomMoveDuration();
+                    this.animationPhase = 'walking';
+                    this.chooseNewMovementTarget();
+                }
+                
+                console.log(`Dino at (${Math.round(this.tileX)}, ${Math.round(this.tileY)}) - Restfulness: ${this.personality.restfulness.toFixed(2)}, Exploration: ${this.personality.exploration.toFixed(2)}, Direction Pref: ${this.personality.direction_preference.toFixed(2)}`);
+            }
+
+            getRandomRestDuration() {
+                // Zusätzliche Zufälligkeit pro Aufruf
+                const baseVariation = 0.8 + Math.random() * 0.4; // 0.8 - 1.2x Multiplikator
+                return (this.restDurationMin + Math.random() * (this.restDurationMax - this.restDurationMin)) * baseVariation;
+            }
+            
+            getRandomMoveDuration() {
+                const baseVariation = 0.8 + Math.random() * 0.4;
+                return (this.moveDurationMin + Math.random() * (this.moveDurationMax - this.moveDurationMin)) * baseVariation;
+            }
+
+            update() {
+                if (isPaused) return;
+                
+                const frameTime = 1/60;
+                this.behaviorTimer += frameTime * gameSpeed;
+                
+                // VERHALTEN-STATE-MACHINE mit verbesserter Logik
+                if (this.behaviorTimer >= this.currentBehaviorDuration) {
+                    this.switchBehaviorState();
+                }
+                
+                // BEWEGUNGS-LOGIK - nur wenn im moving state
+                if (this.behaviorState === 'moving') {
+                    this.handleMovement();
+                }
+                
+                // Grenzen überprüfen
+                this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+                this.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, this.tileY));
+                
+                // Animation-Synchronisation sicherstellen
+                this.syncAnimation();
+            }
+
+            switchBehaviorState() {
+                if (this.behaviorState === 'resting') {
+                    // Wechsle zu moving
+                    this.behaviorState = 'moving';
+                    this.animationPhase = 'walking';
+                    this.currentBehaviorDuration = this.getRandomMoveDuration();
+                    this.chooseNewMovementTarget();
+                    console.log(`Dino starts moving for ${this.currentBehaviorDuration.toFixed(1)}s`);
+                } else {
+                    // Wechsle zu resting  
+                    this.behaviorState = 'resting';
+                    this.animationPhase = 'idle';
+                    this.currentBehaviorDuration = this.getRandomRestDuration();
+                    this.targetTileX = this.tileX;
+                    this.targetTileY = this.tileY;
+                    console.log(`Dino starts resting for ${this.currentBehaviorDuration.toFixed(1)}s`);
+                }
+                
+                this.behaviorTimer = 0;
+                this.phaseStartTime = Date.now(); // Reset für Animation-Timing
+            }
+
+            handleMovement() {
+                const dx = this.targetTileX - this.tileX;
+                const dy = this.targetTileY - this.tileY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // GRÖSSERE Toleranz für weniger Wackeln
+                if (distance > 0.3) { // Erhöht von 0.1 auf 0.3
+                    const moveTileX = (dx / distance) * this.speed * gameSpeed;
+                    const moveTileY = (dy / distance) * this.speed * gameSpeed;
+                    
+                    // Position aktualisieren
+                    this.tileX += moveTileX;
+                    this.tileY += moveTileY;
+                    
+                    // BLICKRICHTUNG: Immer direkt aktualisieren
+                    this.updateFacingDirection(moveTileX, moveTileY);
+                    
+                } else {
+                    // Ziel erreicht - wähle neues Ziel nur wenn noch Zeit im moving state
+                    if (this.behaviorTimer < this.currentBehaviorDuration * 0.8) { // Nur in ersten 80% der Zeit
+                        this.chooseNewMovementTarget();
+                    } else {
+                        // In letzten 20% der Zeit: bleib am Ziel stehen
+                        this.targetTileX = this.tileX;
+                        this.targetTileY = this.tileY;
+                    }
+                }
+            }
+
+            updateFacingDirection(moveTileX, moveTileY) {
+                // EINFACH UND DIREKT: Bewegung nach rechts = schaue nach links (umgekehrt)
+                if (moveTileX > 0.001) {
+                    this.facingRight = false; // Bewegung nach rechts → schau nach links
+                } else if (moveTileX < -0.001) {
+                    this.facingRight = true; // Bewegung nach links → schau nach rechts
+                }
+                // Bei sehr kleiner horizontaler Bewegung: Blickrichtung beibehalten
+            }
+
+            chooseNewMovementTarget() {
+                // Heimatgebiet definieren
+                let homeMinTileX, homeMaxTileX;
+                if (this.isEnemy) {
+                    homeMinTileX = mapWidth * 0.55;
+                    homeMaxTileX = mapWidth * 0.95;
+                } else {
+                    homeMinTileX = mapWidth * 0.05;
+                    homeMaxTileX = mapWidth * 0.45;
+                }
+                
+                // VORWÄRTS/RÜCKWÄRTS LOGIK
+                // Bestimme ob der Dino vorwärts oder rückwärts gehen soll
+                const shouldChangeDirection = Math.random() < 0.3; // 30% Chance auf Richtungswechsel
+                if (shouldChangeDirection) {
+                    this.isMovingForward = !this.isMovingForward;
+                }
+                
+                // Bewegungsrichtung basierend auf aktueller Blickrichtung und Vorwärts/Rückwärts
+                let preferredDirectionX;
+                if (this.isMovingForward) {
+                    // Vorwärts = in Blickrichtung
+                    preferredDirectionX = this.facingRight ? 1 : -1;
+                } else {
+                    // Rückwärts = entgegen Blickrichtung  
+                    preferredDirectionX = this.facingRight ? -1 : 1;
+                }
+                
+                // Persönlichkeits-basierte Richtungspräferenz einbeziehen
+                const personalityInfluence = this.personality.direction_preference * 0.5;
+                preferredDirectionX += personalityInfluence;
+                
+                // Entfernung basierend auf Persönlichkeit und movement_style
+                const styleInfluence = (this.personality.movement_style + 1) / 2; // 0-1 Normalisierung
+                const moveDistance = this.minMoveDistance + styleInfluence * (this.maxMoveDistance - this.minMoveDistance);
+                
+                // Zufällige Varianz zur Distanz
+                const distanceVariance = moveDistance * (0.7 + Math.random() * 0.6); // 70% - 130% der Basis-Distanz
+                
+                // Winkel mit Präferenz für die gewählte X-Richtung
+                let angle;
+                if (Math.random() < 0.7) { // 70% der Zeit in bevorzugter Richtung
+                    // Primär in X-Richtung mit etwas Y-Variation
+                    angle = (Math.random() - 0.5) * Math.PI * 0.8; // ±72° um horizontal
+                    if (preferredDirectionX < 0) {
+                        angle += Math.PI; // Für linke Richtung drehen
+                    }
+                } else {
+                    // 30% komplett zufällige Richtung für Unvorhersagbarkeit
+                    angle = Math.random() * 2 * Math.PI;
+                }
+                
+                // Zielposition berechnen
+                this.targetTileX = this.tileX + Math.cos(angle) * distanceVariance;
+                this.targetTileY = this.tileY + Math.sin(angle) * distanceVariance;
+                
+                // Grenzen für Ziel überprüfen
+                this.targetTileX = Math.max(homeMinTileX, Math.min(homeMaxTileX, this.targetTileX));
+                this.targetTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, this.targetTileY));
+                
+                // Debug-Ausgabe
+                const direction = this.isMovingForward ? "forward" : "backward";
+                const facing = this.facingRight ? "right" : "left";
+                console.log(`Dino chooses new target: facing ${facing}, moving ${direction}, distance: ${distanceVariance.toFixed(1)}`);
+            }
+
+            syncAnimation() {
+                // Sicherstellen dass Animation mit Verhalten synchron ist
+                const expectedAnimation = this.behaviorState === 'moving' ? 'walking' : 'idle';
+                if (this.animationPhase !== expectedAnimation) {
+                    this.animationPhase = expectedAnimation;
+                    this.phaseStartTime = Date.now(); // Reset Animation-Timer
+                }
             }
 
             getDinoColor() {
@@ -270,120 +1165,31 @@
                 return 'vierfüßig';
             }
 
-            update() {
-                if (isPaused) return;
-                
-                // Alte Position speichern für Bewegungsrichtung
-                this.lastX = this.x;
-                
-                // Territoriale Bewegung - vorsichtiges Vorantasten
-                const dx = this.targetX - this.x;
-                const dy = this.targetY - this.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > 3) { // Kleinere Toleranz für häufigere Richtungsänderungen
-                    const moveX = (dx / distance) * this.speed * gameSpeed * 0.3; // Deutlich langsamer
-                    const moveY = (dy / distance) * this.speed * gameSpeed * 0.3;
-                    
-                    this.x += moveX;
-                    this.y += moveY;
-                    this.animationPhase = 'walking';
-                    
-                    // Blickrichtung basierend auf Bewegungsrichtung aktualisieren
-                    if (Math.abs(moveX) > 0.1) { // Nur bei bedeutsamer horizontaler Bewegung
-                        this.facingRight = moveX > 0;
-                    }
-                } else {
-                    this.animationPhase = 'idle';
-                    
-                    // Neues Ziel setzen - territoriales Verhalten
-                    if (Math.random() < 0.02) { // Häufigere Richtungsänderungen (2% pro Frame)
-                        this.chooseNewTarget();
-                    }
-                }
-                
-                // Grenzen überprüfen und zurückdrängen
-                this.x = Math.max(20, Math.min(canvas.width - 20, this.x));
-                this.y = Math.max(canvas.height * 0.3, Math.min(canvas.height - 20, this.y));
-            }
-
-            chooseNewTarget() {
-                const currentTime = Date.now();
-                
-                // Heimatgebiet definieren
-                let homeMinX, homeMaxX;
-                if (this.isEnemy) {
-                    homeMinX = canvas.width * 0.55;
-                    homeMaxX = canvas.width * 0.95;
-                } else {
-                    homeMinX = canvas.width * 0.05;
-                    homeMaxX = canvas.width * 0.45;
-                }
-                
-                // Aktuelle Position zur eigenen Seite
-                const distanceFromHome = this.isEnemy ? 
-                    Math.max(0, homeMinX - this.x) : 
-                    Math.max(0, this.x - homeMaxX);
-                
-                // Verschiedene Verhaltensmuster
-                const behavior = Math.random();
-                const isNearBorder = distanceFromHome < 50;
-                
-                if (distanceFromHome > 80) {
-                    // Zu weit von zu Hause - SOFORT zurückkehren
-                    this.targetX = this.isEnemy ? 
-                        homeMinX + 20 + Math.random() * 60 : 
-                        homeMaxX - 20 - Math.random() * 60;
-                    this.targetY = canvas.height * 0.4 + Math.random() * (canvas.height * 0.35);
-                } else if (behavior < 0.4) {
-                    // 40% - Patrouillieren im eigenen Gebiet
-                    this.targetX = homeMinX + Math.random() * (homeMaxX - homeMinX);
-                    this.targetY = this.y + (Math.random() - 0.5) * 80; // Seitlich bewegen
-                } else if (behavior < 0.55 && isNearBorder) {
-                    // 15% - Vorsichtig zur Mitte vortasten (nur wenn nah an Grenze)
-                    const centerDirection = this.isEnemy ? -1 : 1;
-                    this.targetX = this.x + centerDirection * (15 + Math.random() * 25); // 15-40px vorwärts
-                    this.targetY = this.y + (Math.random() - 0.5) * 50;
-                } else if (behavior < 0.7) {
-                    // 15% - Rückzug/defensive Bewegung
-                    const retreatDirection = this.isEnemy ? 1 : -1;
-                    this.targetX = this.x + retreatDirection * (20 + Math.random() * 40); // 20-60px zurück
-                    this.targetY = this.y + (Math.random() - 0.5) * 60;
-                } else {
-                    // 30% - Kleine zufällige Bewegung im aktuellen Bereich
-                    this.targetX = this.x + (Math.random() - 0.5) * 50; // ±25px um aktuelle Position
-                    this.targetY = this.y + (Math.random() - 0.5) * 40; // ±20px um aktuelle Position
-                }
-                
-                // Grenzen für Ziel überprüfen - STRIKT durchsetzen
-                this.targetX = Math.max(homeMinX, Math.min(homeMaxX, this.targetX));
-                this.targetY = Math.max(canvas.height * 0.35, Math.min(canvas.height - 50, this.targetY));
-                
-                // Seltener längere Pausen
-                if (Math.random() < 0.05) { // Nur 5% statt 10%
-                    this.targetX = this.x; // Bleib hier
-                    this.targetY = this.y;
-                }
-            }
-
             render() {
-                this.renderDino(ctx, this.x, this.y, this.species.properties, this.dinoType, this.scale, this.isEnemy);
+                // Kachel-Koordinaten zu Pixel-Koordinaten konvertieren
+                const pixelX = this.tileX * tileSize + tileSize / 2;
+                const pixelY = this.tileY * tileSize + tileSize / 2;
                 
-                // Auswahl-Ring (proportional zur neuen Größe)
+                // Schatten unter dem Dino rendern (ZUERST für Z-Order)
+                this.renderShadow(pixelX, pixelY);
+                
+                this.renderDino(ctx, pixelX, pixelY, this.species.properties, this.dinoType, this.scale, this.isEnemy);
+                
+                // Auswahl-Ring (proportional zur neuen Größe, Dinos 50% größer)
                 if (this.selected) {
                     ctx.strokeStyle = '#32cd32';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(this.x, this.y, 15 * this.scale, 0, 2 * Math.PI); // Kleinerer Ring
+                    ctx.arc(pixelX, pixelY, 14.4 * this.scale, 0, 2 * Math.PI); // Dinos 50% größer: 9.6->14.4
                     ctx.stroke();
                 }
                 
-                // Health Bar (proportional zur neuen Größe)
+                // Health Bar (proportional zur neuen Größe, Dinos 50% größer)
                 if (this.health < 100) {
-                    const barWidth = 20 * this.scale; // Kleinere Health Bar
+                    const barWidth = 19.2 * this.scale; // Dinos 50% größer: 12.8->19.2
                     const barHeight = 3;
-                    const barX = this.x - barWidth/2;
-                    const barY = this.y - 20 * this.scale; // Näher zum Dino
+                    const barX = pixelX - barWidth/2;
+                    const barY = pixelY - 19.2 * this.scale; // Dinos 50% größer: 12.8->19.2
                     
                     ctx.fillStyle = '#ff0000';
                     ctx.fillRect(barX, barY, barWidth, barHeight);
@@ -392,12 +1198,37 @@
                 }
             }
 
+            renderShadow(pixelX, pixelY) {
+                // Schatten-Parameter basierend auf Dino-Größe und -Typ (Dinos 50% größer)
+                const shadowWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.768; // Dinos 50% größer: 0.512->0.768
+                const shadowHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.384; // Dinos 50% größer: 0.256->0.384
+                
+                // Schatten-Position leicht versetzt (als würde die Sonne von oben-links scheinen)
+                const shadowOffsetX = 2.88 * this.scale; // Dinos 50% größer: 1.92->2.88
+                const shadowOffsetY = 7.68 * this.scale; // Dinos 50% größer: 5.12->7.68
+                const shadowX = pixelX + shadowOffsetX - shadowWidth / 2;
+                const shadowY = pixelY + shadowOffsetY - shadowHeight / 2;
+                
+                // Schatten-Stil
+                ctx.save();
+                ctx.globalAlpha = 0.3; // Semi-transparent
+                ctx.fillStyle = '#000000';
+                
+                // Elliptischen Schatten rendern
+                ctx.beginPath();
+                ctx.ellipse(shadowX + shadowWidth/2, shadowY + shadowHeight/2, 
+                          shadowWidth/2, shadowHeight/2, 0, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.restore(); // Alpha zurücksetzen
+            }
+
             renderDino(ctx, centerX, centerY, props, dinoType, scale, isEnemy) {
                 const color = this.color;
                 
-                // Spiegelung basierend auf Blickrichtung (nicht auf Teamzugehörigkeit)
-                // Standard-Dino zeigt nach links, spiegeln wenn nach rechts schauen soll
-                if (this.facingRight) {
+                // Spiegelung basierend auf Blickrichtung
+                // Standard-Dino zeigt nach rechts, spiegeln wenn nach links schauen soll
+                if (!this.facingRight) { // Spiegeln für Links-Blick
                     ctx.save();
                     ctx.scale(-1, 1);
                     centerX = -centerX;
@@ -453,7 +1284,7 @@
                 ctx.fillStyle = frontColor;
                 this.renderDinoLayer(ctx, centerX + 5*scale, centerY, props, dinoType, 'front', scale, bodyAnimationY, headAnimationX, headAnimationY, tailAnimationY, frontLegAnimationX, backLegAnimationX);
                 
-                if (this.facingRight) { // Restore nur wenn gespiegelt
+                if (!this.facingRight) { // Restore nur wenn gespiegelt
                     ctx.restore();
                 }
             }
@@ -897,57 +1728,494 @@
             }
 
             isClickedBy(mouseX, mouseY) {
-                const distance = Math.sqrt((mouseX - this.x)**2 + (mouseY - this.y)**2);
-                return distance < Math.max(15, 20 * this.scale); // Mindestens 15px für gute Klickbarkeit
+                // Kachel-Koordinaten zu Pixel-Koordinaten konvertieren
+                const pixelX = this.tileX * tileSize + tileSize / 2;
+                const pixelY = this.tileY * tileSize + tileSize / 2;
+                
+                const distance = Math.sqrt((mouseX - pixelX)**2 + (mouseY - pixelY)**2);
+                return distance < Math.max(14.4, 19.2 * this.scale); // Dinos 50% größer: 9.6->14.4, 12.8->19.2
             }
         }
 
         // Umgebungsobjekte
         class EnvironmentObject {
-            constructor(x, y, type) {
-                this.x = x;
-                this.y = y;
+            constructor(tileX, tileY, type, options = {}) {
+                this.tileX = tileX;
+                this.tileY = tileY;
                 this.type = type; // 'tree', 'rock', 'rodent'
-                this.size = (Math.random() * 20 + 10) * 0.5; // Hälfte der ursprünglichen Größe (5-15)
+                this.options = options; // Zusätzliche Optionen für Steine
+                
+                if (type === 'tree') {
+                    this.baseSize = (Math.random() * 30 + 15) * 0.448; // Doppelt: 0.224->0.448
+                    this.size = this.baseSize; // Aktuelle Größe (wird bei updateScale angepasst)
+                    
+                    // Basis-Dimensionen speichern (relativ zu Basis-Size)
+                    this.baseTrunkHeight = this.baseSize * (0.8 + Math.random() * 0.6); // Variable Stamm-Höhe
+                    this.baseTrunkWidth = Math.max(2, this.baseSize * 0.2); // Proportionale Stamm-Breite
+                    this.baseCrownWidth = this.baseSize * (1.2 + Math.random() * 0.6); // Variable Krone
+                    this.baseCrownHeight = this.baseSize * (0.8 + Math.random() * 0.4); // Variable Krone
+                    
+                    // Aktuelle Dimensionen (werden bei updateScale angepasst)
+                    this.trunkHeight = this.baseTrunkHeight;
+                    this.trunkWidth = this.baseTrunkWidth;
+                    this.crownWidth = this.baseCrownWidth;
+                    this.crownHeight = this.baseCrownHeight;
+                    
+                    this.treeSeed = Math.floor(tileX * 123 + tileY * 456); // Seed für deterministische Details
+                } else if (type === 'rock') {
+                    // Stein-spezifische Eigenschaften
+                    this.rockType = options.rockType || 'medium'; // 'small', 'medium', 'large'
+                    this.isGroupLeader = options.isGroupLeader || false;
+                    this.groupIndex = options.groupIndex || 0;
+                    
+                    // BASIS-Größe basierend auf Typ (doppelt so groß)
+                    switch (this.rockType) {
+                        case 'small':
+                            this.baseSize = (Math.random() * 8 + 6) * 0.512; // Doppelt: 0.256->0.512
+                            break;
+                        case 'medium':
+                            this.baseSize = (Math.random() * 15 + 12) * 0.512; // Doppelt: 0.256->0.512
+                            break;
+                        case 'large':
+                            this.baseSize = (Math.random() * 25 + 20) * 0.512; // Doppelt: 0.256->0.512
+                            break;
+                        default:
+                            this.baseSize = (Math.random() * 15 + 10) * 0.512; // Doppelt: 0.256->0.512
+                    }
+                    this.size = this.baseSize; // Aktuelle Größe (wird bei updateScale angepasst)
+                    
+                    // Deterministische Form-Eigenschaften basierend auf Position
+                    this.rockSeed = Math.floor(tileX * 177 + tileY * 239);
+                    this.baseWidth = this.baseSize * (0.8 + ((this.rockSeed % 100) / 100) * 0.4); // 80%-120% der Basis-Größe
+                    this.baseHeight = this.baseSize * (0.8 + (((this.rockSeed + 50) % 100) / 100) * 0.4);
+                    
+                    // Aktuelle Dimensionen (werden bei updateScale angepasst)
+                    this.width = this.baseWidth;
+                    this.height = this.baseHeight;
+                    
+                    // Farb-Variation
+                    this.colorVariation = (this.rockSeed % 40) - 20; // -20 bis +20 für Farbvariation
+                } else if (type === 'rodent') {
+                    this.baseSize = (Math.random() * 20 + 10) * 0.32; // Doppelt: 0.16->0.32
+                    this.size = this.baseSize; // Aktuelle Größe (wird bei updateScale angepasst)
+                    // Bewegung für Nagetiere - in Kachel-Einheiten
+                    this.moveSpeed = 0.02; // Sehr langsame Bewegung in Kachel-Einheiten
+                } else {
+                    this.baseSize = (Math.random() * 20 + 10) * 0.32; // Doppelt: 0.16->0.32
+                    this.size = this.baseSize; // Aktuelle Größe (wird bei updateScale angepasst)
+                }
+            }
+
+            // NEUE METHODE: Skalierung anpassen
+            updateScale() {
+                const scaleFactor = tileSize / baseTileSize;
+                
+                // Hauptgröße skalieren
+                this.size = this.baseSize * scaleFactor;
+                
+                // Typ-spezifische Dimensionen skalieren
+                if (this.type === 'tree') {
+                    this.trunkHeight = this.baseTrunkHeight * scaleFactor;
+                    this.trunkWidth = this.baseTrunkWidth * scaleFactor;
+                    this.crownWidth = this.baseCrownWidth * scaleFactor;
+                    this.crownHeight = this.baseCrownHeight * scaleFactor;
+                } else if (this.type === 'rock') {
+                    this.width = this.baseWidth * scaleFactor;
+                    this.height = this.baseHeight * scaleFactor;
+                }
             }
 
             render() {
+                // Kachel-Koordinaten zu Pixel-Koordinaten konvertieren
+                const pixelX = this.tileX * tileSize + tileSize / 2;
+                const pixelY = this.tileY * tileSize + tileSize / 2;
+                
                 ctx.save();
-                ctx.translate(this.x, this.y);
+                ctx.translate(pixelX, pixelY);
                 
                 switch(this.type) {
                     case 'tree':
-                        // Stamm
-                        ctx.fillStyle = '#8B4513';
-                        ctx.fillRect(-3, 0, 6, this.size);
-                        // Krone
-                        ctx.fillStyle = '#228B22';
-                        ctx.beginPath();
-                        ctx.arc(0, -this.size/2, this.size/2, 0, 2 * Math.PI);
-                        ctx.fill();
+                        this.renderDetailedTree();
                         break;
                         
                     case 'rock':
-                        ctx.fillStyle = '#696969';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, this.size/2, 0, 2 * Math.PI);
-                        ctx.fill();
+                        this.renderDetailedRock();
                         break;
                         
                     case 'rodent':
-                        // Kleines Nagetier (angepasste Größe)
+                        // Kleines Nagetier (angepasste Größe, doppelt so groß)
                         ctx.fillStyle = '#8B4513';
-                        const rodentSize = this.size * 0.3; // Noch kleinere Nagetiere
+                        const rodentSize = this.size * 0.192; // Doppelt: 0.096->0.192
                         ctx.fillRect(-rodentSize/2, -rodentSize/2, rodentSize, rodentSize);
-                        // Bewegung (langsamere Bewegung für kleinere Größe)
+                        // Bewegung (in Kachel-Koordinaten)
                         if (Math.random() < 0.01) { // Weniger häufige Bewegung
-                            this.x += (Math.random() - 0.5) * 1; // Langsamere Bewegung
-                            this.y += (Math.random() - 0.5) * 1;
+                            this.tileX += (Math.random() - 0.5) * this.moveSpeed; // Bewegung in Kachel-Einheiten
+                            this.tileY += (Math.random() - 0.5) * this.moveSpeed;
+                            
+                            // Grenzen prüfen
+                            this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+                            this.tileY = Math.max(mapHeight * 0.6, Math.min(mapHeight - 1, this.tileY));
                         }
                         break;
                 }
                 
                 ctx.restore();
+            }
+
+            renderDetailedRock() {
+                // Basis-Stein-Farben (verschiedene Grautöne)
+                const baseColor = this.getRockColor();
+                const shadowColor = this.darkenRockColor(baseColor, 0.6);
+                const highlightColor = this.lightenRockColor(baseColor, 1.4);
+                
+                // Hauptkörper des Steins
+                ctx.fillStyle = baseColor;
+                ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+                
+                // 3D-Schattierung (ähnlich wie bei Bäumen und Kacheln)
+                const shadowSize = Math.max(1, Math.floor(this.size / 8));
+                
+                // Schatten (rechts und unten) - dunkler
+                ctx.fillStyle = shadowColor;
+                ctx.fillRect(-this.width/2 + this.width - shadowSize, -this.height/2, shadowSize, this.height); // Rechts
+                ctx.fillRect(-this.width/2, -this.height/2 + this.height - shadowSize, this.width, shadowSize); // Unten
+                
+                // Highlight (links und oben) - heller
+                ctx.fillStyle = highlightColor;
+                ctx.fillRect(-this.width/2, -this.height/2, shadowSize, this.height); // Links
+                ctx.fillRect(-this.width/2, -this.height/2, this.width, shadowSize); // Oben
+                
+                // Stein-Textur: Risse und Details
+                this.addRockTexture(baseColor, shadowColor);
+                
+                // Größenspezifische Details
+                if (this.rockType === 'large') {
+                    // Große Steine bekommen zusätzliche Farbflächen
+                    const darkColor = this.darkenRockColor(baseColor, 0.7);
+                    
+                    // Große dunkle Bereiche für Verwitterung
+                    ctx.fillStyle = darkColor;
+                    
+                    // Linke Seite - großer dunkler Bereich
+                    const leftPatchWidth = Math.floor(this.width / 4);
+                    const leftPatchHeight = Math.floor(this.height / 3);
+                    ctx.fillRect(-this.width/2, -this.height/2 + 2, leftPatchWidth, leftPatchHeight);
+                    
+                    // Rechte untere Ecke - Verwitterungsfleck
+                    const rightPatchWidth = Math.floor(this.width / 3);
+                    const rightPatchHeight = Math.floor(this.height / 4);
+                    ctx.fillRect(this.width/2 - rightPatchWidth, this.height/2 - rightPatchHeight, rightPatchWidth, rightPatchHeight);
+                    
+                    // Mittige unregelmäßige Fläche
+                    const midPatchSize = Math.floor(this.size / 6);
+                    for (let i = 0; i < 4; i++) {
+                        const patchX = -midPatchSize + i * (midPatchSize / 2);
+                        const patchY = -midPatchSize/2 + (i % 2) * midPatchSize;
+                        
+                        if (((this.rockSeed + i * 47) % 100) > 50) {
+                            ctx.fillRect(patchX, patchY, midPatchSize, midPatchSize);
+                        }
+                    }
+                } else if (this.rockType === 'medium') {
+                    // Mittlere Steine bekommen moderate Farbflächen
+                    const darkColor = this.darkenRockColor(baseColor, 0.8);
+                    ctx.fillStyle = darkColor;
+                    
+                    // Ein größerer unregelmäßiger Fleck in der Mitte
+                    const patchSize = Math.floor(this.size / 4);
+                    for (let x = 0; x < 2; x++) {
+                        for (let y = 0; y < 2; y++) {
+                            const patchX = -patchSize/2 + x * patchSize/2;
+                            const patchY = -patchSize/2 + y * patchSize/2;
+                            
+                            // Unregelmäßige Form durch teilweises Zeichnen
+                            if (((this.rockSeed + x * 13 + y * 29) % 100) > 40) {
+                                ctx.fillRect(patchX, patchY, patchSize/2, patchSize/2);
+                            }
+                        }
+                    }
+                    
+                    // Kleine Eckflecken
+                    ctx.fillRect(-this.width/2, this.height/2 - 2, 3, 2);
+                    ctx.fillRect(this.width/2 - 2, -this.height/2, 2, 3);
+                } else {
+                    // Kleine Steine bekommen subtile Farbflächen
+                    const darkColor = this.darkenRockColor(baseColor, 0.85);
+                    ctx.fillStyle = darkColor;
+                    
+                    // Nur kleine Flecken an den Ecken
+                    ctx.fillRect(-this.width/2, -this.height/2, 2, 2);
+                    ctx.fillRect(this.width/2 - 1, this.height/2 - 1, 1, 1);
+                    
+                    // Ein kleiner mittiger Fleck
+                    if (this.size > 8) {
+                        ctx.fillRect(-1, 0, 2, 1);
+                    }
+                }
+            }
+
+            getRockColor() {
+                // Basis-Grau mit Variation
+                const baseGray = 128; // Mittleres Grau
+                const variation = this.colorVariation;
+                const finalGray = Math.max(80, Math.min(180, baseGray + variation));
+                
+                // Verschiedene Stein-Typen haben leicht verschiedene Farben
+                if (this.rockType === 'large') {
+                    // Große Steine etwas dunkler und bräunlicher
+                    const r = Math.floor(finalGray * 0.9);
+                    const g = Math.floor(finalGray * 0.85);
+                    const b = Math.floor(finalGray * 0.8);
+                    return `rgb(${r}, ${g}, ${b})`;
+                } else if (this.rockType === 'small') {
+                    // Kleine Steine etwas heller
+                    const factor = 1.1;
+                    const r = Math.min(255, Math.floor(finalGray * factor));
+                    const g = Math.min(255, Math.floor(finalGray * factor));
+                    const b = Math.min(255, Math.floor(finalGray * factor));
+                    return `rgb(${r}, ${g}, ${b})`;
+                } else {
+                    // Standard-Grau für mittlere Steine
+                    return `rgb(${finalGray}, ${finalGray}, ${finalGray})`;
+                }
+            }
+
+            darkenRockColor(color, factor) {
+                // Extrahiere RGB-Werte aus rgb(r, g, b) String
+                const matches = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+                if (matches) {
+                    const r = Math.floor(parseInt(matches[1]) * factor);
+                    const g = Math.floor(parseInt(matches[2]) * factor);
+                    const b = Math.floor(parseInt(matches[3]) * factor);
+                    return `rgb(${r}, ${g}, ${b})`;
+                }
+                return '#444444'; // Fallback
+            }
+
+            lightenRockColor(color, factor) {
+                // Extrahiere RGB-Werte aus rgb(r, g, b) String
+                const matches = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+                if (matches) {
+                    const r = Math.min(255, Math.floor(parseInt(matches[1]) * factor));
+                    const g = Math.min(255, Math.floor(parseInt(matches[2]) * factor));
+                    const b = Math.min(255, Math.floor(parseInt(matches[3]) * factor));
+                    return `rgb(${r}, ${g}, ${b})`;
+                }
+                return '#CCCCCC'; // Fallback
+            }
+
+            addRockTexture(baseColor, shadowColor) {
+                // Organische Farbflächen statt Linien - ALLE Größen skaliert!
+                const scale = tileSize / baseTileSize; // Skalierungsfaktor
+                const highlightColor = this.lightenRockColor(baseColor, 1.2);
+                const midColor = this.darkenRockColor(baseColor, 0.9);
+                
+                // Große organische Flecken für Farbvariation
+                const largeSpots = Math.floor(this.size / 8) + 2;
+                for (let i = 0; i < largeSpots; i++) {
+                    const spotX = -this.width/2 + ((this.rockSeed + i * 73) % 100) / 100 * this.width;
+                    const spotY = -this.height/2 + ((this.rockSeed + i * 97) % 100) / 100 * this.height;
+                    const spotSize = (2 + ((this.rockSeed + i * 41) % 100) / 100 * (this.size / 4));
+                    
+                    // Zufällige Farbe zwischen den verfügbaren Tönen
+                    const colorChoice = (this.rockSeed + i * 137) % 3;
+                    let spotColor;
+                    if (colorChoice === 0) {
+                        spotColor = shadowColor;
+                    } else if (colorChoice === 1) {
+                        spotColor = highlightColor;
+                    } else {
+                        spotColor = midColor;
+                    }
+                    
+                    ctx.fillStyle = spotColor;
+                    
+                    // Eckige "organische" Flecken (mehrere kleine Rechtecke für unregelmäßige Form)
+                    const fleckSize = Math.max(1 * scale, Math.floor(spotSize / 2));
+                    for (let fx = 0; fx < 2; fx++) {
+                        for (let fy = 0; fy < 2; fy++) {
+                            const fleckX = spotX - fleckSize/2 + fx * fleckSize;
+                            const fleckY = spotY - fleckSize/2 + fy * fleckSize;
+                            
+                            // Nur teilweise zeichnen für unregelmäßige Formen
+                            if (((this.rockSeed + i * 23 + fx * 7 + fy * 11) % 100) > 40) {
+                                ctx.fillRect(fleckX, fleckY, fleckSize, fleckSize);
+                            }
+                        }
+                    }
+                }
+                
+                // Mittelgroße Flecken für zusätzliche Textur
+                const mediumSpots = Math.floor(this.size / 5);
+                for (let i = 0; i < mediumSpots; i++) {
+                    const spotX = -this.width/2 + 1 * scale + ((this.rockSeed + i * 127) % 100) / 100 * (this.width - 2 * scale);
+                    const spotY = -this.height/2 + 1 * scale + ((this.rockSeed + i * 179) % 100) / 100 * (this.height - 2 * scale);
+                    const spotSize = (1 + ((this.rockSeed + i * 61) % 100) / 100 * 2) * scale;
+                    
+                    ctx.fillStyle = shadowColor;
+                    ctx.fillRect(spotX, spotY, spotSize, spotSize);
+                }
+                
+                // Kleine Sprenkel für feine Details
+                const smallSpots = Math.floor(this.size / 3);
+                for (let i = 0; i < smallSpots; i++) {
+                    const spotX = -this.width/2 + 1 * scale + ((this.rockSeed + i * 211) % 100) / 100 * (this.width - 2 * scale);
+                    const spotY = -this.height/2 + 1 * scale + ((this.rockSeed + i * 233) % 100) / 100 * (this.height - 2 * scale);
+                    
+                    ctx.fillStyle = highlightColor;
+                    ctx.fillRect(spotX, spotY, 1 * scale, 1 * scale);
+                }
+            }
+
+            renderDetailedTree() {
+                // Stamm mit Textur rendern
+                this.renderTrunk();
+                
+                // Eckige Krone mit Schattierung rendern
+                this.renderCrown();
+                
+                // Äste und Details
+                this.renderBranches();
+            }
+
+            renderTrunk() {
+                const scale = tileSize / baseTileSize; // Skalierungsfaktor
+                const trunkX = -this.trunkWidth / 2;
+                const trunkY = 0;
+                
+                // Basis-Stamm
+                ctx.fillStyle = '#8B4513'; // Braun
+                ctx.fillRect(trunkX, trunkY, this.trunkWidth, this.trunkHeight);
+                
+                // Stamm-Schattierung
+                ctx.fillStyle = '#654321'; // Dunkler Braun für Schatten
+                ctx.fillRect(trunkX + this.trunkWidth - 2 * scale, trunkY, 2 * scale, this.trunkHeight); // Rechte Seite
+                ctx.fillRect(trunkX, trunkY + this.trunkHeight - 2 * scale, this.trunkWidth, 2 * scale); // Untere Seite
+                
+                // Helle Kante (Licht von links oben)
+                ctx.fillStyle = '#CD853F'; // Heller Braun
+                ctx.fillRect(trunkX, trunkY, 2 * scale, this.trunkHeight); // Linke Seite
+                ctx.fillRect(trunkX, trunkY, this.trunkWidth, 2 * scale); // Obere Seite
+                
+                // Rinde-Textur (deterministische Linien) - ALLE Größen skaliert!
+                ctx.fillStyle = '#654321';
+                const barkLines = Math.floor(this.trunkHeight / (8 * scale));
+                for (let i = 0; i < barkLines; i++) {
+                    const lineY = trunkY + 4 * scale + i * 8 * scale;
+                    const lineVariation = ((this.treeSeed + i * 67) % 100) / 100;
+                    const lineLength = this.trunkWidth * (0.6 + lineVariation * 0.3);
+                    const lineX = trunkX + (this.trunkWidth - lineLength) / 2;
+                    
+                    ctx.fillRect(lineX, lineY, lineLength, 1 * scale);
+                    
+                    // Vertikale Risse
+                    if (i % 3 === 0) {
+                        ctx.fillRect(trunkX + this.trunkWidth * 0.3, lineY - 2 * scale, 1 * scale, 4 * scale);
+                    }
+                }
+            }
+
+            renderCrown() {
+                const scale = tileSize / baseTileSize; // Skalierungsfaktor
+                const crownX = -this.crownWidth / 2;
+                const crownY = -this.crownHeight;
+                
+                // Basis-Krone (eckig statt rund!)
+                ctx.fillStyle = '#31AB31'; // Grün
+                ctx.fillRect(crownX, crownY, this.crownWidth, this.crownHeight);
+                
+                // Subtile Krone-Schattierung (wie bei Kacheln) - VIEL WENIGER 3D
+                const shadowSize = Math.max(1, Math.floor(this.size / 32)); // Deutlich subtiler wie bei Kacheln
+                
+                // Schatten (rechts und unten) - sehr dezent
+                ctx.fillStyle = '#006400'; // Dunkles Grün
+                ctx.fillRect(crownX + this.crownWidth - shadowSize, crownY, shadowSize, this.crownHeight); // Rechts
+                ctx.fillRect(crownX, crownY + this.crownHeight - shadowSize, this.crownWidth, shadowSize); // Unten
+                
+                // Licht (links und oben) - sehr dezent
+                ctx.fillStyle = '#32CD32'; // Helles Grün
+                ctx.fillRect(crownX, crownY, shadowSize, this.crownHeight); // Links
+                ctx.fillRect(crownX, crownY, this.crownWidth, shadowSize); // Oben
+                
+                // Blätter-Details (deterministische Punkte) - ALLE Größen skaliert!
+                ctx.fillStyle = '#228B22';
+                const leafClusters = Math.floor(this.crownWidth / (6 * scale));
+                for (let i = 0; i < leafClusters; i++) {
+                    const leafX = crownX + 3 * scale + ((this.treeSeed + i * 37) % 100) / 100 * (this.crownWidth - 6 * scale);
+                    const leafY = crownY + 3 * scale + ((this.treeSeed + i * 71) % 100) / 100 * (this.crownHeight - 6 * scale);
+                    
+                    // Kleine Blatt-Gruppen
+                    ctx.fillRect(leafX, leafY, 2 * scale, 2 * scale);
+                    ctx.fillRect(leafX + 1 * scale, leafY - 1 * scale, 1 * scale, 1 * scale);
+                    ctx.fillRect(leafX - 1 * scale, leafY + 1 * scale, 1 * scale, 1 * scale);
+                }
+                
+                // ENTFERNT: Eckige "Zacken" an der Krone - User wollte keine Zacken
+            }
+
+            renderBranches() {
+                const scale = tileSize / baseTileSize; // Skalierungsfaktor
+                // Kleine Äste am Stamm
+                ctx.fillStyle = '#8B4513';
+                const branches = Math.floor(this.trunkHeight / (15 * scale));
+                
+                for (let i = 0; i < branches; i++) {
+                    const branchY = this.trunkHeight * 0.3 + i * (this.trunkHeight * 0.5 / branches);
+                    const branchSide = ((this.treeSeed + i * 43) % 2) === 0 ? -1 : 1; // Links oder rechts
+                    const branchLength = (4 + ((this.treeSeed + i * 53) % 100) / 100 * 6) * scale;
+                    
+                    const branchStartX = branchSide * this.trunkWidth / 2;
+                    const branchEndX = branchStartX + branchSide * branchLength;
+                    
+                    // Ast-Linie
+                    ctx.fillRect(
+                        Math.min(branchStartX, branchEndX), 
+                        branchY - 1 * scale, 
+                        Math.abs(branchEndX - branchStartX), 
+                        2 * scale
+                    );
+                    
+                    // Kleines Blatt am Ende
+                    ctx.fillStyle = '#228B22';
+                    ctx.fillRect(branchEndX - 1 * scale, branchY - 2 * scale, 3 * scale, 3 * scale);
+                    ctx.fillStyle = '#8B4513';
+                }
+            }
+        }
+
+        // NEUE GLOBALE FUNKTION: Alle Objekte skalieren
+        function updateAllObjectScales() {
+            console.log('Aktualisiere Skalierung aller Objekte...');
+            
+            gameObjects.forEach(obj => {
+                if (obj.updateScale) {
+                    obj.updateScale();
+                }
+            });
+            
+            console.log(`${gameObjects.length} Objekte skaliert auf tileSize: ${tileSize.toFixed(1)}px`);
+        }
+
+        // RESIZE-FUNKTION - MUSS VOR initGame() stehen!
+        function resizeCanvas() {
+            const oldWidth = canvas.width;
+            const oldHeight = canvas.height;
+            
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            console.log('Canvas resized von', oldWidth, 'x', oldHeight, 'zu', canvas.width, 'x', canvas.height);
+            
+            // Kachelgröße neu berechnen
+            if (levelData) {
+                const oldTileSize = tileSize;
+                tileSize = Math.min(canvas.width / mapWidth, canvas.height / mapHeight);
+                console.log('Neue Kachelgröße:', tileSize.toFixed(1) + 'px (vorher:', oldTileSize.toFixed(1) + 'px)');
+                
+                // WICHTIG: Alle Objekte skalieren!
+                if (gameObjects && gameObjects.length > 0) {
+                    updateAllObjectScales();
+                }
             }
         }
 
@@ -960,7 +2228,11 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             
+            // Basis-Kachelgröße beim ersten Laden setzen
+            baseTileSize = Math.min(canvas.width / mapWidth, canvas.height / mapHeight);
+            
             console.log('Canvas initialisiert:', canvas.width, 'x', canvas.height);
+            console.log('Basis-Kachelgröße:', baseTileSize.toFixed(1) + 'px');
             
             // Resize-Event
             window.addEventListener('resize', resizeCanvas);
@@ -970,24 +2242,6 @@
             
             // Level-Daten laden und generieren
             loadLevelData();
-        }
-
-        function resizeCanvas() {
-            const oldWidth = canvas.width;
-            const oldHeight = canvas.height;
-            
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            console.log('Canvas resized von', oldWidth, 'x', oldHeight, 'zu', canvas.width, 'x', canvas.height);
-            
-            // Level neu generieren wenn sich die Größe deutlich geändert hat
-            if (Math.abs(oldWidth - canvas.width) > 100 || Math.abs(oldHeight - canvas.height) > 100) {
-                if (levelData) {
-                    console.log('Level wird wegen Größenänderung neu generiert');
-                    generateLevel();
-                }
-            }
         }
 
         function loadLevelData() {
@@ -1030,157 +2284,32 @@
             notice.innerHTML = '📋 DEMO-MODUS';
             document.body.appendChild(notice);
         }
-
+           
         function generateLevel() {
             console.log('=== LEVEL GENERATION START ===');
             console.log('Canvas Größe:', canvas.width, 'x', canvas.height);
             console.log('Level Data:', levelData);
             
+            // Kachel-Map generieren
+            generateTileMap();
+            
             gameObjects = [];
             let objectCounts = { trees: 0, rocks: 0, rodents: 0, ownDinos: 0, enemyDinos: 0 };
             
-            // Umgebungsobjekte generieren - BESSERE VERTEILUNG
-            // Bäume - über das ganze Level verteilt, aber mehr in der oberen Hälfte
-            for (let i = 0; i < 25; i++) {
-                const x = 50 + Math.random() * (canvas.width - 100); // Abstand zu Rändern
-                const y = canvas.height * 0.3 + Math.random() * (canvas.height * 0.5); // Von 30% bis 80%
-                gameObjects.push(new EnvironmentObject(x, y, 'tree'));
-                objectCounts.trees++;
-            }
+            // Bäume - in Gruppen generieren, bevorzugt hinter Gras-Zone
+            generateTreeGroups(objectCounts);
             
-            // Steine - gleichmäßig verteilt
-            for (let i = 0; i < 35; i++) {
-                const x = Math.random() * canvas.width;
-                const y = canvas.height * 0.5 + Math.random() * (canvas.height * 0.4); // Von 50% bis 90%
-                gameObjects.push(new EnvironmentObject(x, y, 'rock'));
-                objectCounts.rocks++;
-            }
+            // Steine - in Gruppen/Haufen verteilt, NICHT auf Wasser! (bleibt wie gehabt)
+            generateRockGroups(objectCounts);
             
-            // Nagetiere - kleine Gruppen, mehr verteilt
-            for (let i = 0; i < 12; i++) {
-                const centerX = Math.random() * canvas.width;
-                const centerY = canvas.height * 0.6 + Math.random() * (canvas.height * 0.3);
-                
-                // Kleine Gruppe um den Zenterpunkt (kleinere Verteilung)
-                for (let j = 0; j < Math.random() * 3 + 1; j++) {
-                    const x = centerX + (Math.random() - 0.5) * 40; // Kleinere Verteilung: ±20px um Zentrum
-                    const y = centerY + (Math.random() - 0.5) * 30; // Kleinere Verteilung: ±15px um Zentrum
-                    gameObjects.push(new EnvironmentObject(
-                        Math.max(20, Math.min(canvas.width - 20, x)),
-                        Math.max(canvas.height * 0.6, Math.min(canvas.height - 20, y)),
-                        'rodent'
-                    ));
-                    objectCounts.rodents++;
-                }
-            }
+            // Nagetiere - kleine Gruppen, mehr verteilt, NICHT auf Wasser
+            generateRodentGroups(objectCounts);
             
-            // Eigene Dinos generieren - LINKE HÄLFTE, bessere Verteilung
-            levelData.populationData.forEach((species, speciesIndex) => {
-                if (!species.population.isExtinct) {
-                    console.log(`Generiere ${species.name}: ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
-                    
-                    // Erwachsene - in Gruppen platzieren
-                    const adultGroups = Math.ceil(species.population.adults / 4); // Gruppen von max. 4
-                    let adultsPlaced = 0;
-                    
-                    for (let group = 0; group < adultGroups; group++) {
-                        const groupSize = Math.min(4, species.population.adults - adultsPlaced);
-                        const groupCenterX = 80 + Math.random() * (canvas.width * 0.35); // Linke 40% mit Puffer
-                        const groupCenterY = canvas.height * 0.4 + Math.random() * (canvas.height * 0.4); // Von 40% bis 80%
-                        
-                        console.log(`Erwachsene Gruppe ${group + 1} bei (${Math.round(groupCenterX)}, ${Math.round(groupCenterY)})`);
-                        
-                        for (let i = 0; i < groupSize; i++) {
-                            const x = groupCenterX + (Math.random() - 0.5) * 60; // Kleinere Verteilung: ±30px um Gruppenzentrum
-                            const y = groupCenterY + (Math.random() - 0.5) * 40;  // Kleinere Verteilung: ±20px um Gruppenzentrum
-                            
-                            const finalX = Math.max(50, Math.min(canvas.width * 0.45, x));
-                            const finalY = Math.max(canvas.height * 0.35, Math.min(canvas.height - 50, y));
-                            
-                            gameObjects.push(new Dino(finalX, finalY, species, true, false));
-                            objectCounts.ownDinos++;
-                            adultsPlaced++;
-                        }
-                    }
-                    
-                    // Jungtiere - näher zu Erwachsenen, aber etwas verstreuter
-                    const juvenileGroups = Math.ceil(species.population.juveniles / 6); // Kleinere Gruppen
-                    let juvenilesPlaced = 0;
-                    
-                    for (let group = 0; group < juvenileGroups; group++) {
-                        const groupSize = Math.min(6, species.population.juveniles - juvenilesPlaced);
-                        const groupCenterX = 60 + Math.random() * (canvas.width * 0.4); // Etwas weiter verteilt
-                        const groupCenterY = canvas.height * 0.45 + Math.random() * (canvas.height * 0.35);
-                        
-                        for (let i = 0; i < groupSize; i++) {
-                            const x = groupCenterX + (Math.random() - 0.5) * 50; // Kleinere Verteilung: ±25px
-                            const y = groupCenterY + (Math.random() - 0.5) * 35;  // Kleinere Verteilung: ±17.5px
-                            
-                            const finalX = Math.max(40, Math.min(canvas.width * 0.45, x));
-                            const finalY = Math.max(canvas.height * 0.4, Math.min(canvas.height - 40, y));
-                            
-                            gameObjects.push(new Dino(finalX, finalY, species, false, false));
-                            objectCounts.ownDinos++;
-                            juvenilesPlaced++;
-                        }
-                    }
-                }
-            });
+            // Eigene Dinos generieren - LINKE HÄLFTE, bessere Verteilung, NICHT auf Wasser
+            generateOwnDinos(objectCounts);
             
-            // Gegner-Dinos generieren - RECHTE HÄLFTE, spiegelverkehrt
-            levelData.populationData.forEach((species, speciesIndex) => {
-                if (!species.population.isExtinct) {
-                    // Weniger Gegner-Dinos für Balance
-                    const enemyAdults = Math.ceil(species.population.adults * 0.7);
-                    const enemyJuveniles = Math.ceil(species.population.juveniles * 0.5);
-                    
-                    console.log(`Generiere Gegner ${species.name}: ${enemyAdults} Erwachsene, ${enemyJuveniles} Jungtiere`);
-                    
-                    // Erwachsene Gegner - in lockeren Gruppen
-                    const enemyAdultGroups = Math.ceil(enemyAdults / 3);
-                    let enemyAdultsPlaced = 0;
-                    
-                    for (let group = 0; group < enemyAdultGroups; group++) {
-                        const groupSize = Math.min(3, enemyAdults - enemyAdultsPlaced);
-                        const groupCenterX = canvas.width * 0.6 + Math.random() * (canvas.width * 0.35); // Rechte 40%
-                        const groupCenterY = canvas.height * 0.4 + Math.random() * (canvas.height * 0.4);
-                        
-                        for (let i = 0; i < groupSize; i++) {
-                            const x = groupCenterX + (Math.random() - 0.5) * 50; // Kleinere Verteilung
-                            const y = groupCenterY + (Math.random() - 0.5) * 40; // Kleinere Verteilung
-                            
-                            const finalX = Math.max(canvas.width * 0.55, Math.min(canvas.width - 50, x));
-                            const finalY = Math.max(canvas.height * 0.35, Math.min(canvas.height - 50, y));
-                            
-                            gameObjects.push(new Dino(finalX, finalY, species, true, true));
-                            objectCounts.enemyDinos++;
-                            enemyAdultsPlaced++;
-                        }
-                    }
-                    
-                    // Junge Gegner - verstreuter
-                    const enemyJuvenileGroups = Math.ceil(enemyJuveniles / 4);
-                    let enemyJuvenilesPlaced = 0;
-                    
-                    for (let group = 0; group < enemyJuvenileGroups; group++) {
-                        const groupSize = Math.min(4, enemyJuveniles - enemyJuvenilesPlaced);
-                        const groupCenterX = canvas.width * 0.65 + Math.random() * (canvas.width * 0.3);
-                        const groupCenterY = canvas.height * 0.45 + Math.random() * (canvas.height * 0.35);
-                        
-                        for (let i = 0; i < groupSize; i++) {
-                            const x = groupCenterX + (Math.random() - 0.5) * 45; // Kleinere Verteilung
-                            const y = groupCenterY + (Math.random() - 0.5) * 30; // Kleinere Verteilung
-                            
-                            const finalX = Math.max(canvas.width * 0.55, Math.min(canvas.width - 40, x));
-                            const finalY = Math.max(canvas.height * 0.4, Math.min(canvas.height - 40, y));
-                            
-                            gameObjects.push(new Dino(finalX, finalY, species, false, true));
-                            objectCounts.enemyDinos++;
-                            enemyJuvenilesPlaced++;
-                        }
-                    }
-                }
-            });
+            // Gegner-Dinos generieren - RECHTE HÄLFTE, spiegelverkehrt, NICHT auf Wasser
+            generateEnemyDinos(objectCounts);
             
             console.log('=== OBJEKT COUNTS ===');
             console.log('Bäume:', objectCounts.trees);
@@ -1191,8 +2320,274 @@
             console.log('Gesamt Objekte:', gameObjects.length);
             console.log('=== LEVEL GENERATION END ===');
             
+            // Nach Level-Generation: Alle Objekte auf aktuelle Kachelgröße skalieren
+            updateAllObjectScales();
+            
             updateHUD();
         }
+
+        // NEUE FUNKTION: Sichere Position finden (nicht auf Wasser) - ROBUSTERE VERSION
+        function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, attempts = 50) {
+            console.log(`Suche gültige Position um (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)}) mit Radius ${maxDistanceInTiles}`);
+            
+            for (let attempt = 0; attempt < attempts; attempt++) {
+                let testTileX, testTileY;
+                
+                if (maxDistanceInTiles === 0) {
+                    // Direkt am Zentrum
+                    testTileX = centerTileX;
+                    testTileY = centerTileY;
+                } else {
+                    // Zufällig um das Zentrum
+                    const angle = Math.random() * 2 * Math.PI;
+                    const distance = Math.random() * maxDistanceInTiles;
+                    testTileX = centerTileX + Math.cos(angle) * distance;
+                    testTileY = centerTileY + Math.sin(angle) * distance;
+                }
+                
+                // Grenzen prüfen
+                const boundedTileX = Math.max(1, Math.min(mapWidth - 2, testTileX));
+                const boundedTileY = Math.max(mapHeight * 0.3, Math.min(mapHeight - 2, testTileY));
+                
+                // Prüfe ob Position auf Wasser ist
+                const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
+                console.log(`  Versuch ${attempt + 1}: (${boundedTileX.toFixed(1)}, ${boundedTileY.toFixed(1)}) = ${tileType === TILE_TYPES.WATER ? 'WASSER' : tileType === TILE_TYPES.GRASS ? 'GRAS' : 'ERDE'}`);
+                
+                if (tileType !== TILE_TYPES.WATER) {
+                    console.log(`  ✓ Gültige Position gefunden: (${boundedTileX.toFixed(1)}, ${boundedTileY.toFixed(1)})`);
+                    return { tileX: boundedTileX, tileY: boundedTileY, valid: true };
+                }
+            }
+            
+            // FALLBACK: Wenn nichts gefunden, nimm einfach eine sichere Erde-Position
+            console.log(`  ⚠ Keine Position gefunden, verwende Fallback`);
+            
+            // Suche systematisch eine Land-Kachel
+            for (let y = Math.floor(mapHeight * 0.3); y < mapHeight - 2; y++) {
+                for (let x = 1; x < mapWidth - 2; x++) {
+                    const tileType = getTileTypeAtPosition(x, y);
+                    if (tileType !== TILE_TYPES.WATER) {
+                        console.log(`  ✓ Fallback Position: (${x}, ${y})`);
+                        return { tileX: x, tileY: y, valid: true };
+                    }
+                }
+            }
+            
+            console.log(`  ❌ Auch Fallback fehlgeschlagen!`);
+            return { tileX: centerTileX, tileY: centerTileY, valid: false };
+        }
+
+        // NEUE FUNKTION: Baum-Gruppen generieren - VEREINFACHT
+        function generateTreeGroups(objectCounts) {
+            console.log('=== BAUM-GENERATION START ===');
+            
+            const groupCount = 4 + Math.floor(Math.random() * 3); // 4-6 Baum-Gruppen
+            const singleTrees = 3 + Math.floor(Math.random() * 4); // 3-6 einzelne Bäume
+            
+            console.log(`Plane ${groupCount} Baum-Gruppen + ${singleTrees} einzelne Bäume`);
+            
+            // Baum-Gruppen
+            for (let group = 0; group < groupCount; group++) {
+                console.log(`--- Baum-Gruppe ${group + 1} ---`);
+                
+                // EINFACHER: Zufällige Position, dann validieren
+                let groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
+                let groupCenterTileY = mapHeight * 0.3 + Math.random() * (mapHeight * 0.5);
+                
+                console.log(`Gruppe ${group + 1} Zentrum: (${groupCenterTileX.toFixed(1)}, ${groupCenterTileY.toFixed(1)})`);
+                
+                // Gruppen-Größe
+                const treesInGroup = 3 + Math.floor(Math.random() * 5); // 3-7 Bäume pro Gruppe
+                
+                for (let i = 0; i < treesInGroup; i++) {
+                    // Position um Gruppenzentrum - NICHT auf Wasser!
+                    const position = findValidLandPosition(groupCenterTileX, groupCenterTileY, 4); // 4 Kacheln Radius
+                    
+                    if (position.valid) {
+                        gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'tree'));
+                        objectCounts.trees++;
+                        console.log(`  Baum ${i + 1} platziert bei (${position.tileX.toFixed(1)}, ${position.tileY.toFixed(1)})`);
+                    } else {
+                        console.log(`  Baum ${i + 1} NICHT platziert - keine gültige Position`);
+                    }
+                }
+            }
+            
+            // Einzelne Bäume - zufällig verteilt
+            console.log(`--- Einzelne Bäume ---`);
+            for (let i = 0; i < singleTrees; i++) {
+                const position = findValidLandPosition(
+                    Math.random() * mapWidth, 
+                    mapHeight * 0.3 + Math.random() * (mapHeight * 0.5), 
+                    0 // Keine Gruppen-Distanz
+                );
+                
+                if (position.valid) {
+                    gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'tree'));
+                    objectCounts.trees++;
+                    console.log(`Einzelbaum ${i + 1} platziert bei (${position.tileX.toFixed(1)}, ${position.tileY.toFixed(1)})`);
+                } else {
+                    console.log(`Einzelbaum ${i + 1} NICHT platziert - keine gültige Position`);
+                }
+            }
+            
+            console.log(`=== BAUM-GENERATION END: ${objectCounts.trees} Bäume platziert ===`);
+        }
+
+        // VEREINFACHTE FUNKTION: Stein-Gruppen
+        function generateRockGroups(objectCounts) {
+            console.log('=== STEIN-GENERATION START ===');
+            const rockGroups = 8; // Weniger Gruppen für einfacheres Debugging
+            
+            for (let group = 0; group < rockGroups; group++) {
+                console.log(`--- Stein-Gruppe ${group + 1} ---`);
+                
+                // EINFACHER: Zufällige Position
+                const groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
+                const groupCenterTileY = mapHeight * 0.5 + Math.random() * (mapHeight * 0.4);
+                
+                console.log(`Stein-Gruppe ${group + 1} Zentrum: (${groupCenterTileX.toFixed(1)}, ${groupCenterTileY.toFixed(1)})`);
+                
+                // Einfache Gruppe: 3-6 Steine
+                const rocksInGroup = 3 + Math.floor(Math.random() * 4);
+                
+                for (let i = 0; i < rocksInGroup; i++) {
+                    const rockType = i === 0 ? 'large' : (Math.random() < 0.5 ? 'medium' : 'small');
+                    const maxDistance = i === 0 ? 0.5 : 2.0;
+                    
+                    const position = findValidLandPosition(groupCenterTileX, groupCenterTileY, maxDistance);
+                    
+                    if (position.valid) {
+                        gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'rock', {
+                            rockType: rockType,
+                            isGroupLeader: i === 0,
+                            groupIndex: group
+                        }));
+                        objectCounts.rocks++;
+                        console.log(`  Stein ${i + 1} (${rockType}) platziert bei (${position.tileX.toFixed(1)}, ${position.tileY.toFixed(1)})`);
+                    } else {
+                        console.log(`  Stein ${i + 1} NICHT platziert - keine gültige Position`);
+                    }
+                }
+            }
+            
+            console.log(`=== STEIN-GENERATION END: ${objectCounts.rocks} Steine platziert ===`);
+        }
+
+        // VEREINFACHTE FUNKTION: Nagetier-Gruppen
+        function generateRodentGroups(objectCounts) {
+            console.log('=== NAGETIER-GENERATION START ===');
+            
+            for (let i = 0; i < 8; i++) {
+                console.log(`--- Nagetier-Gruppe ${i + 1} ---`);
+                
+                // Zufällige Zentrums-Position
+                const centerTileX = 5 + Math.random() * (mapWidth - 10);
+                const centerTileY = mapHeight * 0.6 + Math.random() * (mapHeight * 0.3);
+                
+                console.log(`Nagetier-Gruppe ${i + 1} Zentrum: (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)})`);
+                
+                // 1-3 Nagetiere pro Gruppe
+                const rodentsInGroup = 1 + Math.floor(Math.random() * 3);
+                
+                for (let j = 0; j < rodentsInGroup; j++) {
+                    const position = findValidLandPosition(centerTileX, centerTileY, 2.0);
+                    
+                    if (position.valid) {
+                        gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'rodent'));
+                        objectCounts.rodents++;
+                        console.log(`  Nagetier ${j + 1} platziert bei (${position.tileX.toFixed(1)}, ${position.tileY.toFixed(1)})`);
+                    } else {
+                        console.log(`  Nagetier ${j + 1} NICHT platziert - keine gültige Position`);
+                    }
+                }
+            }
+            
+            console.log(`=== NAGETIER-GENERATION END: ${objectCounts.rodents} Nagetiere platziert ===`);
+        }
+
+        // VEREINFACHTE FUNKTION: Eigene Dinos generieren
+        function generateOwnDinos(objectCounts) {
+            console.log('=== EIGENE DINOS GENERATION START ===');
+            
+            levelData.populationData.forEach((species, speciesIndex) => {
+                if (!species.population.isExtinct) {
+                    console.log(`--- ${species.name} ---`);
+                    console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
+                    
+                    // VEREINFACHT: Alle Dinos in einer großen Gruppe
+                    const totalDinos = species.population.adults + species.population.juveniles;
+                    const centerTileX = 5 + Math.random() * (mapWidth * 0.25); // Linke Hälfte
+                    const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
+                    
+                    console.log(`${species.name} Zentrum: (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)})`);
+                    
+                    for (let i = 0; i < totalDinos; i++) {
+                        const isAdult = i < species.population.adults;
+                        const position = findValidLandPosition(centerTileX, centerTileY, 8); // Großer Radius
+
+                        //const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
+                        //const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
+                        
+                        if (position.valid) {
+                            // Stelle sicher dass in linker Hälfte bleibt
+ 
+                            
+                            gameObjects.push(new Dino(position.tileX, position.tileY, species, isAdult, false));
+                            objectCounts.ownDinos++;
+                           // console.log(`  ${isAdult ? 'Erwachsener' : 'Junger'} ${species.name} platziert bei (${finalTileX.toFixed(1)}, ${finalTileY.toFixed(1)})`);
+                        } else {
+                           // console.log(`  ${isAdult ? 'Erwachsener' : 'Junger'} ${species.name} NICHT platziert - keine gültige Position`);
+                        }
+                    }
+                }
+            });
+            
+            console.log(`=== EIGENE DINOS GENERATION END: ${objectCounts.ownDinos} Dinos platziert ===`);
+        }
+
+        // VEREINFACHTE FUNKTION: Gegner-Dinos generieren
+        function generateEnemyDinos(objectCounts) {
+            console.log('=== GEGNER DINOS GENERATION START ===');
+            
+            levelData.populationData.forEach((species, speciesIndex) => {
+                if (!species.population.isExtinct) {
+                    // Weniger Gegner für Balance
+                    const enemyAdults = Math.ceil(species.population.adults * 0.6);
+                    const enemyJuveniles = Math.ceil(species.population.juveniles * 0.4);
+                    const totalEnemies = enemyAdults + enemyJuveniles;
+                    
+                    console.log(`--- Gegner ${species.name} ---`);
+                    console.log(`Generiere ${enemyAdults} Erwachsene, ${enemyJuveniles} Jungtiere`);
+                    
+                    // VEREINFACHT: Alle Gegner in einer großen Gruppe
+                    const centerTileX = 5 + mapWidth * 0.65 + Math.random() * (mapWidth * 0.25); // Rechte Hälfte
+                    const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
+                    
+                    console.log(`Gegner ${species.name} Zentrum: (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)})`);
+                    
+                    for (let i = 0; i < totalEnemies; i++) {
+                        const isAdult = i < enemyAdults;
+                        const position = findValidLandPosition(centerTileX, centerTileY, 8); // Großer Radius
+                        
+                        if (position.valid) {
+                            // Stelle sicher dass in rechter Hälfte bleibt
+                            const finalTileX = Math.max(mapWidth * 0.55, Math.min(mapWidth - 2, position.tileX));
+                            const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
+                            
+                            gameObjects.push(new Dino(finalTileX, finalTileY, species, isAdult, true));
+                            objectCounts.enemyDinos++;
+                            console.log(`  ${isAdult ? 'Erwachsener' : 'Junger'} Gegner ${species.name} platziert bei (${finalTileX.toFixed(1)}, ${finalTileY.toFixed(1)})`);
+                        } else {
+                            console.log(`  ${isAdult ? 'Erwachsener' : 'Junger'} Gegner ${species.name} NICHT platziert - keine gültige Position`);
+                        }
+                    }
+                }
+            });
+            
+            console.log(`=== GEGNER DINOS GENERATION END: ${objectCounts.enemyDinos} Dinos platziert ===`);
+        }
+            
 
         function startGameLoop() {
             function gameLoop() {
@@ -1214,45 +2609,19 @@
         }
 
         function render() {
-            // Himmel
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#87CEEB');
-            gradient.addColorStop(0.3, '#98FB98');
-            gradient.addColorStop(1, '#228B22');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // TILE-LOOK (ab ca. 35% Höhe)
-            const tileSize = 48; // 48px für schönen Retro-Look
-            const tileStartY = Math.floor(canvas.height * 0.35);
-
-            const grassColors = ['#6bab3c', '#7dc857', '#568d2d'];
-            const dirtColors = ['#9d6c32', '#b28554', '#c9a063'];
-
-            for (let y = tileStartY; y < canvas.height; y += tileSize) {
-                for (let x = 0; x < canvas.width; x += tileSize) {
-                    // Muster: leicht versetztes Schachbrett + Zufall
-                    let tileType;
-                    if (((Math.floor(x/tileSize) + Math.floor(y/tileSize)) % 2 === 0 && Math.random() > 0.25) || Math.random() > 0.8) {
-                        tileType = 'grass';
-                    } else {
-                        tileType = 'dirt';
-                    }
-                    let color = tileType === 'grass'
-                        ? grassColors[Math.floor(Math.random()*grassColors.length)]
-                        : dirtColors[Math.floor(Math.random()*dirtColors.length)];
-                    ctx.fillStyle = color;
-                    ctx.fillRect(x, y, tileSize, tileSize);
-                }
-            }
-
-            // Objekte nach Y-Position sortieren (Z-Order)
-            gameObjects.sort((a, b) => a.y - b.y);
-
-            // Alle Objekte rendern (Dinos, Bäume etc.)
+            // Terrain rendern (Himmel + Kacheln)
+            renderTerrain();
+            
+            // Objekte nach Y-Position sortieren (Z-Order) - jetzt in Kachel-Koordinaten
+            gameObjects.sort((a, b) => {
+                const aY = a.tileY || a.y; // Fallback für Objekte ohne tileY
+                const bY = b.tileY || b.y;
+                return aY - bY;
+            });
+            
+            // Alle Objekte rendern
             gameObjects.forEach(obj => obj.render());
         }
-
 
         function updateHUD() {
             const statusContainer = document.getElementById('speciesStatus');
