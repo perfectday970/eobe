@@ -127,7 +127,8 @@ router.post('/save-evolution', async (req, res) => {
 // Evolution-Daten laden (für population.html)
 router.get('/load-evolution/:sessionId', async (req, res) => {
     try {
-        const { sessionId } = req.params;
+        const { sessionId } = req.params; // ← ERST sessionId definieren
+        console.log('🔍 DEBUG - Load Request für:', sessionId);
         
         const game = await Game.findOne({ sessionId });
         

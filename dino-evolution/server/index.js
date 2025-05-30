@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const path = require('path');
 require('dotenv').config();
 
 // Import routes (werden wir erstellen)
@@ -44,6 +45,30 @@ connectDB();
 // Routes
 app.use('/api', apiRoutes);
 app.use('/api/game', gameRoutes);
+
+app.use((req, res, next) => {
+    console.log('=== REQUEST DEBUG ===');
+    console.log('Method:', req.method);
+    console.log('Original URL:', req.originalUrl);
+    console.log('Path:', req.path);
+    console.log('Query:', req.query);
+    
+    // Redirect Detection
+    const originalRedirect = res.redirect;
+    res.redirect = function(statusOrUrl, url) {
+        console.log('🔄 REDIRECT DETECTED!');
+        console.log('   From:', req.originalUrl);
+        console.log('   To:', arguments[0]);
+        console.trace('Redirect source');
+        return originalRedirect.apply(this, arguments);
+    };
+    
+    next();
+});
+
+app.use(express.static(path.join(__dirname, '../client'), {
+    redirect: false
+}));
 
 // Health check
 app.get('/health', (req, res) => {

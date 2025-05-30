@@ -386,13 +386,26 @@
 
         async function loadGameData() {
             try {
-                // Session-ID aus URL-Parameter laden
-                const urlParams = new URLSearchParams(window.location.search);
-                sessionId = urlParams.get('session');
+                setLoadingText('Prüfe Session...');
+                
+                // ROBUSTES URL-PARSING
+                console.log('🔍 URL:', window.location.href);
+                
+                let sessionId = null;
+                
+                // METHODE 1: RegEx (am zuverlässigsten)
+                const sessionMatch = window.location.href.match(/session=([a-f0-9-]+)/i);
+                if (sessionMatch && sessionMatch[1]) {
+                    sessionId = sessionMatch[1];
+                    console.log('✅ Session-ID gefunden:', sessionId);
+                }
                 
                 if (!sessionId) {
-                    throw new Error('Keine Session-ID gefunden');
+                    throw new Error('Keine Session-ID in URL gefunden');
                 }
+                
+                // Session-ID global setzen
+                window.sessionId = sessionId;
                 
                 updateSessionInfo();
                 setLoadingText('Lade Evolutionsdaten...');
@@ -407,7 +420,6 @@
                     currentLevel = data.gameData.currentLevel || 1;
                     
                     console.log('✅ Evolution-Daten geladen:', data.gameData);
-                    console.log(`📊 ${selectedSlots.length} Slots, Level: ${currentLevel}`);
                     
                     if (selectedSlots.length === 0) {
                         throw new Error('Keine Dinosaurier-Arten ausgewählt');
@@ -677,12 +689,28 @@
             setLoadingText('Bereite Level vor...');
             
             setTimeout(() => {
-                const urlParams = new URLSearchParams();
-                urlParams.set('session', sessionId);
-                window.location.href = `level.html?${urlParams.toString()}`;
+                // SESSION-ID NOCHMALS AUS URL EXTRAHIEREN (sicherer)
+                let currentSessionId = sessionId;
+                
+                // Fallback: Aus aktueller URL extrahieren
+                if (!currentSessionId) {
+                    const currentUrl = new URL(window.location.href);
+                    currentSessionId = currentUrl.searchParams.get('session');
+                }
+                
+                console.log('🔍 Redirect sessionId:', currentSessionId); // DEBUG
+                
+                if (currentSessionId) {
+                    const urlParams = new URLSearchParams();
+                    urlParams.set('session', currentSessionId);
+                    window.location.href = `level.html?${urlParams.toString()}`;
+                } else {
+                    console.error('❌ Keine Session-ID für Redirect verfügbar!');
+                    // Fallback: Zurück zum Generator
+                    window.location.href = 'index.html';
+                }
             }, 2000);
         }
-
         // ===================================
         // UI-HILFSFUNKTIONEN
         // ===================================
