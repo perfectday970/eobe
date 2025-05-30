@@ -391,7 +391,7 @@
                 // ROBUSTES URL-PARSING
                 console.log('🔍 URL:', window.location.href);
                 
-                let sessionId = null;
+                sessionId = null;
                 
                 // METHODE 1: RegEx (am zuverlässigsten)
                 const sessionMatch = window.location.href.match(/session=([a-f0-9-]+)/i);
@@ -406,6 +406,12 @@
                 
                 // Session-ID global setzen
                 window.sessionId = sessionId;
+                // Wichtig: Setze auch die globale Variable für savePopulationToServer
+                if (typeof window !== 'undefined') {
+                    window.sessionId = sessionId;
+                }
+                // Globale Variable setzen
+                sessionId = sessionMatch[1];
                 
                 updateSessionInfo();
                 setLoadingText('Lade Evolutionsdaten...');
@@ -492,6 +498,7 @@
             
             // Gegner für Level auswählen
             selectEnemiesForLevel(currentLevel);
+            console.log('🎯 Selected enemies:', enemySlots)
             
             // Populationen berechnen
             const populationData = [];
@@ -545,31 +552,40 @@
             };
             
             // Population-Daten an Server senden
+            console.log('🚀 DEBUG: Rufe savePopulationToServer auf...');
             await savePopulationToServer(levelData);
+            console.log('✅ DEBUG: savePopulationToServer beendet');
             
             // Animation starten
             animatePopulation(populationData, enemyPopulationData);
         }
 
         async function savePopulationToServer(levelData) {
+            console.log('📤 DEBUG: Sende levelData an Server:', levelData);
+            
             if (sessionId && !sessionId.startsWith('offline')) {
                 try {
                     setLoadingText('Speichere Population...');
+                    
+                    const requestData = {
+                        sessionId: sessionId,
+                        populationData: levelData.populationData,
+                        enemyData: levelData.enemyData,
+                        currentLevel: levelData.currentLevel
+                    };
+                    
+                    console.log('📤 DEBUG: Request Data:', requestData);
                     
                     const response = await fetch(`${API_BASE}/save-population`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            sessionId: sessionId,
-                            populationData: levelData.populationData,
-                            enemyData: levelData.enemyData,
-                            currentLevel: levelData.currentLevel
-                        })
+                        body: JSON.stringify(requestData)
                     });
                     
                     const data = await response.json();
+                    console.log('📥 DEBUG: Server Response:', data);
                     
                     if (data.success) {
                         console.log('💾 Population gespeichert:', data);
@@ -579,8 +595,9 @@
                     
                 } catch (error) {
                     console.error('❌ Fehler beim Speichern der Population:', error);
-                    // Weiter mit Animation auch wenn Speichern fehlschlägt
                 }
+            } else {
+                console.log('🔒 DEBUG: Offline-Modus oder keine Session-ID');
             }
         }
 
@@ -686,8 +703,7 @@
             const finalMessage = document.getElementById('finalMessage');
             finalMessage.classList.add('visible');
             
-            setLoadingText('Bereite Level vor...');
-            
+            setLoadingText('Bereite Level vor...'); 
             setTimeout(() => {
                 // SESSION-ID NOCHMALS AUS URL EXTRAHIEREN (sicherer)
                 let currentSessionId = sessionId;
