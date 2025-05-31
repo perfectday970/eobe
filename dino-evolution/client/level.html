@@ -1238,12 +1238,133 @@
                 this.facingRight = !isEnemy;
                 this.lastTileX = tileX;
                 
+                // NEU: Cross-Movement System
+                this.initializeCrossMovement();
+                
                 this.initializeMovementBehavior();
                 this.isMovingForward = true;
                 this.animationPhase = 'idle';
                 this.phaseStartTime = Date.now();
             }
 
+            // NEU: Cross-Movement Initialisierung
+            initializeCrossMovement() {
+                // Spawn-Bereiche definieren
+                this.spawnSide = this.isEnemy ? 'right' : 'left';
+                
+                // Ziel-Bereiche definieren (die "letzten vier Kacheln" jeder Seite)
+                this.targetZones = {
+                    left: { min: 0, max: 4 },           // Linke Seite: erste 4 Kacheln
+                    right: { min: mapWidth - 4, max: mapWidth }  // Rechte Seite: letzte 4 Kacheln
+                };
+                
+                // Home-Bereiche (ursprüngliche Spawn-Bereiche)
+                this.homeZones = {
+                    left: { min: mapWidth * 0.05, max: mapWidth * 0.45 },
+                    right: { min: mapWidth * 0.55, max: mapWidth * 0.95 }
+                };
+                
+                // Initial alle Dinos wollen zur anderen Seite
+                this.currentGoal = this.spawnSide === 'left' ? 'right' : 'left';
+                
+                // Wahrscheinlichkeits-Modifikatoren
+                this.crossMovementTendency = 0.7; // 70% Wahrscheinlichkeit in Richtung Ziel
+                this.randomMovementChance = 0.3;   // 30% für zufällige Bewegung
+                
+                console.log(`🎯 Dino ${this.species.name} (${this.spawnSide}): Ziel -> ${this.currentGoal}`);
+            }
+
+            // NEU: Prüfen ob Dino sein aktuelles Ziel erreicht hat
+            checkGoalReached() {
+                const currentZone = this.targetZones[this.currentGoal];
+                
+                if (this.tileX >= currentZone.min && this.tileX <= currentZone.max) {
+                    // Ziel erreicht! Wechsle zum anderen Ziel
+                    this.currentGoal = this.currentGoal === 'left' ? 'right' : 'left';
+                    
+                    console.log(`🎯 Dino ${this.species.name}: Ziel erreicht! Neues Ziel -> ${this.currentGoal}`);
+                    
+                    // Kurze Pause nach Ziel-Erreichung
+                    this.behaviorState = 'resting';
+                    this.currentBehaviorDuration = this.getRandomRestDuration() * 1.5; // Etwas länger ausruhen
+                    this.behaviorTimer = 0;
+                    this.animationPhase = 'idle';
+                    this.phaseStartTime = Date.now();
+                    
+                    return true;
+                }
+                
+                return false;
+            }
+
+            // MODIFIZIERT: Bewegungsziel mit Cross-Movement Logik wählen
+            chooseNewMovementTarget() {
+                // Prüfe erst, ob Ziel erreicht wurde
+                this.checkGoalReached();
+                
+                // Basis-Bewegungsbereich (breiter als ursprünglich für Crossing)
+                let baseMinTileX = mapWidth * 0.05;
+                let baseMaxTileX = mapWidth * 0.95;
+                
+                // Ziel-Zone bestimmen
+                const targetZone = this.targetZones[this.currentGoal];
+                const targetCenterX = (targetZone.min + targetZone.max) / 2;
+                
+                // Richtung zum Ziel berechnen
+                const directionToTarget = targetCenterX > this.tileX ? 1 : -1;
+                
+                // Entscheidung: Cross-Movement oder Random Movement
+                const useCrossMovement = Math.random() < this.crossMovementTendency;
+                
+                let moveDistance, angle;
+                
+                if (useCrossMovement) {
+                    // Cross-Movement: Tendenz zum Ziel
+                    moveDistance = this.minMoveDistance + Math.random() * (this.maxMoveDistance - this.minMoveDistance);
+                    
+                    // Hauptrichtung zum Ziel mit etwas Streuung
+                    const baseAngle = directionToTarget > 0 ? 0 : Math.PI; // 0° = rechts, 180° = links
+                    const angleVariation = (Math.random() - 0.5) * Math.PI * 0.6; // ±54° Streuung
+                    angle = baseAngle + angleVariation;
+                    
+                    console.log(`🎯 Cross-Movement: ${this.species.name} -> Ziel ${this.currentGoal}, Winkel: ${(angle * 180 / Math.PI).toFixed(1)}°`);
+                } else {
+                    // Random Movement: Normale zufällige Bewegung
+                    const shouldChangeDirection = Math.random() < 0.3;
+                    if (shouldChangeDirection) {
+                        this.isMovingForward = !this.isMovingForward;
+                    }
+                    
+                    let preferredDirectionX = this.isMovingForward ? (this.facingRight ? 1 : -1) : (this.facingRight ? -1 : 1);
+                    preferredDirectionX += this.personality.direction_preference * 0.5;
+                    
+                    const styleInfluence = (this.personality.movement_style + 1) / 2;
+                    moveDistance = this.minMoveDistance + styleInfluence * (this.maxMoveDistance - this.minMoveDistance);
+                    const distanceVariance = moveDistance * (0.7 + Math.random() * 0.6);
+                    
+                    angle = Math.random() < 0.7 ? 
+                        (Math.random() - 0.5) * Math.PI * 0.8 + (preferredDirectionX < 0 ? Math.PI : 0) :
+                        Math.random() * 2 * Math.PI;
+                    
+                    moveDistance = distanceVariance;
+                }
+                
+                // Neue Position berechnen
+                this.targetTileX = this.tileX + Math.cos(angle) * moveDistance;
+                this.targetTileY = this.tileY + Math.sin(angle) * moveDistance;
+                
+                // Grenzen einhalten (jetzt breiter für Cross-Movement)
+                this.targetTileX = Math.max(baseMinTileX, Math.min(baseMaxTileX, this.targetTileX));
+                this.targetTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, this.targetTileY));
+                
+                // Debug-Info
+                if (useCrossMovement) {
+                    const distanceToTarget = Math.abs(this.tileX - targetCenterX);
+                    console.log(`📍 ${this.species.name}: Pos ${this.tileX.toFixed(1)} -> Target ${this.targetTileX.toFixed(1)}, Entfernung zum Ziel: ${distanceToTarget.toFixed(1)}`);
+                }
+            }
+
+            // REST DER KLASSE BLEIBT UNVERÄNDERT...
             updateScale() {
                 const scaleFactor = tileSize / baseTileSize;
                 this.scale = this.baseScale * scaleFactor;
@@ -1307,6 +1428,7 @@
                     this.handleMovement();
                 }
                 
+                // MODIFIZIERT: Erweiterte Grenzen für Cross-Movement
                 this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
                 this.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, this.tileY));
                 
@@ -1362,53 +1484,6 @@
                 }
             }
 
-            chooseNewMovementTarget() {
-                let homeMinTileX, homeMaxTileX;
-                if (this.isEnemy) {
-                    homeMinTileX = mapWidth * 0.55;
-                    homeMaxTileX = mapWidth * 0.95;
-                } else {
-                    homeMinTileX = mapWidth * 0.05;
-                    homeMaxTileX = mapWidth * 0.45;
-                }
-                
-                const shouldChangeDirection = Math.random() < 0.3;
-                if (shouldChangeDirection) {
-                    this.isMovingForward = !this.isMovingForward;
-                }
-                
-                let preferredDirectionX;
-                if (this.isMovingForward) {
-                    preferredDirectionX = this.facingRight ? 1 : -1;
-                } else {
-                    preferredDirectionX = this.facingRight ? -1 : 1;
-                }
-                
-                const personalityInfluence = this.personality.direction_preference * 0.5;
-                preferredDirectionX += personalityInfluence;
-                
-                const styleInfluence = (this.personality.movement_style + 1) / 2;
-                const moveDistance = this.minMoveDistance + styleInfluence * (this.maxMoveDistance - this.minMoveDistance);
-                
-                const distanceVariance = moveDistance * (0.7 + Math.random() * 0.6);
-                
-                let angle;
-                if (Math.random() < 0.7) {
-                    angle = (Math.random() - 0.5) * Math.PI * 0.8;
-                    if (preferredDirectionX < 0) {
-                        angle += Math.PI;
-                    }
-                } else {
-                    angle = Math.random() * 2 * Math.PI;
-                }
-                
-                this.targetTileX = this.tileX + Math.cos(angle) * distanceVariance;
-                this.targetTileY = this.tileY + Math.sin(angle) * distanceVariance;
-                
-                this.targetTileX = Math.max(homeMinTileX, Math.min(homeMaxTileX, this.targetTileX));
-                this.targetTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, this.targetTileY));
-            }
-
             syncAnimation() {
                 const expectedAnimation = this.behaviorState === 'moving' ? 'walking' : 'idle';
                 if (this.animationPhase !== expectedAnimation) {
@@ -1417,6 +1492,7 @@
                 }
             }
 
+            // RENDER-METHODEN BLEIBEN UNVERÄNDERT
             render() {
                 const pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
                 const pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;
@@ -1493,7 +1569,7 @@
                 
                 ctx.beginPath();
                 ctx.ellipse(shadowX + shadowWidth/2, shadowY + shadowHeight/2, 
-                          shadowWidth/2, shadowHeight/2, 0, 0, 2 * Math.PI);
+                        shadowWidth/2, shadowHeight/2, 0, 0, 2 * Math.PI);
                 ctx.fill();
                 
                 ctx.restore();
@@ -2059,7 +2135,7 @@
             if (isLoading) return;
             
             renderTerrain();
-            
+
             gameObjects.sort((a, b) => {
                 const aY = a.tileY || a.y;
                 const bY = b.tileY || b.y;
