@@ -342,6 +342,49 @@
         let bloodParticles = []; // Bluteffekte
         let attackIcons = []; // Angriffs-Icons
         let corpses = []; // Leichen
+
+        let teamFood = {
+            plants: 0,
+            meat: 0
+        };
+
+        let foodIcons = []; // Aufsteigende Food-Icons
+        let consumedFoodSources = new Set(); // Verbrauchte Nahrungsquellen (für Regeneration)
+
+        // ===================================
+        // 2. NEUE KONSTANTEN (nach bestehenden COMBAT_CONFIG einfügen)
+        // ===================================
+
+        const FOOD_CONFIG = {
+            // Nahrungswerte
+            FOOD_VALUES: {
+                LARGE_TREE: 5,    // baseSize >= 25
+                SMALL_TREE: 2,    // baseSize < 25
+                RODENT: 5,
+                ENEMY_CORPSE: 4,
+                OWN_CORPSE: 4     // nur bei Aas >= 70
+            },
+            
+            // Mindestvoraussetzungen
+            MIN_REQUIREMENTS: {
+                PLANTS: 20,
+                MEAT: 20,
+                CARRION: 70
+            },
+            
+            // Zeiten
+            CONSUMPTION_TIME: 5.0,      // 3 Sekunden Nahrungsaufnahme
+            POST_COMBAT_COOLDOWN: 7.0,  // 7 Sekunden nach Kampf
+            POST_FOOD_COOLDOWN: 5.0,    // 5 Sekunden nach Nahrungsaufnahme
+            TREE_REGENERATION: 60.0,    // 30 Sekunden Baum-Regeneration
+            
+            // Icons für Nahrungstypen
+            FOOD_ICONS: {
+                'plants': '🌿',
+                'meat': '🥩'
+            }
+        };
+
         
         // Konstanten für Kampfsystem
         const COMBAT_CONFIG = {
@@ -1653,6 +1696,28 @@
                 const distance = Math.sqrt((mouseX - pixelX)**2 + (mouseY - pixelY)**2);
                 return distance < Math.max(14.4, 19.2 * this.scale);
             }
+
+            initializeFoodBehavior() {
+                // Nahrungsverhalten
+                this.foodState = 'neutral';        // 'neutral', 'seeking', 'consuming'
+                this.foodTarget = null;
+                this.consumptionStartTime = 0;
+                this.foodCooldownUntil = 0;        // Timestamp bis wann Cooldown aktiv
+                this.postCombatCooldownUntil = 0;  // Timestamp für Post-Combat Cooldown
+                
+                // Nahrungsvorlieben berechnen
+                const props = this.species.properties;
+                this.foodPreferences = {
+                    plants: props.pflanzen || 0,
+                    meat: props.fleisch || 0,
+                    carrion: props.aas || 0
+                };
+                
+                // Kann verschiedene Nahrungstypen konsumieren?
+                this.canConsumePlants = this.foodPreferences.plants >= FOOD_CONFIG.MIN_REQUIREMENTS.PLANTS;
+                this.canConsumeMeat = this.foodPreferences.meat >= FOOD_CONFIG.MIN_REQUIREMENTS.MEAT;
+                this.canConsumeCarrion = this.foodPreferences.carrion >= FOOD_CONFIG.MIN_REQUIREMENTS.CARRION;
+            }
         }
 
         // ===================================
@@ -1808,6 +1873,9 @@
             }
 
             renderCrown() {
+                if (this.hasBeenEaten) {
+                    return; // Keine Krone rendern wenn gefressen
+                }
                 const scale = tileSize / baseTileSize;
                 const crownX = -this.crownWidth / 2;
                 const crownY = -this.crownHeight;
@@ -2240,7 +2308,13 @@
                     </div>
                 `;
             });
-            
+            html += `
+                <div class="species-status" style="border-top: 1px solid #8b4513; margin-top: 10px; padding-top: 10px;">
+                    <span style="color: #32cd32; font-weight: bold;">
+                        🌿 Pflanzen: ${teamFood.plants} | 🥩 Fleisch: ${teamFood.meat}
+                    </span>
+                </div>
+            `;
             statusContainer.innerHTML = html;
         }
 
@@ -2488,6 +2562,8 @@
                     dino.isAttacking = false;
                 }
             }
+
+            updateFood(dino);
         }
 
         function updateNeutralState(dino) {
@@ -2638,7 +2714,13 @@
 
         // Kampf starten
         function startCombat(attacker, defender) {
-            // Bestehender Code für Combat-Check...
+            if (attacker.foodState === 'consuming') {
+                interruptFoodConsumption(attacker, 'combat started');
+            }
+            if (defender.foodState === 'consuming') {
+                interruptFoodConsumption(defender, 'under attack');
+            }
+                       
             const attackerInCombat = combats.find(c => c.participants.includes(attacker));
             if (attackerInCombat) return;
             
@@ -2908,6 +2990,7 @@
             // Gewinner spezifisch zurück zu neutral
             if (winner.combatState !== 'dead') {
                 winner.combatState = 'neutral';
+                winner.postCombatCooldownUntil = Date.now() + (FOOD_CONFIG.POST_COMBAT_COOLDOWN * 1000);
                 winner.combatTarget = null;
                 
                 // Bewegung für Gewinner auch aktivieren
@@ -2947,6 +3030,17 @@
                 const elapsed = Date.now() - icon.startTime;
                 icon.offsetY = -(elapsed / icon.duration) * 50; // 50px nach oben
             });
+            gameObjects.forEach(obj => {
+                if (obj instanceof Dino) {
+                    updateFood(obj);
+                }
+            });
+
+            // Food-Icons updaten
+            foodIcons.forEach(icon => {
+                const elapsed = Date.now() - icon.startTime;
+                icon.offsetY = -(elapsed / icon.duration) * 60; // 60px nach oben
+            });
         }
 
         // Kampf-Rendering (zur bestehenden render()-Funktion hinzufügen)
@@ -2959,6 +3053,28 @@
                 ctx.beginPath();
                 ctx.arc(particle.x, particle.y, particle.size, 0, 2 * Math.PI);
                 ctx.fill();
+                ctx.restore();
+            });
+
+            foodIcons.forEach(icon => {
+                const pixelX = icon.dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+                const pixelY = icon.dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+                
+                ctx.save();
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#32CD32';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                
+                const elapsed = Date.now() - icon.startTime;
+                icon.offsetY = -(elapsed / icon.duration) * 60; // 60px nach oben
+                
+                const iconY = pixelY - 30 + icon.offsetY;
+                const text = `${icon.symbol}+${icon.value}`;
+                
+                ctx.strokeText(text, pixelX, iconY);
+                ctx.fillText(text, pixelX, iconY);
                 ctx.restore();
             });
             
@@ -3057,6 +3173,315 @@
             }
         }
 
+        // Nahrungsquellen in der Nähe finden
+        function findFoodSourcesInRange(dino) {
+            if (dino.combatState === 'dead' || dino.foodState === 'consuming') return [];
+            
+            const sources = [];
+            const detectionRadius = dino.detectionRadius; // Gleicher Radius wie Feinderkennung
+            
+            gameObjects.forEach(obj => {
+                const distance = calculateDistance(dino, obj);
+                if (distance > detectionRadius) return;
+                
+                // Bäume (Pflanzen)
+                if (obj.type === 'tree' && dino.canConsumePlants) {
+                    const sourceId = `tree_${obj.tileX}_${obj.tileY}`;
+                    if (!consumedFoodSources.has(sourceId)) {
+                        const isLarge = obj.baseSize >= 25;
+                        sources.push({
+                            object: obj,
+                            type: 'plants',
+                            value: isLarge ? FOOD_CONFIG.FOOD_VALUES.LARGE_TREE : FOOD_CONFIG.FOOD_VALUES.SMALL_TREE,
+                            preference: dino.foodPreferences.plants,
+                            sourceId: sourceId
+                        });
+                    }
+                }
+                
+                // Nagetiere (Fleisch)
+                if (obj.type === 'rodent' && dino.canConsumeMeat) {
+                    const sourceId = `rodent_${obj.tileX}_${obj.tileY}`;
+                    if (!consumedFoodSources.has(sourceId)) {
+                        sources.push({
+                            object: obj,
+                            type: 'meat',
+                            value: FOOD_CONFIG.FOOD_VALUES.RODENT,
+                            preference: dino.foodPreferences.meat,
+                            sourceId: sourceId
+                        });
+                    }
+                }
+            });
+            
+            // Leichen (Aas/Fleisch)
+            if (dino.canConsumeCarrion || dino.canConsumeMeat) {
+                corpses.forEach(corpse => {
+                    const distance = Math.sqrt(
+                        (dino.tileX - corpse.tileX) ** 2 + 
+                        (dino.tileY - corpse.tileY) ** 2
+                    );
+                    
+                    if (distance <= detectionRadius) {
+                        const sourceId = `corpse_${corpse.tileX}_${corpse.tileY}_${corpse.deathTime}`;
+                        if (!consumedFoodSources.has(sourceId)) {
+                            const isOwnSpecies = corpse.dino.isEnemy === dino.isEnemy;
+                            
+                            // Eigene Art nur bei hohem Aas-Wert
+                            if (isOwnSpecies && !dino.canConsumeCarrion) return;
+                            
+                            const preference = isOwnSpecies ? 
+                                dino.foodPreferences.carrion : 
+                                Math.max(dino.foodPreferences.meat, dino.foodPreferences.carrion);
+                            
+                            sources.push({
+                                object: corpse,
+                                type: 'meat', // Wird als Fleisch gezählt
+                                value: isOwnSpecies ? FOOD_CONFIG.FOOD_VALUES.OWN_CORPSE : FOOD_CONFIG.FOOD_VALUES.ENEMY_CORPSE,
+                                preference: preference,
+                                sourceId: sourceId
+                            });
+                        }
+                    }
+                });
+            }
+            
+            // Nach Vorliebe sortieren (höchste zuerst)
+            return sources.sort((a, b) => b.preference - a.preference);
+        }
+
+        // Beste Nahrungsquelle auswählen
+        function selectBestFoodSource(dino) {
+            const sources = findFoodSourcesInRange(dino);
+            return sources.length > 0 ? sources[0] : null;
+        }
+
+        // Nahrungsaufnahme starten
+        function startFoodConsumption(dino, foodSource) {
+            console.log(`🍽️ ${dino.species.name} beginnt ${foodSource.type} zu konsumieren`);
+            
+            dino.foodState = 'consuming';
+            dino.foodTarget = foodSource;
+            dino.consumptionStartTime = Date.now();
+            
+            // Bewegung stoppen
+            dino.behaviorState = 'resting';
+            dino.targetTileX = dino.tileX;
+            dino.targetTileY = dino.tileY;
+            dino.animationPhase = 'idle';
+        }
+
+        // Nahrungsaufnahme abschließen
+        function completeFoodConsumption(dino) {
+            const foodSource = dino.foodTarget;
+            if (!foodSource) return;
+            
+            // Effizienz basierend auf Vorliebe berechnen
+            const preference = foodSource.preference;
+            let efficiency = preference / 100; // 0-1 basierend auf 0-100 Vorliebe
+            if (preference >= 100) efficiency = 2.0; // Doppelte Ausbeute bei 100
+            if (preference <= 0) efficiency = 0.0;   // Keine Ausbeute bei 0
+            
+            const finalValue = Math.round(foodSource.value * efficiency);
+            
+            // Nahrungspunkte hinzufügen
+            if (foodSource.type === 'plants') {
+                teamFood.plants += finalValue;
+            } else {
+                teamFood.meat += finalValue;
+            }
+            
+            console.log(`🌟 ${dino.species.name} erhält ${finalValue} ${foodSource.type} Punkte (Effizienz: ${(efficiency*100).toFixed(0)}%)`);
+            
+            // Icon anzeigen
+            showFoodIcon(dino, foodSource.type, finalValue);
+            
+            // Nahrungsquelle als verbraucht markieren
+            consumedFoodSources.add(foodSource.sourceId);
+            
+            // Baum-Krone entfernen
+            if (foodSource.object.type === 'tree') {
+                foodSource.object.hasBeenEaten = true;
+                
+                // Regeneration planen
+                setTimeout(() => {
+                    consumedFoodSources.delete(foodSource.sourceId);
+                    foodSource.object.hasBeenEaten = false;
+                    console.log(`🌳 Baum regeneriert: ${foodSource.sourceId}`);
+                }, FOOD_CONFIG.TREE_REGENERATION * 1000);
+            }
+            
+            // Nagetier entfernen
+            if (foodSource.object.type === 'rodent') {
+                const index = gameObjects.indexOf(foodSource.object);
+                if (index > -1) {
+                    gameObjects.splice(index, 1);
+                }
+            }
+            
+            // Leiche entfernen
+            if (foodSource.object.deathTime) {
+                const index = corpses.indexOf(foodSource.object);
+                if (index > -1) {
+                    corpses.splice(index, 1);
+                }
+            }
+            
+            // Post-Food Cooldown setzen
+            dino.foodCooldownUntil = Date.now() + (FOOD_CONFIG.POST_FOOD_COOLDOWN * 1000);
+            
+            // Zustand zurücksetzen
+            dino.foodState = 'neutral';
+            dino.foodTarget = null;
+            
+            updateHUD(); // HUD mit neuen Nahrungspunkten aktualisieren
+        }
+
+        // Nahrungsaufnahme unterbrechen
+        function interruptFoodConsumption(dino, reason = 'unknown') {
+            console.log(`❌ ${dino.species.name} Nahrungsaufnahme unterbrochen: ${reason}`);
+            
+            dino.foodState = 'neutral';
+            dino.foodTarget = null;
+            dino.consumptionStartTime = 0;
+        }
+
+        // Food Icon anzeigen (ähnlich wie Attack Icons)
+        function showFoodIcon(dino, foodType, value) {
+            const icon = {
+                dino: dino,
+                type: foodType,
+                symbol: FOOD_CONFIG.FOOD_ICONS[foodType],
+                value: value,
+                startTime: Date.now(),
+                duration: 1500, // 1.5 Sekunden
+                offsetY: 0
+            };
+            
+            foodIcons.push(icon);
+            
+            // Icon nach 1.5 Sekunden entfernen
+            setTimeout(() => {
+                const index = foodIcons.indexOf(icon);
+                if (index > -1) {
+                    foodIcons.splice(index, 1);
+                }
+            }, icon.duration);
+        }
+
+        function updateFood(dino) {
+            if (dino.combatState === 'dead') return;
+            
+            const currentTime = Date.now();
+            
+            // Cooldown-Checks
+            const inPostCombatCooldown = currentTime < dino.postCombatCooldownUntil;
+            const inFoodCooldown = currentTime < dino.foodCooldownUntil;
+            
+            // Nahrungsverhalten nur wenn nicht im Cooldown und nicht kämpfend
+            if (!inPostCombatCooldown && !inFoodCooldown && dino.combatState !== 'fighting') {
+                
+                switch (dino.foodState) {
+                    case 'neutral':
+                        updateFoodNeutralState(dino);
+                        break;
+                    case 'seeking':
+                        updateFoodSeekingState(dino);
+                        break;
+                    case 'consuming':
+                        updateFoodConsumingState(dino);
+                        break;
+                }
+            }
+        }
+
+        function updateFoodNeutralState(dino) {
+            // Nur nach Nahrung suchen wenn nicht kämpfend und kein Kampfziel
+            if (dino.combatState === 'neutral') {
+                const bestFood = selectBestFoodSource(dino);
+                if (bestFood) {
+                    dino.foodState = 'seeking';
+                    dino.foodTarget = bestFood;
+                    console.log(`🔍 ${dino.species.name} sucht nach ${bestFood.type}`);
+                }
+            }
+        }
+
+        function updateFoodSeekingState(dino) {
+            if (!dino.foodTarget) {
+                dino.foodState = 'neutral';
+                return;
+            }
+            
+            // Feinde in der Nähe? Abbrechen!
+            const enemies = findEnemiesInRange(dino);
+            if (enemies.length > 0) {
+                console.log(`⚠️ ${dino.species.name} bricht Nahrungssuche ab - Feinde entdeckt`);
+                dino.foodState = 'neutral';
+                dino.foodTarget = null;
+                return;
+            }
+            
+            // Entfernung zur Nahrungsquelle prüfen
+            const targetObj = dino.foodTarget.object;
+            let targetX, targetY;
+            
+            if (targetObj.tileX !== undefined) {
+                targetX = targetObj.tileX;
+                targetY = targetObj.tileY;
+            } else {
+                // Für Corpses
+                targetX = targetObj.tileX || dino.foodTarget.object.tileX;
+                targetY = targetObj.tileY || dino.foodTarget.object.tileY;
+            }
+            
+            const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
+            
+            // Nah genug zum Fressen?
+            if (distance <= 1.0) { // 1 Kachel Reichweite
+                startFoodConsumption(dino, dino.foodTarget);
+                return;
+            }
+            
+            // Zu weit entfernt? Aufgeben
+            if (distance > dino.detectionRadius * 1.2) {
+                dino.foodState = 'neutral';
+                dino.foodTarget = null;
+                return;
+            }
+            
+            // Zur Nahrung bewegen (normale Geschwindigkeit)
+            const dx = targetX - dino.tileX;
+            const dy = targetY - dino.tileY;
+            
+            if (distance > 0.1) {
+                dino.tileX += (dx / distance) * dino.speed * gameSpeed;
+                dino.tileY += (dy / distance) * dino.speed * gameSpeed;
+                
+                // Blickrichtung anpassen
+                if (dx > 0.01) {
+                    dino.facingRight = false;
+                } else if (dx < -0.01) {
+                    dino.facingRight = true;
+                }
+            }
+        }
+
+        function updateFoodConsumingState(dino) {
+            const currentTime = Date.now();
+            const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
+            
+            // Nahrungsaufnahme abgeschlossen?
+            if (elapsed >= FOOD_CONFIG.CONSUMPTION_TIME) {
+                completeFoodConsumption(dino);
+                return;
+            }
+            
+            // WICHTIG: Während des Fressens KEINE Feinderkennung, aber Angriffe sind möglich
+            // Das wird durch das Kampfsystem automatisch gehandhabt
+        }
+
+
         // ===================================
         // INITIALISIERUNG
         // ===================================
@@ -3073,6 +3498,7 @@
             gameObjects.forEach(obj => {
                 if (obj instanceof Dino) {
                     addCombatPropertiesToDino(obj);
+                    obj.initializeFoodBehavior();
                 }
             });
             
