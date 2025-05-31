@@ -1777,7 +1777,10 @@
                 } else if (type === 'rodent') {
                     this.baseSize = (Math.random() * 20 + 10) * 0.32;
                     this.size = this.baseSize;
-                    this.moveSpeed = 0.02;
+                    this.moveSpeed = 0.08; // Erhöht von 0.02 auf 0.08
+                    this.moveTimer = Math.random() * 3; // NEU: Timer für regelmäßige Bewegung
+                    this.moveDirection = Math.random() * Math.PI * 2; // NEU: Bewegungsrichtung
+                    this.moveDelay = 0.5 + Math.random(); // NEU: Bewegungsintervall
                 } else {
                     this.baseSize = (Math.random() * 20 + 10) * 0.32;
                     this.size = this.baseSize;
@@ -1817,15 +1820,46 @@
                         break;
                         
                     case 'rodent':
-                        ctx.fillStyle = '#8B4513';
-                        const rodentSize = this.size * 0.192;
-                        ctx.fillRect(-rodentSize/2, -rodentSize/2, rodentSize, rodentSize);
-                        if (Math.random() < 0.01) {
-                            this.tileX += (Math.random() - 0.5) * this.moveSpeed;
-                            this.tileY += (Math.random() - 0.5) * this.moveSpeed;
+                        // Größere Basis-Größe für bessere Sichtbarkeit
+                        const rodentScale = this.size * 0.8; // Erhöht von 0.192 auf 0.4
+                        
+                        // Körperteile definieren
+                        const bodyWidth = rodentScale * 1.2;
+                        const bodyHeight = rodentScale * 0.8;
+                        const headSize = rodentScale * 0.6;
+                        const tailWidth = rodentScale * 0.3;
+                        const tailLength = rodentScale * 1.0;
+                        
+                        // Farben
+                        ctx.fillStyle = '#8B4513'; // Braun für Körper
+                        
+                        // Körper (größtes Rechteck, zentriert)
+                        ctx.fillRect(-bodyWidth/2, -bodyHeight/2, bodyWidth, bodyHeight);
+                        
+                        // Kopf (kleines Rechteck, links vom Körper)
+                        ctx.fillRect(-bodyWidth/2 - headSize * 0.8, -headSize/2, headSize, headSize);
+                        
+                        // Schwanz (längliches Rechteck, rechts vom Körper)
+                        ctx.fillRect(bodyWidth/2, -tailWidth/2, tailLength, tailWidth);
+                        
+                        // VERBESSERTE BEWEGUNG
+                        this.moveTimer += gameSpeed / 60; // Timer erhöhen
+                        
+                        if (this.moveTimer >= this.moveDelay) {
+                            // Neue Richtung wählen
+                            this.moveDirection += (Math.random() - 0.5) * 0.8; // Richtung leicht ändern
                             
+                            // Bewegung anwenden
+                            this.tileX += Math.cos(this.moveDirection) * this.moveSpeed;
+                            this.tileY += Math.sin(this.moveDirection) * this.moveSpeed;
+                            
+                            // Grenzen einhalten
                             this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
                             this.tileY = Math.max(mapHeight * 0.6, Math.min(mapHeight - 1, this.tileY));
+                            
+                            // Timer zurücksetzen
+                            this.moveTimer = 0;
+                            this.moveDelay = 0.3 + Math.random() * 0.7; // Neues Intervall (0.3-1.0 Sekunden)
                         }
                         break;
                 }
@@ -3408,10 +3442,12 @@
             // Konsumptions-Animation beenden
             dino.isConsuming = false;
             
-            // Nahrungsquelle freigeben (falls vorhanden)
+            // Reservierung freigeben (falls vorhanden)
             if (dino.foodTarget && dino.foodTarget.sourceId) {
-                occupiedFoodSources.delete(dino.foodTarget.sourceId);
-                console.log(`🔓 Nahrungsquelle durch Unterbrechung freigegeben: ${dino.foodTarget.sourceId}`);
+                if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
+                    occupiedFoodSources.delete(dino.foodTarget.sourceId);
+                    console.log(`🔓 Nahrungsquelle durch Unterbrechung freigegeben: ${dino.foodTarget.sourceId}`);
+                }
             }
             
             dino.foodState = 'neutral';
@@ -3473,9 +3509,13 @@
             if (dino.combatState === 'neutral') {
                 const bestFood = selectBestFoodSource(dino);
                 if (bestFood) {
+                    // SOFORT reservieren beim Start des seeking
+                    occupiedFoodSources.set(bestFood.sourceId, dino);
+                    
                     dino.foodState = 'seeking';
                     dino.foodTarget = bestFood;
-                    console.log(`🔍 ${dino.species.name} sucht nach ${bestFood.type}`);
+                    dino.seekingStartTime = Date.now(); // NEU: Timeout-Timer
+                    console.log(`🔍 ${dino.species.name} sucht nach ${bestFood.type} (reserviert: ${bestFood.sourceId})`);
                 }
             }
         }
@@ -3486,21 +3526,27 @@
                 return;
             }
             
-            // Prüfe ob Ziel noch verfügbar ist
-            if (occupiedFoodSources.has(dino.foodTarget.sourceId)) {
-                const occupant = occupiedFoodSources.get(dino.foodTarget.sourceId);
-                if (occupant !== dino) {
-                    console.log(`🚫 ${dino.species.name}: Ziel-Nahrungsquelle bereits von ${occupant.species.name} belegt`);
-                    dino.foodState = 'neutral';
-                    dino.foodTarget = null;
-                    return;
+            // NEU: Timeout-Check (10 Sekunden seeking maximum)
+            const seekingTime = (Date.now() - dino.seekingStartTime) / 1000;
+            if (seekingTime > 10) {
+                console.log(`⏰ ${dino.species.name} seeking timeout - gibt auf`);
+                // Reservierung freigeben
+                if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
+                    occupiedFoodSources.delete(dino.foodTarget.sourceId);
                 }
+                dino.foodState = 'neutral';
+                dino.foodTarget = null;
+                return;
             }
             
             // Feinde in der Nähe? Abbrechen!
             const enemies = findEnemiesInRange(dino);
             if (enemies.length > 0) {
                 console.log(`⚠️ ${dino.species.name} bricht Nahrungssuche ab - Feinde entdeckt`);
+                // Reservierung freigeben
+                if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
+                    occupiedFoodSources.delete(dino.foodTarget.sourceId);
+                }
                 dino.foodState = 'neutral';
                 dino.foodTarget = null;
                 return;
@@ -3514,15 +3560,14 @@
                 targetX = targetObj.tileX;
                 targetY = targetObj.tileY;
             } else {
-                // Für Corpses
                 targetX = targetObj.tileX || dino.foodTarget.object.tileX;
                 targetY = targetObj.tileY || dino.foodTarget.object.tileY;
             }
             
             const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
             
-            // Nah genug zum Fressen? (großzügigere Reichweite)
-            if (distance <= 1.5) { // 1.5 Kacheln Reichweite - größer für weniger "Kampf" um exakte Position
+            // Nah genug zum Fressen?
+            if (distance <= 1.5) {
                 console.log(`🎯 ${dino.species.name} erreicht Nahrung (Entfernung: ${distance.toFixed(2)})`);
                 startFoodConsumption(dino, dino.foodTarget);
                 return;
@@ -3530,9 +3575,30 @@
             
             // Zu weit entfernt? Aufgeben
             if (distance > dino.detectionRadius * 1.2) {
+                // Reservierung freigeben
+                if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
+                    occupiedFoodSources.delete(dino.foodTarget.sourceId);
+                }
                 dino.foodState = 'neutral';
                 dino.foodTarget = null;
                 return;
+            }
+            
+            // NEU: Kollisionsvermeidung mit anderen Dinos
+            const nearbyDinos = gameObjects.filter(obj => 
+                obj instanceof Dino && 
+                obj !== dino && 
+                calculateDistance(dino, obj) < 1.0 // Weniger als 1 Kachel entfernt
+            );
+            
+            if (nearbyDinos.length > 0) {
+                // Ausweichmanöver: Kleinen Umweg nehmen
+                const avoidanceAngle = Math.random() * Math.PI * 2;
+                const avoidanceDistance = 0.5;
+                targetX += Math.cos(avoidanceAngle) * avoidanceDistance;
+                targetY += Math.sin(avoidanceAngle) * avoidanceDistance;
+                
+                console.log(`🔄 ${dino.species.name} weicht anderen Dinos aus`);
             }
             
             // Zur Nahrung bewegen (normale Geschwindigkeit)
@@ -3550,11 +3616,6 @@
                     dino.facingRight = false;
                 } else if (dx < -0.01) {
                     dino.facingRight = true;
-                }
-                
-                // Debug: Position während Annäherung
-                if (Math.random() < 0.01) { // 1% Chance für Debug-Log
-                    console.log(`🚶 ${dino.species.name} nähert sich Nahrung: ${distance.toFixed(2)} Kacheln entfernt`);
                 }
             }
         }
