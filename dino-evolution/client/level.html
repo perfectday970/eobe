@@ -292,6 +292,7 @@
     </div>
 
     <script src="dino-renderer.js"></script>
+    <script src="dino-abilities.js"></script>
 
     <script>
         // ===================================
@@ -335,7 +336,42 @@
         // GEÄNDERT: Terrain-Offsets für Scrolling
         let terrainOffsetX = 0;
         let terrainOffsetY = 0;
+
+        // Kampf Variablen
+        let combats = []; // Aktive Kämpfe
+        let bloodParticles = []; // Bluteffekte
+        let attackIcons = []; // Angriffs-Icons
+        let corpses = []; // Leichen
         
+        // Konstanten für Kampfsystem
+        const COMBAT_CONFIG = {
+            ATTACK_DISTANCE: 1.2, // Kacheln
+            DETECTION_BASE: 3, // Basis-Erkennungsradius in Kacheln
+            MOVEMENT_STAMINA_COST: 5, // pro Sekunde
+            STAMINA_RECOVERY: 8, // pro Sekunde bei Stillstand
+            ATTACK_COOLDOWN: 1.5,
+            
+            // Konditionskosten für Angriffe
+            STAMINA_COSTS: {
+                'Sprung': 15,
+                'Biss': 10,
+                'Tödlicher Biss': 20,
+                'Kopfstoß': 12,
+                'Gift Speien': 18,
+                'Schwanzschlag': 25
+            },
+            
+            // Icons für Angriffstypen
+            ATTACK_ICONS: {
+                'Sprung': '🦘',
+                'Biss': '🦷',
+                'Tödlicher Biss': '💀',
+                'Kopfstoß': '🎯',
+                'Gift Speien': '☠️',
+                'Schwanzschlag': '🐉'
+            }
+        };
+
         // Kachel-Typen und Farben
         const TILE_TYPES = {
             GRASS: 0,
@@ -1433,6 +1469,7 @@
                 this.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, this.tileY));
                 
                 this.syncAnimation();
+
             }
 
             switchBehaviorState() {
@@ -1494,8 +1531,26 @@
 
             // RENDER-METHODEN BLEIBEN UNVERÄNDERT
             render() {
-                const pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
-                const pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+                let pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+                let pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+                
+                // DASH-ANIMATION: Position vor dem Rendering anpassen
+                if (this.isAttacking) {
+                    const elapsed = Date.now() - this.attackAnimationStart;
+                    const progress = elapsed / 300; // 300ms Animation
+                    
+                    if (progress < 0.5) {
+                        // Nach vorne dashen (erste Hälfte)
+                        const dashDistance = 15 * this.scale * (progress * 2); // 0 -> 1
+                        pixelX += this.facingRight ? -dashDistance : dashDistance;
+                    } else if (progress < 1.0) {
+                        // Zurück dashen (zweite Hälfte)
+                        const returnProgress = (progress - 0.5) * 2; // 0 -> 1
+                        const dashDistance = 15 * this.scale * (1 - returnProgress); // 1 -> 0
+                        pixelX += this.facingRight ? -dashDistance : dashDistance;
+                    }
+                    // Nach 100% ist der Dino wieder an der ursprünglichen Position
+                }
                 
                 this.renderShadow(pixelX, pixelY);
                 
@@ -1519,7 +1574,13 @@
                     backLegAnimationX: 0
                 };
                 
-                if (this.animationPhase === 'idle') {
+                // KAMPF-SPEZIFISCHE ANIMATION: Im Kampf weniger Bewegung
+                if (this.combatState === 'fighting') {
+                    // Kampf-Idle: Nur leichte Atmung
+                    animationData.bodyAnimationY = Math.sin(animationTime * 2) * 1; // Weniger Bewegung
+                    animationData.headAnimationX = Math.sin(animationTime * 0.5) * 2; // Langsamere Kopfbewegung
+                    animationData.tailAnimationY = Math.sin(animationTime * 1) * 2; // Weniger Schwanzwedeln
+                } else if (this.animationPhase === 'idle') {
                     animationData.bodyAnimationY = Math.sin(animationTime * 2) * 2;
                     animationData.headAnimationX = Math.sin(animationTime * 0.8) * 3;
                     animationData.headAnimationY = Math.sin(animationTime * 1.2) * 1.5;
@@ -1531,6 +1592,7 @@
                     animationData.tailAnimationY = Math.sin(animationTime * walkSpeed * 0.75) * 4;
                 }
                 
+                // Dino mit angepasster Position rendern
                 dinoRenderer.renderDino(ctx, pixelX, pixelY, this.species.properties, this.dinoType, this.scale, this.isEnemy, animationData, this.facingRight);
                 
                 if (this.selected) {
@@ -1552,6 +1614,8 @@
                     ctx.fillStyle = '#00ff00';
                     ctx.fillRect(barX, barY, barWidth * (this.health/100), barHeight);
                 }
+
+                renderCombatUI(this);
             }
 
             renderShadow(pixelX, pixelY) {
@@ -2129,6 +2193,7 @@
                     if (obj.update) obj.update();
                 });
             }
+            updateCombatSystem();
         }
 
         function render() {
@@ -2143,6 +2208,8 @@
             });
             
             gameObjects.forEach(obj => obj.render());
+
+            renderCombatEffects();
         }
 
         function updateHUD() {
@@ -2257,10 +2324,719 @@
                 
                 setTimeout(() => {
                     generateLevel();
+                    initializeCombatForAllDinos()
                     hideLoadingShowGame();
                     startGameLoop();
                 }, 1000);
             }
+        }
+
+        // Kampf-Eigenschaften zur Dino-Klasse hinzufügen (in constructor)
+        function addCombatPropertiesToDino(dino) {
+            if (!window.DinoAbilities || !window.DinoAbilities.calculateDinoAbilities) {
+                console.error('❌ DinoAbilities nicht verfügbar! Script nicht geladen?');
+                return;
+            }
+            
+            // Fähigkeiten berechnen
+            dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
+            
+            // Kampfwerte
+            dino.maxHP = dino.abilities['Lebenspunkte'];
+            dino.currentHP = dino.maxHP;
+            dino.maxStamina = dino.abilities['Kondition'];
+            dino.currentStamina = dino.maxStamina;
+            
+            // Kampfzustand
+            dino.combatState = 'neutral';
+            dino.combatTarget = null;
+            dino.lastAttackTime = 0; // NEU: Cooldown-Timer
+            dino.combatTurn = false;
+            dino.isAttacking = false;
+            dino.attackAnimationStart = 0;
+            dino.wasMovingLastFrame = false;
+            
+            // Erkennungsradius berechnen
+            dino.detectionRadius = COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
+            
+            // Verfügbare Angriffe ermitteln
+            dino.availableAttacks = getAvailableAttacks(dino);
+        }
+
+        // Verfügbare Angriffe basierend auf Fähigkeiten
+        function getAvailableAttacks(dino) {
+            const attacks = [];
+            const abilities = dino.abilities;
+            
+            // Basis-Angriffe (immer verfügbar)
+            attacks.push({
+                type: 'Sprung',
+                damage: Math.round((dino.species.properties.hinterbeine_stärke + dino.species.properties.hinterbeine_länge) / 4),
+                probability: abilities['Sprung']
+            });
+            
+            attacks.push({
+                type: 'Biss', 
+                damage: Math.round((dino.species.properties.kopf_beisskraft + dino.species.properties.maul_zahntyp) / 3),
+                probability: abilities['Biss']
+            });
+            
+            attacks.push({
+                type: 'Kopfstoß',
+                damage: Math.round((dino.species.properties.kopf_größe + dino.species.properties.kopf_hörner_größe * 2 + dino.species.properties.kopf_hörner_anzahl * 10) / 4),
+                probability: abilities['Kopfstoß']
+            });
+            
+            // Spezial-Angriffe (nur wenn Schwellwerte erreicht)
+            if (abilities['Tödlicher Biss']) {
+                attacks.push({
+                    type: 'Tödlicher Biss',
+                    damage: Math.round((dino.species.properties.kopf_beisskraft + dino.species.properties.maul_zahntyp) / 2),
+                    probability: abilities['Tödlicher Biss']
+                });
+            }
+            
+            if (abilities['Gift Speien']) {
+                attacks.push({
+                    type: 'Gift Speien',
+                    damage: Math.round((dino.species.properties.maul_zahntyp + dino.species.properties.farbig) / 3),
+                    probability: abilities['Gift Speien'],
+                    range: Math.floor(abilities['Gift Speien'] / 20) || 1
+                });
+            }
+            
+            if (abilities['Schwanzschlag']) {
+                attacks.push({
+                    type: 'Schwanzschlag',
+                    damage: Math.round((dino.species.properties.schwanz_länge + dino.species.properties.schwanz_breite + 
+                                    dino.species.properties.schwanz_keule + dino.species.properties.schwanz_stacheln) / 3),
+                    probability: abilities['Schwanzschlag']
+                });
+            }
+            
+            // Nach Wahrscheinlichkeit sortieren (höchste zuerst)
+            return attacks.sort((a, b) => b.probability - a.probability);
+        }
+
+        // ===================================
+        // KAMPFLOGIK
+        // ===================================
+
+        // Feinde in Erkennungsradius suchen
+        function findEnemiesInRange(dino) {
+            if (dino.combatState === 'dead') return [];
+            
+            const enemies = gameObjects.filter(obj => 
+                obj instanceof Dino && 
+                obj.combatState !== 'dead' &&
+                obj.isEnemy !== dino.isEnemy && // Unterschiedliche Fraktionen
+                calculateDistance(dino, obj) <= dino.detectionRadius
+            );
+            
+            return enemies;
+        }
+
+        // Entfernung zwischen zwei Dinos berechnen
+        function calculateDistance(dino1, dino2) {
+            const dx = dino1.tileX - dino2.tileX;
+            const dy = dino1.tileY - dino2.tileY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // Kampf-Update für jeden Dino
+        function updateCombat(dino) {
+            if (dino.combatState === 'dead') return;
+            
+            // Stamina-Regeneration bei Stillstand
+            if (!dino.wasMovingLastFrame && dino.combatState !== 'fighting') {
+                dino.currentStamina = Math.min(dino.maxStamina, dino.currentStamina + COMBAT_CONFIG.STAMINA_RECOVERY * gameSpeed / 60);
+            }
+            
+            // Stamina-Verbrauch bei Bewegung
+            if (dino.behaviorState === 'moving' && dino.combatState !== 'fighting') {
+                dino.currentStamina = Math.max(0, dino.currentStamina - COMBAT_CONFIG.MOVEMENT_STAMINA_COST * gameSpeed / 60);
+                dino.wasMovingLastFrame = true;
+            } else {
+                dino.wasMovingLastFrame = false;
+            }
+            
+            // Zustandsmaschine
+            switch (dino.combatState) {
+                case 'neutral':
+                    updateNeutralState(dino);
+                    break;
+                case 'seeking':
+                    updateSeekingState(dino);
+                    break;
+                case 'fighting':
+                    updateFightingState(dino);
+                    break;
+            }
+            
+            // Angriffs-Animation
+            if (dino.isAttacking) {
+                const attackDuration = 0.3; // 300ms
+                if (Date.now() - dino.attackAnimationStart > attackDuration * 1000) {
+                    dino.isAttacking = false;
+                }
+            }
+        }
+
+        function updateNeutralState(dino) {
+            const enemies = findEnemiesInRange(dino);
+            if (enemies.length > 0) {
+                // VERBESSERUNG: Wähle Feind der NICHT bereits kämpft
+                const availableEnemies = enemies.filter(enemy => {
+                    const isAlreadyFighting = combats.some(c => c.participants.includes(enemy));
+                    return !isAlreadyFighting;
+                });
+                
+                if (availableEnemies.length > 0) {
+                    // Nächsten verfügbaren Feind als Ziel wählen
+                    dino.combatTarget = availableEnemies.reduce((nearest, enemy) => 
+                        calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
+                    );
+                    dino.combatState = 'seeking';
+                    console.log(`🎯 ${dino.species.name} entdeckt verfügbaren Feind: ${dino.combatTarget.species.name}`);
+                } else {
+                    // Alle Feinde kämpfen bereits - warte oder suche weiter
+                    console.log(`⏳ ${dino.species.name} wartet - alle Feinde kämpfen bereits`);
+                }
+            }
+        }
+
+        function updateSeekingState(dino) {
+            if (!dino.combatTarget || dino.combatTarget.combatState === 'dead') {
+                dino.combatTarget = null;
+                dino.combatState = 'neutral';
+                return;
+            }
+            
+            // NEU: Prüfen ob Ziel bereits von jemand anderem bekämpft wird
+            const targetAlreadyFighting = combats.some(c => c.participants.includes(dino.combatTarget));
+            if (targetAlreadyFighting) {
+                console.log(`🚫 ${dino.species.name}: Ziel wird bereits bekämpft, suche neues Ziel`);
+                dino.combatTarget = null;
+                dino.combatState = 'neutral';
+                return;
+            }
+            
+            const distance = calculateDistance(dino, dino.combatTarget);
+            
+            // Zu weit weg? Aufgeben
+            if (distance > dino.detectionRadius * 1.5) {
+                dino.combatTarget = null;
+                dino.combatState = 'neutral';
+                return;
+            }
+            
+            // Nah genug für Angriff?
+            if (distance <= COMBAT_CONFIG.ATTACK_DISTANCE) {
+                startCombat(dino, dino.combatTarget);
+                return;
+            }
+            
+            // Auf Feind zubewegen
+            seekEnemy(dino);
+        }
+
+        // NEU: Erweiterte Feindsuche mit Priorisierung
+        function findBestTarget(dino) {
+            const enemies = findEnemiesInRange(dino);
+            if (enemies.length === 0) return null;
+            
+            // 1. Priorität: Freie Feinde (kämpfen nicht)
+            const freeEnemies = enemies.filter(enemy => {
+                return !combats.some(c => c.participants.includes(enemy));
+            });
+            
+            if (freeEnemies.length > 0) {
+                // Nächsten freien Feind wählen
+                return freeEnemies.reduce((nearest, enemy) => 
+                    calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
+                );
+            }
+            
+            // 2. Priorität: Feinde in Unterzahl (2+ vs 1)
+            const outnumberedEnemies = enemies.filter(enemy => {
+                const combat = combats.find(c => c.participants.includes(enemy));
+                if (!combat) return false;
+                
+                const ownDinosInCombat = combat.participants.filter(p => !p.isEnemy).length;
+                const enemyDinosInCombat = combat.participants.filter(p => p.isEnemy).length;
+                
+                return enemyDinosInCombat > ownDinosInCombat; // Feind ist in Überzahl
+            });
+            
+            if (outnumberedEnemies.length > 0) {
+                return outnumberedEnemies[0]; // Unterstütze Verbündete
+            }
+            
+            return null; // Kein geeignetes Ziel
+        }
+
+        function updateFightingState(dino) {
+            if (!dino.combatTarget || dino.combatTarget.combatState === 'dead') {
+                dino.combatState = 'neutral';
+                dino.combatTarget = null;
+                return;
+            }
+            
+            // KEINE Bewegung während des Kampfes (außer Dash)
+            
+            // Kampf-Turn-System mit Cooldown
+            const combat = combats.find(c => c.participants.includes(dino));
+            if (combat && combat.currentAttacker === dino && !dino.isAttacking) {
+                
+                // NEU: Cooldown-Check
+                const timeSinceLastAttack = (Date.now() - dino.lastAttackTime) / 1000;
+                const canAttack = timeSinceLastAttack >= COMBAT_CONFIG.ATTACK_COOLDOWN;
+                
+                if (canAttack && dino.currentStamina > 0) {
+                    performAttack(dino, dino.combatTarget);
+                } else if (!canAttack) {
+                    // Cooldown läuft noch - warten
+                    console.log(`⏳ ${dino.species.name} wartet (Cooldown: ${(COMBAT_CONFIG.ATTACK_COOLDOWN - timeSinceLastAttack).toFixed(1)}s)`);
+                } else {
+                    // Keine Stamina - Turn wechseln
+                    console.log(`💤 ${dino.species.name} hat keine Stamina - Turn wechselt`);
+                    combat.currentAttacker = combat.participants.find(p => p !== dino);
+                }
+            }
+        }
+        // Auf Feind zubewegen
+        function seekEnemy(dino) {
+            if (!dino.combatTarget) return;
+            
+            const dx = dino.combatTarget.tileX - dino.tileX;
+            const dy = dino.combatTarget.tileY - dino.tileY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0.1) {
+                const moveSpeed = dino.speed * gameSpeed * 1.5; // Schneller im Kampf
+                dino.tileX += (dx / distance) * moveSpeed;
+                dino.tileY += (dy / distance) * moveSpeed;
+                
+                // Blickrichtung anpassen
+                if (dx > 0.01) {
+                    dino.facingRight = false;
+                } else if (dx < -0.01) {
+                    dino.facingRight = true;
+                }
+            }
+        }
+
+        // Kampf starten
+        function startCombat(attacker, defender) {
+            // Bestehender Code...
+            
+            console.log(`⚔️ Neuer Kampf: ${attacker.species.name} vs ${defender.species.name}`);
+            
+            // Beide Dinos in Kampfmodus
+            attacker.combatState = 'fighting';
+            defender.combatState = 'fighting';
+            attacker.combatTarget = defender;
+            defender.combatTarget = attacker;
+            
+            // NEU: Dinos optimal ausrichten für den Kampf
+            const dx = defender.tileX - attacker.tileX;
+            if (dx > 0) {
+                attacker.facingRight = false; // Angreifer schaut nach rechts
+                defender.facingRight = true;  // Verteidiger schaut nach links
+            } else {
+                attacker.facingRight = true;  // Angreifer schaut nach links
+                defender.facingRight = false; // Verteidiger schaut nach rechts
+            }
+            
+            // Kampf-Objekt erstellen
+            const combat = {
+                participants: [attacker, defender],
+                currentAttacker: attacker,
+                startTime: Date.now()
+            };
+            
+            combats.push(combat);
+        }
+
+        // Angriff durchführen
+        function performAttack(attacker, defender) {
+            if (attacker.availableAttacks.length === 0) return;
+            
+            // Angriff auswählen (gewichtet nach Wahrscheinlichkeit)
+            const attack = selectWeightedAttack(attacker.availableAttacks);
+            
+            // Stamina-Kosten
+            const staminaCost = COMBAT_CONFIG.STAMINA_COSTS[attack.type];
+            if (attacker.currentStamina < staminaCost) {
+                // Nicht genug Stamina - Turn wechseln
+                const combat = combats.find(c => c.participants.includes(attacker));
+                if (combat) {
+                    combat.currentAttacker = combat.participants.find(p => p !== attacker);
+                }
+                return;
+            }
+            
+            attacker.currentStamina -= staminaCost;
+            
+            // NEU: Cooldown-Timer setzen
+            attacker.lastAttackTime = Date.now();
+            
+            // Angriffs-Animation
+            attacker.isAttacking = true;
+            attacker.attackAnimationStart = Date.now();
+            
+            // Icon anzeigen
+            showAttackIcon(attacker, attack.type);
+            
+            // Schaden berechnen
+            const damage = calculateDamage(attack, attacker, defender);
+            
+            // Schaden anwenden
+            defender.currentHP = Math.max(0, defender.currentHP - damage);
+            
+            // Bluteffekt
+            createBloodEffect(defender);
+            
+            console.log(`💥 ${attacker.species.name} ${attack.type} → ${defender.species.name} (${damage} Schaden, ${defender.currentHP}/${defender.maxHP} HP)`);
+            
+            // Tod prüfen
+            if (defender.currentHP <= 0) {
+                handleDeath(defender);
+                endCombat(attacker, defender);
+            } else {
+                // NEU: Turn wechselt nach längerem Delay für bessere Sichtbarkeit
+                setTimeout(() => {
+                    const combat = combats.find(c => c.participants.includes(attacker));
+                    if (combat && combat.currentAttacker === attacker) {
+                        combat.currentAttacker = defender;
+                        console.log(`🔄 Turn wechselt zu: ${defender.species.name}`);
+                    }
+                }, 800); // 800ms statt 500ms für bessere Übersicht
+            }
+        }
+
+        // Gewichtete Angriffs-Auswahl
+        function selectWeightedAttack(attacks) {
+            // Top 3 Angriffe nach Wahrscheinlichkeit
+            const topAttacks = attacks.slice(0, 3);
+            
+            const weights = topAttacks.map((attack, index) => {
+                if (index === 0) return 0.6; // Höchster: 60%
+                if (index === 1) return 0.3; // Zweiter: 30%
+                return 0.1; // Dritter: 10%
+            });
+            
+            const random = Math.random();
+            let weightSum = 0;
+            
+            for (let i = 0; i < topAttacks.length; i++) {
+                weightSum += weights[i];
+                if (random <= weightSum) {
+                    return topAttacks[i];
+                }
+            }
+            
+            return topAttacks[0]; // Fallback
+        }
+
+        // Schaden berechnen mit Verteidigung
+        function calculateDamage(attack, attacker, defender) {
+            let damage = attack.damage;
+            const defenseAbilities = defender.abilities;
+            
+            // Verteidigungsmodifikatoren anwenden
+            let damageReduction = 0;
+            
+            // Gewicht (Sprung-Schutz)
+            if (attack.type === 'Sprung' && defenseAbilities['Gewicht'] >= 50) {
+                damageReduction += 0.2; // -20%
+            }
+            
+            // Tarnung (Gift Speien & Tödlicher Biss)
+            if ((attack.type === 'Gift Speien' || attack.type === 'Tödlicher Biss') && defenseAbilities['Tarnung'] >= 50) {
+                damageReduction += 0.2; // -20%
+            }
+            
+            // Ausweichen (alles)
+            if (defenseAbilities['Ausweichen'] >= 50) {
+                damageReduction += 0.3; // -30%
+            }
+            
+            // Panzerung (alles außer Gift Speien)
+            if (attack.type !== 'Gift Speien' && defenseAbilities['Panzerung'] >= 50) {
+                damageReduction += 0.35; // -35%
+            }
+            
+            // Panzerung vor tödlichem Biss
+            if (attack.type === 'Tödlicher Biss' && defenseAbilities['Panzerung vor tödlichem Biss'] >= 50) {
+                damageReduction += 0.45; // -45%
+            }
+            
+            // Schaden reduzieren (mindestens 1)
+            damage = Math.max(1, Math.round(damage * (1 - Math.min(0.9, damageReduction))));
+            
+            return damage;
+        }
+
+        // ===================================
+        // VISUELLE EFFEKTE
+        // ===================================
+
+        // Angriffs-Icon anzeigen
+        function showAttackIcon(attacker, attackType) {
+            const icon = {
+                dino: attacker,
+                type: attackType,
+                symbol: COMBAT_CONFIG.ATTACK_ICONS[attackType],
+                startTime: Date.now(),
+                duration: 1000, // 1 Sekunde
+                offsetY: 0
+            };
+            
+            attackIcons.push(icon);
+            
+            // Icon nach 1 Sekunde entfernen
+            setTimeout(() => {
+                const index = attackIcons.indexOf(icon);
+                if (index > -1) {
+                    attackIcons.splice(index, 1);
+                }
+            }, icon.duration);
+        }
+
+        // Bluteffekt erstellen
+        function createBloodEffect(defender) {
+            const particleCount = 5 + Math.random() * 5;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = {
+                    x: defender.tileX * tileSize + tileSize / 2 + terrainOffsetX + (Math.random() - 0.5) * 20,
+                    y: defender.tileY * tileSize + tileSize / 2 + terrainOffsetY + (Math.random() - 0.5) * 20,
+                    vx: (Math.random() - 0.5) * 100,
+                    vy: (Math.random() - 0.5) * 100 - 50, // Nach oben
+                    life: 1.0,
+                    maxLife: 0.5 + Math.random() * 0.5,
+                    size: 2 + Math.random() * 3
+                };
+                
+                bloodParticles.push(particle);
+            }
+        }
+
+        // Tod handhaben
+        function handleDeath(dino) {
+            console.log(`💀 ${dino.species.name} ist gestorben`);
+            
+            dino.combatState = 'dead';
+            dino.combatTarget = null;
+            
+            // Leiche erstellen
+            corpses.push({
+                dino: dino,
+                deathTime: Date.now(),
+                tileX: dino.tileX,
+                tileY: dino.tileY
+            });
+            
+            // Dino aus gameObjects entfernen
+            const index = gameObjects.indexOf(dino);
+            if (index > -1) {
+                gameObjects.splice(index, 1);
+            }
+            
+            updateHUD();
+        }
+
+        // Kampf beenden
+        function endCombat(winner, loser) {
+            console.log(`🏆 ${winner.species.name} gewinnt gegen ${loser.species.name}`);
+            
+            // Kampf aus Liste entfernen
+            const combatIndex = combats.findIndex(c => 
+                c.participants.includes(winner) && c.participants.includes(loser)
+            );
+            
+            if (combatIndex !== -1) {
+                const combat = combats[combatIndex];
+                
+                // Alle Teilnehmer zurück zu neutral setzen
+                combat.participants.forEach(participant => {
+                    if (participant !== loser && participant.combatState !== 'dead') {
+                        participant.combatState = 'neutral';
+                        participant.combatTarget = null;
+                    }
+                });
+                
+                combats.splice(combatIndex, 1);
+            }
+            
+            // Gewinner spezifisch zurück zu neutral
+            if (winner.combatState !== 'dead') {
+                winner.combatState = 'neutral';
+                winner.combatTarget = null;
+            }
+        }
+
+        // ===================================
+        // UPDATE & RENDERING
+        // ===================================
+
+        // Kampf-Updates (zur bestehenden update()-Funktion hinzufügen)
+        function updateCombatSystem() {
+            if (isPaused || isLoading) return;
+            
+            // Alle Dinos updaten
+            gameObjects.forEach(obj => {
+                if (obj instanceof Dino) {
+                    updateCombat(obj);
+                }
+            });
+            
+            // Blutpartikel updaten
+            bloodParticles = bloodParticles.filter(particle => {
+                particle.x += particle.vx * gameSpeed / 60;
+                particle.y += particle.vy * gameSpeed / 60;
+                particle.vy += 200 * gameSpeed / 60; // Schwerkraft
+                particle.life -= gameSpeed / 60 / particle.maxLife;
+                
+                return particle.life > 0;
+            });
+            
+            // Attack-Icons updaten
+            attackIcons.forEach(icon => {
+                const elapsed = Date.now() - icon.startTime;
+                icon.offsetY = -(elapsed / icon.duration) * 50; // 50px nach oben
+            });
+        }
+
+        // Kampf-Rendering (zur bestehenden render()-Funktion hinzufügen)
+        function renderCombatEffects() {
+            // Blutpartikel rendern
+            bloodParticles.forEach(particle => {
+                ctx.save();
+                ctx.globalAlpha = particle.life;
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.restore();
+            });
+            
+            // Attack-Icons rendern
+            attackIcons.forEach(icon => {
+                const pixelX = icon.dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+                const pixelY = icon.dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+                
+                ctx.save();
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#FFD700';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                
+                const iconY = pixelY - 40 + icon.offsetY;
+                ctx.strokeText(icon.symbol, pixelX, iconY);
+                ctx.fillText(icon.symbol, pixelX, iconY);
+                ctx.restore();
+            });
+            
+            // Leichen rendern
+            corpses.forEach(corpse => {
+                const pixelX = corpse.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+                const pixelY = corpse.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+                
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.translate(pixelX, pixelY);
+                ctx.rotate(Math.PI / 2); // 90° gedreht (tot)
+                
+                // Vereinfachte Leichen-Darstellung
+                const scale = corpse.dino.scale;
+                dinoRenderer.renderDino(ctx, 0, 0, corpse.dino.species.properties, 
+                                    corpse.dino.dinoType, scale, corpse.dino.isEnemy, 
+                                    null, corpse.dino.facingRight);
+                
+                ctx.restore();
+            });
+        }
+
+        // HP/Stamina Balken zur bestehenden Dino.render() hinzufügen
+        function renderCombatUI(dino) {
+            if (dino.combatState === 'dead') return;
+            
+            const pixelX = dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+            const pixelY = dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+            
+            const barWidth = 40 * dino.scale;
+            const barHeight = 4;
+            const barSpacing = 6;
+            
+            // HP-Balken
+            const hpBarY = pixelY - 50 * dino.scale;
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(pixelX - barWidth/2, hpBarY, barWidth, barHeight);
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(pixelX - barWidth/2, hpBarY, barWidth * (dino.currentHP/dino.maxHP), barHeight);
+            
+            // Stamina-Balken
+            const staminaBarY = hpBarY + barHeight + barSpacing;
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(pixelX - barWidth/2, staminaBarY, barWidth, barHeight);
+            ctx.fillStyle = '#00AAFF';
+            ctx.fillRect(pixelX - barWidth/2, staminaBarY, barWidth * (dino.currentStamina/dino.maxStamina), barHeight);
+            
+            // NEU: Cooldown-Balken (nur im Kampf und nur wenn Cooldown aktiv)
+            if (dino.combatState === 'fighting') {
+                const timeSinceLastAttack = (Date.now() - dino.lastAttackTime) / 1000;
+                const cooldownProgress = Math.min(1, timeSinceLastAttack / COMBAT_CONFIG.ATTACK_COOLDOWN);
+                
+                if (cooldownProgress < 1) {
+                    const cooldownBarY = staminaBarY + barHeight + barSpacing;
+                    
+                    // Cooldown-Hintergrund
+                    ctx.fillStyle = '#333333';
+                    ctx.fillRect(pixelX - barWidth/2, cooldownBarY, barWidth, barHeight);
+                    
+                    // Cooldown-Fortschritt
+                    ctx.fillStyle = '#FFD700'; // Gold
+                    ctx.fillRect(pixelX - barWidth/2, cooldownBarY, barWidth * cooldownProgress, barHeight);
+                }
+            }
+            
+            // Kampf-Status Indikator
+            if (dino.combatState === 'fighting') {
+                ctx.fillStyle = '#FF6B35';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                
+                const statusY = pixelY - 65 * dino.scale;
+                ctx.strokeText('⚔️', pixelX, statusY);
+                ctx.fillText('⚔️', pixelX, statusY);
+            }
+        }
+
+        // ===================================
+        // INITIALISIERUNG
+        // ===================================
+
+        // Kampfsystem für alle Dinos initialisieren (nach Level-Generation)
+        function initializeCombatForAllDinos() {
+            // Prüfen ob DinoAbilities verfügbar ist
+            if (!window.DinoAbilities || !window.DinoAbilities.calculateDinoAbilities) {
+                console.warn('⚠️ DinoAbilities noch nicht verfügbar, warte 100ms...');
+                setTimeout(initializeCombatForAllDinos, 100);
+                return;
+            }
+            
+            gameObjects.forEach(obj => {
+                if (obj instanceof Dino) {
+                    addCombatPropertiesToDino(obj);
+                }
+            });
+            
+            console.log('⚔️ Kampfsystem initialisiert für', gameObjects.filter(obj => obj instanceof Dino).length, 'Dinos');
         }
 
         document.addEventListener('DOMContentLoaded', initGame);
