@@ -356,6 +356,12 @@
         // 2. NEUE KONSTANTEN (nach bestehenden COMBAT_CONFIG einfügen)
         // ===================================
 
+        const FOOD_CONSUMPTION_DISTANCES = {
+            'tree': 1.2,     // Bäume: Etwas weiter weg (große Objekte)
+            'rodent': 0.6,   // Nagetiere: Sehr nah (kleine Objekte)
+            'corpse': 0.8    // Leichen: Mittel nah
+        };
+
         const FOOD_CONFIG = {
             // Nahrungswerte
             FOOD_VALUES: {
@@ -3300,7 +3306,6 @@
             return sources.length > 0 ? sources[0] : null;
         }
 
-        // Nahrungsaufnahme starten
         function startFoodConsumption(dino, foodSource) {
             // Prüfe nochmals ob Nahrungsquelle frei ist (Race Condition vermeiden)
             if (occupiedFoodSources.has(foodSource.sourceId)) {
@@ -3320,23 +3325,12 @@
             dino.foodTarget = foodSource;
             dino.consumptionStartTime = Date.now();
             
-            // WICHTIG: Dino bleibt an seiner aktuellen Position stehen!
-            // KEINE Position-Anpassung zur Nahrungsquelle
-            
-            // Bewegung komplett stoppen (an aktueller Position)
+            // WICHTIG: Dino bleibt an seiner aktuellen Position! Kein Springen!
+            // Bewegung stoppen (an aktueller Position)
             dino.behaviorState = 'resting';
             dino.targetTileX = dino.tileX;  // Aktuelle Position beibehalten
             dino.targetTileY = dino.tileY;  // Aktuelle Position beibehalten
             dino.animationPhase = 'idle';
-            
-            // Erste Konsumtions-Animation starten
-            startConsumptionDash(dino);
-        }
-
-        function startConsumptionDash(dino) {
-            // Sofort ersten Dash starten
-            dino.isConsuming = true;
-            dino.consumptionDashStart = Date.now();
             
             // Blickrichtung zur Nahrungsquelle ausrichten (optional)
             if (dino.foodTarget && dino.foodTarget.object) {
@@ -3350,15 +3344,27 @@
                 }
                 
                 const dx = targetX - dino.tileX;
-                if (dx > 0.1) {
-                    dino.facingRight = false; // Nahrung ist rechts
-                } else if (dx < -0.1) {
-                    dino.facingRight = true;  // Nahrung ist links
+                if (Math.abs(dx) > 0.1) { // Nur wenn Unterschied signifikant
+                    if (dx > 0) {
+                        dino.facingRight = false; // Nahrung ist rechts
+                    } else {
+                        dino.facingRight = true;  // Nahrung ist links
+                    }
                 }
                 // Bei dx ~= 0: Blickrichtung beibehalten
             }
             
-            console.log(`🦷 ${dino.species.name} startet erste Konsum-Dash`);
+            // Erste Konsumtions-Animation starten
+            startConsumptionDash(dino);
+        }
+
+        function startConsumptionDash(dino) {
+            // Sofort ersten Dash starten
+            dino.isConsuming = true;
+            dino.consumptionDashStart = Date.now();
+            
+            const targetObj = dino.foodTarget.object;
+            console.log(`🦷 ${dino.species.name} startet Konsum-Dash zu ${targetObj.type || 'corpse'}`);
         }
 
 
@@ -3566,9 +3572,21 @@
             
             const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
             
+            // NEU: Nähere Distanzen für verschiedene Nahrungstypen
+            let requiredDistance;
+            if (targetObj.type === 'tree') {
+                requiredDistance = 1.0;    // Bäume: Etwas weiter weg
+            } else if (targetObj.type === 'rodent') {
+                requiredDistance = 0.4;    // Nagetiere: Sehr nah (statt 1.5)
+            } else if (targetObj.deathTime) { // Leiche
+                requiredDistance = 0.6;    // Leichen: Nah
+            } else {
+                requiredDistance = 0.8;    // Default: Näher als vorher
+            }
+            
             // Nah genug zum Fressen?
-            if (distance <= 1.5) {
-                console.log(`🎯 ${dino.species.name} erreicht Nahrung (Entfernung: ${distance.toFixed(2)})`);
+            if (distance <= requiredDistance) {
+                console.log(`🎯 ${dino.species.name} ist nah genug an ${targetObj.type || 'corpse'} (Entfernung: ${distance.toFixed(2)})`);
                 startFoodConsumption(dino, dino.foodTarget);
                 return;
             }
@@ -3620,16 +3638,60 @@
             }
         }
 
+        function calculateOptimalFeedingPosition(dino, foodSource) {
+            const targetObj = foodSource.object;
+            let baseX, baseY;
+            
+            // Basis-Position der Nahrungsquelle
+            if (targetObj.tileX !== undefined) {
+                baseX = targetObj.tileX;
+                baseY = targetObj.tileY;
+            } else {
+                baseX = targetObj.tileX || foodSource.object.tileX;
+                baseY = targetObj.tileY || foodSource.object.tileY;
+            }
+            
+            // Je nach Nahrungstyp verschiedene Positionierung
+            if (targetObj.type === 'tree') {
+                // Bei Bäumen: Etwas seitlich positionieren
+                const angleOffset = (Math.random() - 0.5) * Math.PI; // ±90°
+                const distance = 0.8; // Nicht zu nah am Stamm
+                
+                return {
+                    x: baseX + Math.cos(angleOffset) * distance,
+                    y: baseY + Math.sin(angleOffset) * distance
+                };
+            } else if (targetObj.type === 'rodent') {
+                // Bei Nagetieren: Sehr nah, direkt darüber
+                return {
+                    x: baseX,
+                    y: baseY
+                };
+            } else if (targetObj.deathTime) { // Leiche
+                // Bei Leichen: Seitlich, nicht auf der Leiche
+                const sideOffset = (Math.random() > 0.5 ? 0.4 : -0.4);
+                return {
+                    x: baseX + sideOffset,
+                    y: baseY
+                };
+            }
+            
+            // Default: Direkt an der Nahrungsquelle
+            return { x: baseX, y: baseY };
+        }
+
         function updateFoodConsumingState(dino) {
             const currentTime = Date.now();
             const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
             
-            // WICHTIG: Dino bleibt an seiner Position während des Konsums
-            // KEINE Position-Updates zur Nahrungsquelle!
+            // WICHTIG: Dino bleibt ABSOLUT STILL während des Konsums!
+            // Alle Bewegung komplett stoppen
+            dino.behaviorState = 'resting';
+            dino.targetTileX = dino.tileX;  // Position fixieren
+            dino.targetTileY = dino.tileY;  // Position fixieren
+            dino.animationPhase = 'idle';   // Nur Idle-Animation
             
-            // Ziele fixieren um Bewegung zu verhindern
-            dino.targetTileX = dino.tileX;
-            dino.targetTileY = dino.tileY;
+            // KEINE Position-Updates! Dino bleibt genau wo er ist
             
             // Dash-Animation verwalten (alle 0,7 Sekunden)
             const dashInterval = 0.7; // 700ms zwischen Dashes
@@ -3657,8 +3719,8 @@
                 return;
             }
             
-            // WICHTIG: Während des Fressens KEINE Feinderkennung, aber Angriffe sind möglich
-            // Das wird durch das Kampfsystem automatisch gehandhabt
+            // WICHTIG: Während des Fressens KEINE Bewegung, KEINE Feinderkennung
+            // Aber Angriffe durch andere sind möglich (wird durch Kampfsystem gehandhabt)
         }
 
 
