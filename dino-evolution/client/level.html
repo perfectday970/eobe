@@ -1456,6 +1456,14 @@
                 const frameTime = 1/60;
                 this.behaviorTimer += frameTime * gameSpeed;
                 
+                // KAMPF-CHECK: Keine normale Bewegung während Kampf!
+                if (this.combatState === 'fighting') {
+                    // Im Kampf: Nur Combat-Update, KEINE Bewegung
+                    this.syncAnimation();
+                    return; // ← WICHTIG: Früher Return verhindert alle Bewegung
+                }
+                
+                // Normale Bewegung nur wenn NICHT im Kampf
                 if (this.behaviorTimer >= this.currentBehaviorDuration) {
                     this.switchBehaviorState();
                 }
@@ -1464,12 +1472,11 @@
                     this.handleMovement();
                 }
                 
-                // MODIFIZIERT: Erweiterte Grenzen für Cross-Movement
+                // Grenzen nur für nicht-kämpfende Dinos
                 this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
                 this.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, this.tileY));
                 
                 this.syncAnimation();
-
             }
 
             switchBehaviorState() {
@@ -2452,7 +2459,7 @@
                 dino.currentStamina = Math.min(dino.maxStamina, dino.currentStamina + COMBAT_CONFIG.STAMINA_RECOVERY * gameSpeed / 60);
             }
             
-            // Stamina-Verbrauch bei Bewegung
+            // Stamina-Verbrauch bei Bewegung (nur wenn NICHT kämpfend)
             if (dino.behaviorState === 'moving' && dino.combatState !== 'fighting') {
                 dino.currentStamina = Math.max(0, dino.currentStamina - COMBAT_CONFIG.MOVEMENT_STAMINA_COST * gameSpeed / 60);
                 dino.wasMovingLastFrame = true;
@@ -2470,12 +2477,13 @@
                     break;
                 case 'fighting':
                     updateFightingState(dino);
+                    // WICHTIG: Keine weitere Bewegung im fighting-State!
                     break;
             }
             
             // Angriffs-Animation
             if (dino.isAttacking) {
-                const attackDuration = 0.3; // 300ms
+                const attackDuration = 0.3;
                 if (Date.now() - dino.attackAnimationStart > attackDuration * 1000) {
                     dino.isAttacking = false;
                 }
@@ -2512,7 +2520,7 @@
                 return;
             }
             
-            // NEU: Prüfen ob Ziel bereits von jemand anderem bekämpft wird
+            // Prüfen ob Ziel bereits von jemand anderem bekämpft wird
             const targetAlreadyFighting = combats.some(c => c.participants.includes(dino.combatTarget));
             if (targetAlreadyFighting) {
                 console.log(`🚫 ${dino.species.name}: Ziel wird bereits bekämpft, suche neues Ziel`);
@@ -2536,8 +2544,10 @@
                 return;
             }
             
-            // Auf Feind zubewegen
-            seekEnemy(dino);
+            // WICHTIG: seekEnemy() nur wenn NICHT bereits im Kampf
+            if (dino.combatState !== 'fighting') {
+                seekEnemy(dino);
+            }
         }
 
         // NEU: Erweiterte Feindsuche mit Priorisierung
@@ -2628,7 +2638,15 @@
 
         // Kampf starten
         function startCombat(attacker, defender) {
-            // Bestehender Code...
+            // Bestehender Code für Combat-Check...
+            const attackerInCombat = combats.find(c => c.participants.includes(attacker));
+            if (attackerInCombat) return;
+            
+            const defenderInCombat = combats.find(c => c.participants.includes(defender));
+            if (defenderInCombat) {
+                console.log(`🚫 ${defender.species.name} kämpft bereits - ${attacker.species.name} sucht anderes Ziel`);
+                return;
+            }
             
             console.log(`⚔️ Neuer Kampf: ${attacker.species.name} vs ${defender.species.name}`);
             
@@ -2638,14 +2656,24 @@
             attacker.combatTarget = defender;
             defender.combatTarget = attacker;
             
-            // NEU: Dinos optimal ausrichten für den Kampf
+            // NEU: Bewegungsziele auf aktuelle Position setzen (stoppen!)
+            attacker.targetTileX = attacker.tileX;
+            attacker.targetTileY = attacker.tileY;
+            defender.targetTileX = defender.tileX;
+            defender.targetTileY = defender.tileY;
+            
+            // NEU: Behavior auf 'resting' setzen um Bewegung zu stoppen
+            attacker.behaviorState = 'resting';
+            defender.behaviorState = 'resting';
+            
+            // Optimal ausrichten für den Kampf
             const dx = defender.tileX - attacker.tileX;
             if (dx > 0) {
-                attacker.facingRight = false; // Angreifer schaut nach rechts
-                defender.facingRight = true;  // Verteidiger schaut nach links
+                attacker.facingRight = false;
+                defender.facingRight = true;
             } else {
-                attacker.facingRight = true;  // Angreifer schaut nach links
-                defender.facingRight = false; // Verteidiger schaut nach rechts
+                attacker.facingRight = true;
+                defender.facingRight = false;
             }
             
             // Kampf-Objekt erstellen
@@ -2864,6 +2892,13 @@
                     if (participant !== loser && participant.combatState !== 'dead') {
                         participant.combatState = 'neutral';
                         participant.combatTarget = null;
+                        
+                        // NEU: Bewegung wieder aktivieren
+                        participant.behaviorState = 'resting';
+                        participant.behaviorTimer = 0;
+                        participant.currentBehaviorDuration = participant.getRandomRestDuration();
+                        
+                        console.log(`🔓 ${participant.species.name} kann sich wieder bewegen`);
                     }
                 });
                 
@@ -2874,6 +2909,11 @@
             if (winner.combatState !== 'dead') {
                 winner.combatState = 'neutral';
                 winner.combatTarget = null;
+                
+                // Bewegung für Gewinner auch aktivieren
+                winner.behaviorState = 'resting';
+                winner.behaviorTimer = 0;
+                winner.currentBehaviorDuration = winner.getRandomRestDuration();
             }
         }
 
