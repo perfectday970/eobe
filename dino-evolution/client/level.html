@@ -350,6 +350,7 @@
 
         let foodIcons = []; // Aufsteigende Food-Icons
         let consumedFoodSources = new Set(); // Verbrauchte Nahrungsquellen (für Regeneration)
+        let occupiedFoodSources = new Map();
 
         // ===================================
         // 2. NEUE KONSTANTEN (nach bestehenden COMBAT_CONFIG einfügen)
@@ -1584,22 +1585,21 @@
                 let pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
                 let pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;
                 
-                // DASH-ANIMATION: Position vor dem Rendering anpassen
-                if (this.isAttacking) {
-                    const elapsed = Date.now() - this.attackAnimationStart;
-                    const progress = elapsed / 300; // 300ms Animation
+                // DASH-ANIMATION hinzufügen:
+                if (this.isAttacking || this.isConsuming) {
+                    const elapsed = this.isAttacking ? 
+                        (Date.now() - this.attackAnimationStart) : 
+                        (Date.now() - this.consumptionDashStart);
+                    const progress = elapsed / 300;
                     
                     if (progress < 0.5) {
-                        // Nach vorne dashen (erste Hälfte)
-                        const dashDistance = 15 * this.scale * (progress * 2); // 0 -> 1
+                        const dashDistance = 15 * this.scale * (progress * 2);
                         pixelX += this.facingRight ? -dashDistance : dashDistance;
                     } else if (progress < 1.0) {
-                        // Zurück dashen (zweite Hälfte)
-                        const returnProgress = (progress - 0.5) * 2; // 0 -> 1
-                        const dashDistance = 15 * this.scale * (1 - returnProgress); // 1 -> 0
+                        const returnProgress = (progress - 0.5) * 2;
+                        const dashDistance = 15 * this.scale * (1 - returnProgress);
                         pixelX += this.facingRight ? -dashDistance : dashDistance;
                     }
-                    // Nach 100% ist der Dino wieder an der ursprünglichen Position
                 }
                 
                 this.renderShadow(pixelX, pixelY);
@@ -3041,6 +3041,10 @@
                 const elapsed = Date.now() - icon.startTime;
                 icon.offsetY = -(elapsed / icon.duration) * 60; // 60px nach oben
             });
+
+            if (Math.floor(Date.now() / 5000) % 1 === 0) {
+                cleanupOrphanedFoodReservations();
+            }
         }
 
         // Kampf-Rendering (zur bestehenden render()-Funktion hinzufügen)
@@ -3187,7 +3191,9 @@
                 // Bäume (Pflanzen)
                 if (obj.type === 'tree' && dino.canConsumePlants) {
                     const sourceId = `tree_${obj.tileX}_${obj.tileY}`;
-                    if (!consumedFoodSources.has(sourceId)) {
+                    
+                    // Prüfe ob Baum verfügbar ist (nicht gefressen UND nicht belegt)
+                    if (!consumedFoodSources.has(sourceId) && !occupiedFoodSources.has(sourceId)) {
                         const isLarge = obj.baseSize >= 25;
                         sources.push({
                             object: obj,
@@ -3202,7 +3208,9 @@
                 // Nagetiere (Fleisch)
                 if (obj.type === 'rodent' && dino.canConsumeMeat) {
                     const sourceId = `rodent_${obj.tileX}_${obj.tileY}`;
-                    if (!consumedFoodSources.has(sourceId)) {
+                    
+                    // Prüfe ob Nagetier verfügbar ist (nicht gefressen UND nicht belegt)
+                    if (!consumedFoodSources.has(sourceId) && !occupiedFoodSources.has(sourceId)) {
                         sources.push({
                             object: obj,
                             type: 'meat',
@@ -3224,7 +3232,9 @@
                     
                     if (distance <= detectionRadius) {
                         const sourceId = `corpse_${corpse.tileX}_${corpse.tileY}_${corpse.deathTime}`;
-                        if (!consumedFoodSources.has(sourceId)) {
+                        
+                        // Prüfe ob Leiche verfügbar ist (nicht gefressen UND nicht belegt)
+                        if (!consumedFoodSources.has(sourceId) && !occupiedFoodSources.has(sourceId)) {
                             const isOwnSpecies = corpse.dino.isEnemy === dino.isEnemy;
                             
                             // Eigene Art nur bei hohem Aas-Wert
@@ -3258,23 +3268,77 @@
 
         // Nahrungsaufnahme starten
         function startFoodConsumption(dino, foodSource) {
+            // Prüfe nochmals ob Nahrungsquelle frei ist (Race Condition vermeiden)
+            if (occupiedFoodSources.has(foodSource.sourceId)) {
+                console.log(`🚫 ${dino.species.name}: Nahrungsquelle bereits belegt, suche neue`);
+                dino.foodState = 'neutral';
+                dino.foodTarget = null;
+                return;
+            }
+            
             console.log(`🍽️ ${dino.species.name} beginnt ${foodSource.type} zu konsumieren`);
+            
+            // Nahrungsquelle als belegt markieren
+            occupiedFoodSources.set(foodSource.sourceId, dino);
+            console.log(`🔒 Nahrungsquelle belegt: ${foodSource.sourceId} von ${dino.species.name}`);
             
             dino.foodState = 'consuming';
             dino.foodTarget = foodSource;
             dino.consumptionStartTime = Date.now();
             
-            // Bewegung stoppen
+            // WICHTIG: Dino bleibt an seiner aktuellen Position stehen!
+            // KEINE Position-Anpassung zur Nahrungsquelle
+            
+            // Bewegung komplett stoppen (an aktueller Position)
             dino.behaviorState = 'resting';
-            dino.targetTileX = dino.tileX;
-            dino.targetTileY = dino.tileY;
+            dino.targetTileX = dino.tileX;  // Aktuelle Position beibehalten
+            dino.targetTileY = dino.tileY;  // Aktuelle Position beibehalten
             dino.animationPhase = 'idle';
+            
+            // Erste Konsumtions-Animation starten
+            startConsumptionDash(dino);
         }
+
+        function startConsumptionDash(dino) {
+            // Sofort ersten Dash starten
+            dino.isConsuming = true;
+            dino.consumptionDashStart = Date.now();
+            
+            // Blickrichtung zur Nahrungsquelle ausrichten (optional)
+            if (dino.foodTarget && dino.foodTarget.object) {
+                const targetObj = dino.foodTarget.object;
+                let targetX;
+                
+                if (targetObj.tileX !== undefined) {
+                    targetX = targetObj.tileX;
+                } else {
+                    targetX = targetObj.tileX || dino.foodTarget.object.tileX;
+                }
+                
+                const dx = targetX - dino.tileX;
+                if (dx > 0.1) {
+                    dino.facingRight = false; // Nahrung ist rechts
+                } else if (dx < -0.1) {
+                    dino.facingRight = true;  // Nahrung ist links
+                }
+                // Bei dx ~= 0: Blickrichtung beibehalten
+            }
+            
+            console.log(`🦷 ${dino.species.name} startet erste Konsum-Dash`);
+        }
+
 
         // Nahrungsaufnahme abschließen
         function completeFoodConsumption(dino) {
             const foodSource = dino.foodTarget;
             if (!foodSource) return;
+            
+            // Konsumptions-Animation beenden
+            dino.isConsuming = false;
+            
+            // Nahrungsquelle freigeben
+            occupiedFoodSources.delete(foodSource.sourceId);
+            console.log(`🔓 Nahrungsquelle freigegeben: ${foodSource.sourceId}`);
             
             // Effizienz basierend auf Vorliebe berechnen
             const preference = foodSource.preference;
@@ -3340,6 +3404,15 @@
         // Nahrungsaufnahme unterbrechen
         function interruptFoodConsumption(dino, reason = 'unknown') {
             console.log(`❌ ${dino.species.name} Nahrungsaufnahme unterbrochen: ${reason}`);
+            
+            // Konsumptions-Animation beenden
+            dino.isConsuming = false;
+            
+            // Nahrungsquelle freigeben (falls vorhanden)
+            if (dino.foodTarget && dino.foodTarget.sourceId) {
+                occupiedFoodSources.delete(dino.foodTarget.sourceId);
+                console.log(`🔓 Nahrungsquelle durch Unterbrechung freigegeben: ${dino.foodTarget.sourceId}`);
+            }
             
             dino.foodState = 'neutral';
             dino.foodTarget = null;
@@ -3413,6 +3486,17 @@
                 return;
             }
             
+            // Prüfe ob Ziel noch verfügbar ist
+            if (occupiedFoodSources.has(dino.foodTarget.sourceId)) {
+                const occupant = occupiedFoodSources.get(dino.foodTarget.sourceId);
+                if (occupant !== dino) {
+                    console.log(`🚫 ${dino.species.name}: Ziel-Nahrungsquelle bereits von ${occupant.species.name} belegt`);
+                    dino.foodState = 'neutral';
+                    dino.foodTarget = null;
+                    return;
+                }
+            }
+            
             // Feinde in der Nähe? Abbrechen!
             const enemies = findEnemiesInRange(dino);
             if (enemies.length > 0) {
@@ -3437,8 +3521,9 @@
             
             const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
             
-            // Nah genug zum Fressen?
-            if (distance <= 1.0) { // 1 Kachel Reichweite
+            // Nah genug zum Fressen? (großzügigere Reichweite)
+            if (distance <= 1.5) { // 1.5 Kacheln Reichweite - größer für weniger "Kampf" um exakte Position
+                console.log(`🎯 ${dino.species.name} erreicht Nahrung (Entfernung: ${distance.toFixed(2)})`);
                 startFoodConsumption(dino, dino.foodTarget);
                 return;
             }
@@ -3455,8 +3540,10 @@
             const dy = targetY - dino.tileY;
             
             if (distance > 0.1) {
-                dino.tileX += (dx / distance) * dino.speed * gameSpeed;
-                dino.tileY += (dy / distance) * dino.speed * gameSpeed;
+                // Sanfte Bewegung zur Nahrung
+                const moveSpeed = dino.speed * gameSpeed;
+                dino.tileX += (dx / distance) * moveSpeed;
+                dino.tileY += (dy / distance) * moveSpeed;
                 
                 // Blickrichtung anpassen
                 if (dx > 0.01) {
@@ -3464,12 +3551,44 @@
                 } else if (dx < -0.01) {
                     dino.facingRight = true;
                 }
+                
+                // Debug: Position während Annäherung
+                if (Math.random() < 0.01) { // 1% Chance für Debug-Log
+                    console.log(`🚶 ${dino.species.name} nähert sich Nahrung: ${distance.toFixed(2)} Kacheln entfernt`);
+                }
             }
         }
 
         function updateFoodConsumingState(dino) {
             const currentTime = Date.now();
             const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
+            
+            // WICHTIG: Dino bleibt an seiner Position während des Konsums
+            // KEINE Position-Updates zur Nahrungsquelle!
+            
+            // Ziele fixieren um Bewegung zu verhindern
+            dino.targetTileX = dino.tileX;
+            dino.targetTileY = dino.tileY;
+            
+            // Dash-Animation verwalten (alle 0,7 Sekunden)
+            const dashInterval = 0.7; // 700ms zwischen Dashes
+            const dashDuration = 0.3;  // 300ms pro Dash (wie bei Angriffen)
+            
+            // Berechne welcher Dash-Zyklus gerade läuft
+            const cycleTime = elapsed % dashInterval;
+            
+            if (cycleTime < dashDuration) {
+                // Wir sind in einem aktiven Dash
+                if (!dino.isConsuming) {
+                    // Neuen Dash starten
+                    dino.isConsuming = true;
+                    dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
+                    console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                }
+            } else {
+                // Wir sind in der Pause zwischen Dashes
+                dino.isConsuming = false;
+            }
             
             // Nahrungsaufnahme abgeschlossen?
             if (elapsed >= FOOD_CONFIG.CONSUMPTION_TIME) {
@@ -3479,6 +3598,27 @@
             
             // WICHTIG: Während des Fressens KEINE Feinderkennung, aber Angriffe sind möglich
             // Das wird durch das Kampfsystem automatisch gehandhabt
+        }
+
+
+        function cleanupOrphanedFoodReservations() {
+            const currentTime = Date.now();
+            const toDelete = [];
+            
+            for (const [sourceId, dino] of occupiedFoodSources.entries()) {
+                // Prüfe ob der Dino noch existiert und die Nahrungsquelle noch konsumiert
+                const dinoExists = gameObjects.includes(dino);
+                const stillConsuming = dino.foodState === 'consuming';
+                
+                if (!dinoExists || !stillConsuming) {
+                    console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
+                    toDelete.push(sourceId);
+                }
+            }
+            
+            toDelete.forEach(sourceId => {
+                occupiedFoodSources.delete(sourceId);
+            });
         }
 
 
