@@ -45,6 +45,15 @@ connectDB();
 // Routes
 app.use('/api', apiRoutes);
 app.use('/api/game', gameRoutes);
+// DEBUG: Liste alle Routes auf
+console.log('📍 Mounted routes:');
+app._router.stack.forEach(layer => {
+    if (layer.route) {
+        console.log(`  ${Object.keys(layer.route.methods)} ${layer.route.path}`);
+    } else if (layer.name === 'router') {
+        console.log(`  Router: ${layer.regexp}`);
+    }
+});
 
 app.use((req, res, next) => {
     console.log('=== REQUEST DEBUG ===');
