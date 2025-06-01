@@ -546,6 +546,8 @@
         let levelStartTime = null;
         let levelEndTime = null;
         let gameEnded = false;
+
+        let currentLevel = 1;
         
         // API Base URL
         const API_BASE = 'http://localhost:3001/api/game';
@@ -711,9 +713,14 @@
                 if (data.success && data.levelData) {
                     levelData = data.levelData;
                     
-                    console.log('✅ Level-Daten geladen:', levelData);
-                    console.log(`📊 ${levelData.populationData.length} eigene Arten, ${levelData.enemyData?.length || 0} Gegnerarten`);
-                    
+                    // WICHTIG: currentLevel aus levelData extrahieren
+                    if (levelData.currentLevel) {
+                        currentLevel = levelData.currentLevel;
+                        console.log('📊 Level aus levelData geladen:', currentLevel);
+                    } else if (levelData.level) {
+                        currentLevel = levelData.level;
+                        console.log('📊 Level aus levelData.level geladen:', currentLevel);
+                    }
                     // Validierung
                     if (!levelData.populationData || levelData.populationData.length === 0) {
                         throw new Error('Keine Dinosaurier-Population gefunden. Bitte starten Sie erneut.');
@@ -769,7 +776,7 @@
                     },
                     body: JSON.stringify({
                         sessionId: sessionId,
-                        currentLevel: levelData.level || 1,
+                        currentLevel: currentLevel || levelData.currentLevel || levelData.level || 1,
                         populationData: currentPopulation
                     })
                 });
@@ -985,7 +992,7 @@
                     <div class="level-end-actions">
                         ${result.victory ? `
                             <button class="continue-btn" onclick="proceedToNextLevel(${totalEvoPoints})">
-                                🚀 Weiter zu Level ${(levelData.currentLevel || 1) + 1}
+                                🚀 Weiter zu Level ${(currentLevel || levelData.currentLevel || 1) + 1}
                             </button>
                         ` : `
                             <button class="retry-btn" onclick="retryLevel()">
@@ -1067,7 +1074,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         sessionId: sessionId,
-                        completedLevel: levelData.currentLevel || 1,
+                        completedLevel: currentLevel || levelData.currentLevel || 1,
                         earnedPoints: earnedPoints,
                         victory: true
                     })
@@ -1095,7 +1102,7 @@
                 console.error('❌ DEBUG: Fehler beim Level-Abschluss:', error);
                 
                 // Fallback mit Session-Erhaltung
-                const nextLevel = (levelData.currentLevel || 1) + 1;
+                const nextLevel = (currentLevel || levelData.currentLevel || 1) + 1;
                 const urlParams = new URLSearchParams();
                 urlParams.set('session', sessionId);  // WICHTIG: Session beibehalten
                 urlParams.set('level', nextLevel);
@@ -1160,7 +1167,9 @@
             // FIX: Level-Title mit korrektem Level aktualisieren
             const levelTitle = document.getElementById('levelTitle');
             const currentLevel = levelData.currentLevel || levelData.level || 1;
-            levelTitle.textContent = `🎮 Level ${currentLevel} - Überleben`;
+            const displayLevel = currentLevel || levelData.currentLevel || levelData.level || 1;
+            levelTitle.textContent = `🎮 Level ${displayLevel} - Überleben`;
+           // levelTitle.textContent = `🎮 Level ${currentLevel} - Überleben`;
             
             console.log(`🎮 Level ${currentLevel} HUD angezeigt`);
             
@@ -1539,7 +1548,7 @@
                 terrainOffsetY = -scrollY; // Scrolling wenn größer
             }
             
-            console.log(`Terrain-Offsets: X=${terrainOffsetX.toFixed(1)}, Y=${terrainOffsetY.toFixed(1)}, Scroll: (${scrollX}, ${scrollY})`);
+            //console.log(`Terrain-Offsets: X=${terrainOffsetX.toFixed(1)}, Y=${terrainOffsetY.toFixed(1)}, Scroll: (${scrollX}, ${scrollY})`);
         }
 
         function renderTerrain() {
@@ -4331,7 +4340,7 @@
                 const stillConsuming = dino.foodState === 'consuming';
                 
                 if (!dinoExists || !stillConsuming) {
-                    console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
+                    //console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
                     toDelete.push(sourceId);
                 }
             }
