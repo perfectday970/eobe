@@ -19,9 +19,25 @@ const GameSchema = new mongoose.Schema({
         enum: ['evolution', 'population', 'level'], 
         default: 'evolution' 
     },
+
+    totalEarnedPoints: { type: Number, default: 0 },
+    completedLevels: { type: Number, default: 0 },
+    levelHistory: [{
+        level: Number,
+        completedAt: Date,
+        earnedPoints: Number,
+        victory: Boolean
+    }],
+
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
+}, {
+    timestamps: true // Automatische createdAt/updatedAt
 });
+
+// Index für bessere Performance
+GameSchema.index({ sessionId: 1 });
+GameSchema.index({ updatedAt: -1 });
 
 // Middleware für updatedAt
 GameSchema.pre('save', function(next) {

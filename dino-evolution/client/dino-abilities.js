@@ -310,9 +310,10 @@ const SPECIAL_ABILITIES = {
 /**
  * Berechnet alle Fähigkeiten eines Dinosauriers basierend auf seinen Eigenschaften
  * @param {Object} properties - Die Eigenschaften des Dinosauriers (0-100 Werte)
+ * @param {boolean} isAdult - Ob der Dinosaurier erwachsen ist (default: true)
  * @returns {Object} - Objekt mit allen berechneten Fähigkeiten
  */
-function calculateDinoAbilities(properties) {
+function calculateDinoAbilities(properties, isAdult = true) {
     // Basis-Werte für alle Fähigkeiten
     const abilities = {
         "Gewicht": 50,
@@ -383,6 +384,20 @@ function calculateDinoAbilities(properties) {
         }
     });
 
+    if (!isAdult) {
+        Object.keys(abilities).forEach(abilityName => {
+            if (abilityName === "Gewicht") {
+                // Gewicht: Minimum 7 (70% von 10)
+                abilities[abilityName] = Math.max(7, Math.round(abilities[abilityName] * 0.7));
+            } else {
+                // Alle anderen: 70% des ursprünglichen Werts, Minimum 0
+                abilities[abilityName] = Math.max(0, Math.round(abilities[abilityName] * 0.7));
+            }
+        });
+        
+        console.log(`🐣 Jungtier-Malus angewendet: -30% auf alle Fähigkeiten`);
+    }
+
     return abilities;
 }
 
@@ -409,16 +424,21 @@ function findPropertyConfig(propertyName) {
  * @param {Object} properties - Die Eigenschaften des Dinosauriers
  * @returns {Array} - Array der verfügbaren Spezialfähigkeiten
  */
-function getAvailableSpecialAbilities(properties) {
+function getAvailableSpecialAbilities(properties, isAdult = true) {
     const available = [];
     
     Object.keys(SPECIAL_ABILITIES).forEach(abilityName => {
         const config = SPECIAL_ABILITIES[abilityName];
         if (config.requirements(properties)) {
+            const abilities = calculateDinoAbilities(properties, isAdult);
+            const actualValue = abilities[abilityName] || 0;
+            
             available.push({
                 name: abilityName,
                 icon: config.icon,
-                description: config.description
+                description: config.description,
+                value: actualValue,
+                isReduced: !isAdult && actualValue > 0
             });
         }
     });

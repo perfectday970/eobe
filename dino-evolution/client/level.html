@@ -241,6 +241,231 @@
                 font-size: 12px;
             }
         }
+
+        /* Timer Display */
+        .timer-display {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 25px;
+            border-radius: 12px;
+            border: 3px solid #32cd32;
+            z-index: 15;
+            box-shadow: 0 0 20px rgba(50, 205, 50, 0.4);
+        }
+
+        .timer-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timer-label {
+            color: #e8d5c4;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        .timer-value {
+            color: #32cd32;
+            font-size: 1.4em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* Level End Modal */
+        .level-end-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .level-end-content {
+            background: linear-gradient(135deg, #1a3a1a, #2d5a2d);
+            border: 4px solid #32cd32;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(50, 205, 50, 0.6);
+            animation: slideIn 0.6s ease;
+        }
+
+        @keyframes slideIn {
+            from { 
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .level-end-header h2 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #32cd32;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .end-reason {
+            font-size: 1.2em;
+            color: #cd853f;
+            margin-bottom: 25px;
+        }
+
+        .perfect-victory {
+            font-size: 1.3em;
+            color: #ffd700;
+            font-weight: bold;
+            margin-bottom: 20px;
+            animation: glow 1.5s infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 5px #ffd700; }
+            to { text-shadow: 0 0 20px #ffd700, 0 0 30px #ffd700; }
+        }
+
+        .victory-stats, .defeat-stats {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .weight-comparison h4 {
+            color: #ff6b35;
+            margin-bottom: 10px;
+        }
+
+        .own-weight {
+            color: #32cd32;
+            font-weight: bold;
+        }
+
+        .enemy-weight {
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        .food-conversion {
+            background: rgba(50, 205, 50, 0.1);
+            border: 2px solid #32cd32;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .food-conversion h3 {
+            color: #32cd32;
+            margin-bottom: 15px;
+        }
+
+        .meat-points, .plant-points, .total-points {
+            color: #ffd700;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .conversion-total {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #32cd32;
+            font-size: 1.3em;
+            color: #32cd32;
+        }
+
+        .level-end-actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .continue-btn, .retry-btn, .menu-btn {
+            background: linear-gradient(135deg, #32cd32, #228b22);
+            border: 2px solid #32cd32;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            min-width: 150px;
+        }
+
+        .retry-btn {
+            background: linear-gradient(135deg, #ff6b35, #ff8c42);
+            border-color: #ff6b35;
+        }
+
+        .menu-btn {
+            background: linear-gradient(135deg, #8b4513, #a0522d);
+            border-color: #8b4513;
+        }
+
+        .continue-btn:hover, .retry-btn:hover, .menu-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .defeat-stats {
+            color: #ff4444;
+            font-size: 1.2em;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .timer-display {
+                top: 10px;
+                padding: 10px 15px;
+            }
+            
+            .level-end-content {
+                padding: 25px;
+                width: 95%;
+            }
+            
+            .level-end-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .continue-btn, .retry-btn, .menu-btn {
+                width: 100%;
+                max-width: 250px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -279,6 +504,13 @@
             <div class="info-item">🖱️ Ziehen: Karte verschieben</div>
         </div>
 
+        <div class="timer-display" id="timerDisplay">
+            <div class="timer-container">
+                <span class="timer-label">⏰ Zeit:</span>
+                <span class="timer-value" id="levelTimer">3:00</span>
+            </div>
+        </div>
+
         <!-- GAME CONTROLS -->
         <div class="controls" id="gameControls" style="display: none;">
             <button class="control-btn" id="pauseBtn" onclick="pauseGame()">⏸️ Pause</button>
@@ -309,6 +541,11 @@
         let selectedDino = null;
         let isLoading = true;
         let saveInProgress = false;
+
+        let levelTimer = 180; // 3 Minuten in Sekunden
+        let levelStartTime = null;
+        let levelEndTime = null;
+        let gameEnded = false;
         
         // API Base URL
         const API_BASE = 'http://localhost:3001/api/game';
@@ -562,6 +799,326 @@
             }
         }
 
+        function startLevelTimer() {
+            levelStartTime = Date.now();
+            console.log('⏰ Level-Timer gestartet: 3 Minuten');
+        }
+
+        function updateTimer() {
+            if (isPaused || isLoading || gameEnded || !levelStartTime) return;
+            
+            // NEU: Speed-berücksichtigte Zeit-Berechnung
+            const realElapsed = (Date.now() - levelStartTime) / 1000;
+            const gameElapsed = realElapsed * gameSpeed; // Multipliziert mit Spiel-Geschwindigkeit
+            const remaining = Math.max(0, levelTimer - gameElapsed);
+            
+            updateTimerDisplay(remaining);
+            
+            if (remaining <= 0) {
+                endLevelByTime();
+            }
+        }
+
+
+        function updateTimerDisplay(remaining) {
+            const minutes = Math.floor(remaining / 60);
+            const seconds = Math.floor(remaining % 60);
+            const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            const timerElement = document.getElementById('levelTimer');
+            if (timerElement) {
+                // NEU: Speed-Indikator hinzufügen
+                const speedIndicator = gameSpeed > 1 ? ` (${gameSpeed}x)` : '';
+                timerElement.textContent = timeString + speedIndicator;
+                
+                if (remaining <= 30) {
+                    timerElement.style.color = '#ff4444';
+                    timerElement.style.animation = 'pulse 1s infinite';
+                } else if (remaining <= 60) {
+                    timerElement.style.color = '#ffa500';
+                } else {
+                    // NEU: Verschiedene Farben für verschiedene Speeds
+                    if (gameSpeed === 4) {
+                        timerElement.style.color = '#ff6b35'; // Orange für 4x
+                    } else if (gameSpeed === 2) {
+                        timerElement.style.color = '#ffd700'; // Gold für 2x
+                    } else {
+                        timerElement.style.color = '#32cd32'; // Grün für 1x
+                    }
+                }
+            }
+        }
+
+
+        function checkVictoryConditions() {
+            if (gameEnded || isLoading) return;
+            
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.combatState !== 'dead');
+            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.combatState !== 'dead');
+            
+            if (ownDinos.length === 0) {
+                endLevelByDefeat();
+                return;
+            }
+            
+            if (enemyDinos.length === 0) {
+                endLevelByEnemiesEliminated();
+                return;
+            }
+        }
+
+        function endLevelByTime() {
+            if (gameEnded) return;
+            gameEnded = true;
+            levelEndTime = Date.now();
+            
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.combatState !== 'dead');
+            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.combatState !== 'dead');
+            
+            const ownWeight = calculateTotalWeight(ownDinos);
+            const enemyWeight = calculateTotalWeight(enemyDinos);
+            
+            const victory = ownWeight > enemyWeight;
+            
+            showLevelEndScreen({
+                victory: victory,
+                reason: 'Zeit abgelaufen',
+                ownWeight: ownWeight,
+                enemyWeight: enemyWeight,
+                ownDinos: ownDinos.length,
+                enemyDinos: enemyDinos.length
+            });
+        }
+
+        function endLevelByEnemiesEliminated() {
+            if (gameEnded) return;
+            gameEnded = true;
+            levelEndTime = Date.now();
+            
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.combatState !== 'dead');
+            
+            showLevelEndScreen({
+                victory: true,
+                reason: 'Alle Gegner eliminiert',
+                ownDinos: ownDinos.length,
+                enemyDinos: 0,
+                perfectVictory: true
+            });
+        }
+
+        function endLevelByDefeat() {
+            if (gameEnded) return;
+            gameEnded = true;
+            levelEndTime = Date.now();
+            
+            showLevelEndScreen({
+                victory: false,
+                reason: 'Alle eigenen Dinosaurier eliminiert',
+                ownDinos: 0,
+                defeat: true
+            });
+        }
+
+        function calculateTotalWeight(dinos) {
+            return dinos.reduce((total, dino) => {
+                let weight = dino.abilities['Gewicht'] || 50;
+                
+                if (!dino.isAdult) {
+                    weight *= 0.7;
+                }
+                
+                return total + weight;
+            }, 0);
+        }
+
+        // ===================================
+        // LEVEL-ENDE UI
+        // ===================================
+
+        function showLevelEndScreen(result) {
+            isPaused = true;
+            
+            const meatPoints = teamFood.meat;
+            const plantPoints = Math.floor(teamFood.plants * 0.5);
+            const totalEvoPoints = meatPoints + plantPoints;
+            
+            const modal = document.createElement('div');
+            modal.className = 'level-end-modal';
+            modal.innerHTML = `
+                <div class="level-end-content">
+                    <div class="level-end-header">
+                        <h2>${result.victory ? '🏆 SIEG!' : '💀 NIEDERLAGE'}</h2>
+                        <p class="end-reason">${result.reason}</p>
+                    </div>
+                    
+                    ${result.victory ? `
+                        <div class="victory-stats">
+                            ${result.perfectVictory ? '<p class="perfect-victory">🌟 PERFEKTER SIEG! 🌟</p>' : ''}
+                            ${result.ownWeight ? `
+                                <div class="weight-comparison">
+                                    <h4>Gewichts-Vergleich:</h4>
+                                    <p>🦕 Eigene Dinos: <span class="own-weight">${Math.round(result.ownWeight)}</span></p>
+                                    <p>⚔️ Gegner: <span class="enemy-weight">${Math.round(result.enemyWeight)}</span></p>
+                                </div>
+                            ` : ''}
+                            <div class="survivor-count">
+                                <p>Überlebende: ${result.ownDinos} eigene Dinos</p>
+                            </div>
+                        </div>
+                        
+                        <div class="food-conversion">
+                            <h3>🍽️ Nahrung → Evolutionspunkte</h3>
+                            <div class="conversion-details">
+                                <p>🥩 Fleisch: ${teamFood.meat} × 1 = <span class="meat-points">${meatPoints}</span> EP</p>
+                                <p>🌿 Pflanzen: ${teamFood.plants} × 0.5 = <span class="plant-points">${plantPoints}</span> EP</p>
+                                <div class="conversion-total">
+                                    <strong>Gesamt: <span class="total-points">${totalEvoPoints}</span> EP</strong>
+                                </div>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="defeat-stats">
+                            <p>💀 Alle Dinosaurier wurden eliminiert</p>
+                        </div>
+                    `}
+                    
+                    <div class="level-end-actions">
+                        ${result.victory ? `
+                            <button class="continue-btn" onclick="proceedToNextLevel(${totalEvoPoints})">
+                                🚀 Weiter zu Level ${(levelData.currentLevel || 1) + 1}
+                            </button>
+                        ` : `
+                            <button class="retry-btn" onclick="retryLevel()">
+                                🔄 Level wiederholen
+                            </button>
+                        `}
+                        <button class="menu-btn" onclick="returnToMenu()">
+                            🏠 Zurück zum Menü
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            setTimeout(() => {
+                if (result.victory) {
+                    animatePointsConversion();
+                }
+            }, 1000);
+        }
+
+        function animatePointsConversion() {
+            const meatElement = document.querySelector('.meat-points');
+            const plantElement = document.querySelector('.plant-points');
+            const totalElement = document.querySelector('.total-points');
+            
+            animateCounter(meatElement, 0, teamFood.meat, 1000);
+            animateCounter(plantElement, 0, Math.floor(teamFood.plants * 0.5), 1200);
+            
+            setTimeout(() => {
+                const total = teamFood.meat + Math.floor(teamFood.plants * 0.5);
+                animateCounter(totalElement, 0, total, 1500);
+            }, 1500);
+        }
+
+        function animateCounter(element, start, end, duration) {
+            if (!element) return;
+            
+            const startTime = Date.now();
+            
+            function update() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const current = Math.floor(start + (end - start) * progress);
+                
+                element.textContent = current;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            update();
+        }
+
+        // ===================================
+        // NAVIGATION
+        // ===================================
+
+        async function proceedToNextLevel(earnedPoints) {
+            console.log('🚀 DEBUG: proceedToNextLevel - Session:', sessionId?.substring(0, 8));
+            console.log('🎯 DEBUG: Aktuelles Level:', levelData.currentLevel || 1);
+            
+            if (!sessionId || sessionId.startsWith('offline')) {
+                // Offline-Modus
+                const nextLevel = (levelData.currentLevel || 1) + 1;
+                const urlParams = new URLSearchParams();
+                urlParams.set('level', nextLevel);
+                urlParams.set('earnedPoints', earnedPoints);
+                window.location.href = `index.html?${urlParams.toString()}`;
+                return;
+            }
+            
+            try {
+                // Server-Request
+                const response = await fetch(`${API_BASE}/complete-level`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        completedLevel: levelData.currentLevel || 1,
+                        earnedPoints: earnedPoints,
+                        victory: true
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('📥 DEBUG: Server Response:', data);
+                
+                if (data.success) {
+                    // KRITISCH: Session-ID UND neues Level in URL
+                    const urlParams = new URLSearchParams();
+                    urlParams.set('session', sessionId);           // Session beibehalten!
+                    urlParams.set('earnedPoints', earnedPoints);
+                    urlParams.set('level', data.newLevel);         // Neues Level explizit
+                    
+                    const targetUrl = `index.html?${urlParams.toString()}`;
+                    console.log('🔗 DEBUG: Redirect mit Session:', targetUrl);
+                    
+                    window.location.href = targetUrl;
+                } else {
+                    throw new Error(data.error || 'Level-Abschluss fehlgeschlagen');
+                }
+                
+            } catch (error) {
+                console.error('❌ DEBUG: Fehler beim Level-Abschluss:', error);
+                
+                // Fallback mit Session-Erhaltung
+                const nextLevel = (levelData.currentLevel || 1) + 1;
+                const urlParams = new URLSearchParams();
+                urlParams.set('session', sessionId);  // WICHTIG: Session beibehalten
+                urlParams.set('level', nextLevel);
+                urlParams.set('earnedPoints', earnedPoints);
+                window.location.href = `index.html?${urlParams.toString()}`;
+            }
+        }
+
+        function retryLevel() {
+            const urlParams = new URLSearchParams();
+            urlParams.set('session', sessionId);
+            window.location.href = `level.html?${urlParams.toString()}`;
+        }
+
+        function returnToMenu() {
+            if (sessionId) {
+                window.location.href = `index.html?session=${sessionId}`;
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+
+
         // ===================================
         // UI FUNKTIONEN (unverändert)
         // ===================================
@@ -600,9 +1157,15 @@
             gameControls.style.display = 'flex';
             sessionInfo.style.display = 'block';
             
-            // Level-Title aktualisieren
+            // FIX: Level-Title mit korrektem Level aktualisieren
             const levelTitle = document.getElementById('levelTitle');
-            levelTitle.textContent = `🎮 Level ${levelData.currentLevel || 1} - Überleben`;
+            const currentLevel = levelData.currentLevel || levelData.level || 1;
+            levelTitle.textContent = `🎮 Level ${currentLevel} - Überleben`;
+            
+            console.log(`🎮 Level ${currentLevel} HUD angezeigt`);
+            
+            // Timer starten
+            startLevelTimer();
             
             isLoading = false;
         }
@@ -2309,6 +2872,8 @@
                 });
             }
             updateCombatSystem();
+            updateTimer();
+            checkVictoryConditions();
         }
 
         function render() {
@@ -2400,16 +2965,48 @@
             isPaused = !isPaused;
             const pauseBtn = document.getElementById('pauseBtn');
             pauseBtn.textContent = isPaused ? '▶️ Weiter' : '⏸️ Pause';
+            
+            // NEU: Speed-berücksichtigte Pause-Logik
+            if (isPaused && levelStartTime) {
+                // Timer-Zustand beim Pausieren speichern (mit Speed-Faktor)
+                const realElapsed = (Date.now() - levelStartTime) / 1000;
+                const gameElapsed = realElapsed * gameSpeed;
+                levelTimer = Math.max(0, levelTimer - gameElapsed);
+                levelStartTime = null;
+                
+                console.log(`⏸️ Timer pausiert bei ${Math.floor(levelTimer / 60)}:${Math.floor(levelTimer % 60).toString().padStart(2, '0')}`);
+            } else if (!isPaused && !levelStartTime && !gameEnded) {
+                // Timer beim Fortsetzen wieder starten
+                levelStartTime = Date.now();
+                console.log(`▶️ Timer fortgesetzt, verbleibend: ${Math.floor(levelTimer / 60)}:${Math.floor(levelTimer % 60).toString().padStart(2, '0')}`);
+            }
         }
 
         function speedUp() {
+            // WICHTIG: Timer-Status vor Speed-Änderung speichern
+            let wasRunning = false;
+            if (levelStartTime && !isPaused && !gameEnded) {
+                wasRunning = true;
+                
+                // Aktuellen Timer-Stand mit alter Geschwindigkeit berechnen
+                const realElapsed = (Date.now() - levelStartTime) / 1000;
+                const gameElapsed = realElapsed * gameSpeed; // Alte gameSpeed verwenden
+                levelTimer = Math.max(0, levelTimer - gameElapsed);
+            }
+            
+            // Speed ändern (bestehende Logik)
             gameSpeed = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 4 : 1;
             const speedBtn = document.getElementById('speedBtn');
             speedBtn.textContent = 
                 gameSpeed === 1 ? '⏩ Schneller' : 
                 gameSpeed === 2 ? '⏩⏩ Sehr schnell' : '⏩ Normal';
+            
+            // Timer mit neuer Geschwindigkeit neu starten
+            if (wasRunning) {
+                levelStartTime = Date.now();
+                console.log(`🚀 Speed geändert auf ${gameSpeed}x, Timer läuft weiter`);
+            }
         }
-
         // ===================================
         // INITIALISIERUNG (ÜBERARBEITET)
         // ===================================

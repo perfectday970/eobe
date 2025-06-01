@@ -301,9 +301,9 @@
         // ===================================
         
         const ENEMY_SLOTS = [
+            // Level 1 Gegner (bestehend)
             {
-                name: "Kleine Räuber",
-                level: 1,
+                name: "Kleine Räuber", level: 1,
                 properties: {
                     gepanzert: 5, stachelig: 0, farbig: 15, tarnung: 25,
                     kopf_beisskraft: 35, kopf_größe: 40, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 0,
@@ -315,8 +315,7 @@
                 }
             },
             {
-                name: "Stachel-Verteidiger",
-                level: 2,
+                name: "Stachel-Verteidiger", level: 2,
                 properties: {
                     gepanzert: 25, stachelig: 35, farbig: 10, tarnung: 20,
                     kopf_beisskraft: 25, kopf_größe: 50, kopf_hörner_anzahl: 1, kopf_hörner_größe: 25, kragen_größe: 30,
@@ -327,56 +326,92 @@
                     flügel: 0, flossen: 0, fleisch: 15, pflanzen: 75, aas: 20
                 }
             },
+            // Level 2+ Gegner (NEU)
             {
-                name: "Gift-Speier",
-                level: 3,
+                name: "Panzer-Gigant", level: 2,
                 properties: {
-                    gepanzert: 15, stachelig: 10, farbig: 65, tarnung: 35,
-                    kopf_beisskraft: 45, kopf_größe: 55, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 15,
-                    maul_zahntyp: 75, hals_länge: 40, hals_breite: 35, körper_länge: 60, körper_höhe: 45,
-                    vorderbeine_länge: 40, vorderbeine_stärke: 35, vorderklauen_länge: 45,
-                    hinterbeine_länge: 65, hinterbeine_stärke: 50, hinterklauen_länge: 55,
-                    schwanz_länge: 50, schwanz_breite: 35, schwanz_keule: 0, schwanz_stacheln: 0,
-                    flügel: 0, flossen: 0, fleisch: 60, pflanzen: 25, aas: 65
+                    gepanzert: 60, stachelig: 25, farbig: 10, tarnung: 15,
+                    kopf_beisskraft: 50, kopf_größe: 75, kopf_hörner_anzahl: 2, kopf_hörner_größe: 45, kragen_größe: 60,
+                    maul_zahntyp: 35, hals_länge: 30, hals_breite: 65, körper_länge: 90, körper_höhe: 80,
+                    vorderbeine_länge: 70, vorderbeine_stärke: 75, vorderklauen_länge: 20,
+                    hinterbeine_länge: 75, hinterbeine_stärke: 85, hinterklauen_länge: 25,
+                    schwanz_länge: 65, schwanz_breite: 70, schwanz_keule: 70, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 20, pflanzen: 85, aas: 30
+                }
+            },
+            // Level 3+ Gegner
+            {
+                name: "Gift-Assassine", level: 3,
+                properties: {
+                    gepanzert: 20, stachelig: 15, farbig: 80, tarnung: 55,
+                    kopf_beisskraft: 65, kopf_größe: 60, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 20,
+                    maul_zahntyp: 85, hals_länge: 45, hals_breite: 40, körper_länge: 65, körper_höhe: 50,
+                    vorderbeine_länge: 45, vorderbeine_stärke: 40, vorderklauen_länge: 60,
+                    hinterbeine_länge: 75, hinterbeine_stärke: 60, hinterklauen_länge: 75,
+                    schwanz_länge: 55, schwanz_breite: 40, schwanz_keule: 0, schwanz_stacheln: 25,
+                    flügel: 0, flossen: 0, fleisch: 75, pflanzen: 20, aas: 80
                 }
             },
             {
-                name: "Keulenschwanz-Titan",
-                level: 4,
+                name: "Sichelklauen-Jäger", level: 3,
                 properties: {
-                    gepanzert: 45, stachelig: 20, farbig: 20, tarnung: 15,
-                    kopf_beisskraft: 35, kopf_größe: 70, kopf_hörner_anzahl: 2, kopf_hörner_größe: 40, kragen_größe: 50,
-                    maul_zahntyp: 30, hals_länge: 25, hals_breite: 55, körper_länge: 85, körper_höhe: 75,
-                    vorderbeine_länge: 65, vorderbeine_stärke: 70, vorderklauen_länge: 25,
-                    hinterbeine_länge: 70, hinterbeine_stärke: 80, hinterklauen_länge: 30,
-                    schwanz_länge: 70, schwanz_breite: 65, schwanz_keule: 60, schwanz_stacheln: 0,
-                    flügel: 0, flossen: 0, fleisch: 25, pflanzen: 80, aas: 30
+                    gepanzert: 15, stachelig: 10, farbig: 35, tarnung: 65,
+                    kopf_beisskraft: 75, kopf_größe: 70, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 15,
+                    maul_zahntyp: 80, hals_länge: 25, hals_breite: 50, körper_länge: 70, körper_höhe: 55,
+                    vorderbeine_länge: 35, vorderbeine_stärke: 50, vorderklauen_länge: 70,
+                    hinterbeine_länge: 85, hinterbeine_stärke: 75, hinterklauen_länge: 95,
+                    schwanz_länge: 60, schwanz_breite: 45, schwanz_keule: 0, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 0, fleisch: 85, pflanzen: 5, aas: 75
+                }
+            },
+            // Level 4+ Gegner
+            {
+                name: "Flug-Terror", level: 4,
+                properties: {
+                    gepanzert: 25, stachelig: 15, farbig: 50, tarnung: 40,
+                    kopf_beisskraft: 70, kopf_größe: 65, kopf_hörner_anzahl: 1, kopf_hörner_größe: 35, kragen_größe: 20,
+                    maul_zahntyp: 75, hals_länge: 40, hals_breite: 45, körper_länge: 75, körper_höhe: 60,
+                    vorderbeine_länge: 50, vorderbeine_stärke: 45, vorderklauen_länge: 80,
+                    hinterbeine_länge: 80, hinterbeine_stärke: 70, hinterklauen_länge: 85,
+                    schwanz_länge: 65, schwanz_breite: 50, schwanz_keule: 0, schwanz_stacheln: 30,
+                    flügel: 80, flossen: 0, fleisch: 80, pflanzen: 10, aas: 70
                 }
             },
             {
-                name: "Flug-Jäger",
-                level: 5,
+                name: "Wasser-Titan", level: 4,
                 properties: {
-                    gepanzert: 10, stachelig: 5, farbig: 40, tarnung: 45,
-                    kopf_beisskraft: 60, kopf_größe: 60, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 10,
-                    maul_zahntyp: 70, hals_länge: 35, hals_breite: 40, körper_länge: 65, körper_höhe: 50,
-                    vorderbeine_länge: 45, vorderbeine_stärke: 40, vorderklauen_länge: 65,
-                    hinterbeine_länge: 75, hinterbeine_stärke: 60, hinterklauen_länge: 70,
-                    schwanz_länge: 60, schwanz_breite: 40, schwanz_keule: 0, schwanz_stacheln: 0,
-                    flügel: 65, flossen: 0, fleisch: 75, pflanzen: 10, aas: 55
+                    gepanzert: 40, stachelig: 20, farbig: 30, tarnung: 45,
+                    kopf_beisskraft: 80, kopf_größe: 85, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 40,
+                    maul_zahntyp: 85, hals_länge: 60, hals_breite: 70, körper_länge: 95, körper_höhe: 75,
+                    vorderbeine_länge: 60, vorderbeine_stärke: 65, vorderklauen_länge: 40,
+                    hinterbeine_länge: 80, hinterbeine_stärke: 80, hinterklauen_länge: 50,
+                    schwanz_länge: 85, schwanz_breite: 75, schwanz_keule: 0, schwanz_stacheln: 0,
+                    flügel: 0, flossen: 85, fleisch: 70, pflanzen: 40, aas: 60
+                }
+            },
+            // Level 5+ Gegner (Endgame)
+            {
+                name: "Alpha-Zerstörer", level: 5,
+                properties: {
+                    gepanzert: 50, stachelig: 40, farbig: 40, tarnung: 60,
+                    kopf_beisskraft: 95, kopf_größe: 90, kopf_hörner_anzahl: 3, kopf_hörner_größe: 60, kragen_größe: 35,
+                    maul_zahntyp: 95, hals_länge: 35, hals_breite: 75, körper_länge: 85, körper_höhe: 85,
+                    vorderbeine_länge: 45, vorderbeine_stärke: 55, vorderklauen_länge: 90,
+                    hinterbeine_länge: 90, hinterbeine_stärke: 95, hinterklauen_länge: 100,
+                    schwanz_länge: 80, schwanz_breite: 60, schwanz_keule: 0, schwanz_stacheln: 50,
+                    flügel: 0, flossen: 0, fleisch: 95, pflanzen: 5, aas: 85
                 }
             },
             {
-                name: "Alpha-Räuber",
-                level: 6,
+                name: "Ultimativer Räuber", level: 6,
                 properties: {
-                    gepanzert: 35, stachelig: 25, farbig: 30, tarnung: 50,
-                    kopf_beisskraft: 85, kopf_größe: 85, kopf_hörner_anzahl: 1, kopf_hörner_größe: 45, kragen_größe: 25,
-                    maul_zahntyp: 90, hals_länge: 30, hals_breite: 60, körper_länge: 80, körper_höhe: 70,
-                    vorderbeine_länge: 40, vorderbeine_stärke: 45, vorderklauen_länge: 80,
-                    hinterbeine_länge: 85, hinterbeine_stärke: 85, hinterklauen_länge: 90,
-                    schwanz_länge: 75, schwanz_breite: 50, schwanz_keule: 0, schwanz_stacheln: 35,
-                    flügel: 0, flossen: 0, fleisch: 90, pflanzen: 5, aas: 70
+                    gepanzert: 45, stachelig: 35, farbig: 60, tarnung: 70,
+                    kopf_beisskraft: 100, kopf_größe: 95, kopf_hörner_anzahl: 2, kopf_hörner_größe: 50, kragen_größe: 40,
+                    maul_zahntyp: 100, hals_länge: 40, hals_breite: 80, körper_länge: 90, körper_höhe: 80,
+                    vorderbeine_länge: 50, vorderbeine_stärke: 60, vorderklauen_länge: 95,
+                    hinterbeine_länge: 95, hinterbeine_stärke: 100, hinterklauen_länge: 100,
+                    schwanz_länge: 85, schwanz_breite: 65, schwanz_keule: 40, schwanz_stacheln: 60,
+                    flügel: 60, flossen: 0, fleisch: 100, pflanzen: 0, aas: 90
                 }
             }
         ];
@@ -451,20 +486,26 @@
         function calculatePopulation(species) {
             const props = species.properties;
             
-            // Basis-Werte
-            const baseAdults = 2 + Math.floor(Math.random() * 3); // 2-4 Erwachsene
-            
-            // Fortpflanzungsgeschwindigkeit beeinflusst Kinder-Anzahl
+            const baseAdults = 2 + Math.floor(Math.random() * 3);
             const reproductionFactor = (props.fortpflanzungsgeschwindigkeit || 50) / 100;
-            const childrenMultiplier = 0.5 + reproductionFactor * 1.5; // 0.5 - 2.0x
-            
-            // Zeit zur Erwachsenwerdung beeinflusst Verhältnis
+            const childrenMultiplier = 0.5 + reproductionFactor * 1.5;
             const maturationTime = (props.zeit_zur_erwachsenwerdung || 50) / 100;
-            const maturationFactor = 0.8 + maturationTime * 0.4; // 0.8 - 1.2x
+            const maturationFactor = 0.8 + maturationTime * 0.4;
             
-            // Finale Berechnung mit Grenzen
             let adults = Math.max(2, Math.min(20, Math.round(baseAdults * maturationFactor)));
             let juveniles = Math.max(1, Math.min(15, Math.round(adults * childrenMultiplier)));
+            
+            // NEU: Level-basierte Anpassung für Gegner
+            if (species.level && currentLevel > 1) {
+                const levelMultiplier = 1 + (currentLevel - 1) * 0.3;
+                adults = Math.round(adults * levelMultiplier);
+                juveniles = Math.round(juveniles * levelMultiplier);
+                
+                adults = Math.min(25, adults);
+                juveniles = Math.min(20, juveniles);
+                
+                console.log(`📈 Level ${currentLevel} Boost für ${species.name}: ${adults} Erwachsene, ${juveniles} Jungtiere`);
+            }
             
             return {
                 adults: adults,
@@ -474,15 +515,80 @@
         }
 
         function selectEnemiesForLevel(level) {
-            const maxEnemyLevel = Math.min(level + 1, ENEMY_SLOTS.length);
-            const enemyCount = Math.min(2 + level, 4); // 2-4 Gegnerarten pro Level
+            console.log(`🎯 Wähle Gegner für Level ${level} (exponentielles System)`);
             
             enemySlots = [];
-            for (let i = 0; i < enemyCount && i < maxEnemyLevel; i++) {
-                enemySlots.push(ENEMY_SLOTS[i]);
+            
+            const maxEnemyLevel = Math.min(level + 1, 6);
+            let enemyCount, levelMultiplier;
+            
+            if (level === 1) {
+                enemyCount = 2;
+                levelMultiplier = 1;
+            } else if (level === 2) {
+                enemyCount = 3;
+                levelMultiplier = 1.2;
+            } else if (level === 3) {
+                enemyCount = 4;
+                levelMultiplier = 1.5;
+            } else if (level === 4) {
+                enemyCount = 5;
+                levelMultiplier = 1.8;
+            } else if (level >= 5) {
+                enemyCount = 6;
+                levelMultiplier = 2.0;
             }
             
-            console.log(`🎯 Level ${level}: ${enemySlots.length} Gegnerarten ausgewählt`);
+            const availableEnemies = ENEMY_SLOTS.filter(enemy => enemy.level <= maxEnemyLevel);
+            const selectedEnemies = [];
+            
+            const highLevelEnemies = availableEnemies.filter(enemy => enemy.level >= Math.max(1, level - 1));
+            const lowLevelEnemies = availableEnemies.filter(enemy => enemy.level < Math.max(1, level - 1));
+            
+            const highLevelSlots = Math.ceil(enemyCount * 0.7);
+            const lowLevelSlots = enemyCount - highLevelSlots;
+            
+            for (let i = 0; i < highLevelSlots && i < highLevelEnemies.length; i++) {
+                const enemy = { ...highLevelEnemies[i % highLevelEnemies.length] };
+                
+                if (level > enemy.level) {
+                    const boost = Math.pow(1.15, level - enemy.level);
+                    boostEnemyStats(enemy, boost, level);
+                }
+                
+                selectedEnemies.push(enemy);
+            }
+            
+            for (let i = 0; i < lowLevelSlots && i < lowLevelEnemies.length; i++) {
+                const enemy = { ...lowLevelEnemies[i % lowLevelEnemies.length] };
+                selectedEnemies.push(enemy);
+            }
+            
+            enemySlots = selectedEnemies;
+            
+            console.log(`📊 Level ${level}: ${enemySlots.length} Gegnerarten, Max-Enemy-Level: ${maxEnemyLevel}`);
+            enemySlots.forEach(enemy => {
+                console.log(`  - ${enemy.name} (Level ${enemy.level})`);
+            });
+        }
+
+        function boostEnemyStats(enemy, multiplier, currentLevel) {
+            console.log(`⚡ Boost ${enemy.name}: ${multiplier.toFixed(2)}x für Level ${currentLevel}`);
+            
+            const combatStats = [
+                'kopf_beisskraft', 'kopf_größe', 'kopf_hörner_anzahl', 'kopf_hörner_größe',
+                'maul_zahntyp', 'körper_länge', 'körper_höhe', 'gepanzert', 'stachelig',
+                'vorderbeine_stärke', 'vorderklauen_länge', 'hinterbeine_stärke', 'hinterklauen_länge',
+                'schwanz_keule', 'schwanz_stacheln', 'fleisch', 'tarnung'
+            ];
+            
+            combatStats.forEach(stat => {
+                if (enemy.properties[stat] > 0) {
+                    enemy.properties[stat] = Math.min(100, Math.round(enemy.properties[stat] * multiplier));
+                }
+            });
+            
+            enemy.name = `${enemy.name} (L${currentLevel})`;
         }
 
         // ===================================
@@ -572,7 +678,7 @@
                         sessionId: sessionId,
                         populationData: levelData.populationData,
                         enemyData: levelData.enemyData,
-                        currentLevel: levelData.currentLevel
+                        currentLevel: levelData.currentLevel // WICHTIG: Level mitgeben
                     };
                     
                     console.log('📤 DEBUG: Request Data:', requestData);
