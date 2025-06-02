@@ -1894,6 +1894,9 @@
                 this.dinoType = dinoRenderer.getDinoType(species.properties);
                 this.color = dinoRenderer.getDinoColor(species.properties, isEnemy);
                 this.facingRight = !isEnemy;
+                this.hasMovedSideways = false;  // Für Umweg-Pfadfindung
+                this.preferredSide = null;      // Welche Seite für Umweg
+                this.spiralDirection = null;
                 this.lastTileX = tileX;
                 
                 // NEU: Cross-Movement System
@@ -2751,8 +2754,7 @@
             
             for (let group = 0; group < groupCount; group++) {
                 let groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
-                let groupCenterTileY = mapHeight * 0.3 + Math.random() * (mapHeight * 0.5);
-                
+                let groupCenterTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);              
                 const treesInGroup = 3 + Math.floor(Math.random() * 5);
                 
                 for (let i = 0; i < treesInGroup; i++) {
@@ -4188,9 +4190,9 @@
                 return;
             }
             
-            // Timeout reduziert
+            // Timeout
             const seekingTime = (Date.now() - dino.seekingStartTime) / 1000;
-            if (seekingTime > 6) { // Reduziert von 10 auf 6 Sekunden
+            if (seekingTime > 8) { // Etwas mehr Zeit für komplexere Wege
                 console.log(`⏰ ${dino.species.name} seeking timeout - gibt auf`);
                 releaseFoodReservation(dino);
                 return;
@@ -4205,8 +4207,8 @@
             }
             
             const targetObj = dino.foodTarget.object;
-            let targetX = targetObj.tileX;
-            let targetY = targetObj.tileY;
+            const targetX = targetObj.tileX;
+            const targetY = targetObj.tileY;
             
             const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
             
@@ -4230,16 +4232,21 @@
                 return;
             }
             
-            // VERBESSERTE KOLLISIONSVERMEIDUNG
+            // VEREINFACHTE STRATEGIE: Eine klare Prioritätenreihenfolge
+            let moveTargetX = targetX;
+            let moveTargetY = targetY;
+            let movementReason = "direct";
+            
+            // 1. PRIORITÄT: Kollisionsvermeidung (wichtigster Punkt)
             const nearbyDinos = gameObjects.filter(obj => 
                 obj instanceof Dino && 
                 obj !== dino && 
                 obj.combatState !== 'dead' &&
-                calculateDistance(dino, obj) < 2.0 // Erhöht von 1.0 auf 2.0
+                calculateDistance(dino, obj) < 1.8
             );
             
             if (nearbyDinos.length > 0) {
-                // 1. Prüfen ob andere Dinos das GLEICHE Ziel haben
+                // Prüfen ob andere Dinos das GLEICHE Ziel haben
                 const sameTargetDinos = nearbyDinos.filter(otherDino => 
                     otherDino.foodState === 'seeking' && 
                     otherDino.foodTarget && 
@@ -4247,13 +4254,13 @@
                 );
                 
                 if (sameTargetDinos.length > 0) {
-                    console.log(`🔄 ${dino.species.name}: Andere Dinos zielen auf gleiche Nahrung - suche neue`);
+                    console.log(`🔄 ${dino.species.name}: Andere Dinos zielen auf gleiche Nahrung - gibt auf`);
                     releaseFoodReservation(dino);
-                    dino.foodCooldownUntil = Date.now() + 3000; // 3 Sekunden warten
+                    dino.foodCooldownUntil = Date.now() + 2000;
                     return;
                 }
                 
-                // 2. Intelligente Abstoßung von anderen Dinos
+                // Sanfte Kollisionsvermeidung
                 let avoidanceX = 0;
                 let avoidanceY = 0;
                 
@@ -4262,40 +4269,96 @@
                     const dy = dino.tileY - otherDino.tileY;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     
-                    if (dist > 0 && dist < 2.0) {
-                        const repulsionStrength = (2.0 - dist) / 2.0;
+                    if (dist > 0 && dist < 1.8) {
+                        const repulsionStrength = (1.8 - dist) / 1.8;
                         avoidanceX += (dx / dist) * repulsionStrength;
                         avoidanceY += (dy / dist) * repulsionStrength;
                     }
                 });
                 
-                // Starke Ausweichbewegung
-                targetX += avoidanceX * 3.0;
-                targetY += avoidanceY * 3.0;
+                // Nur KLEINE Ausweichbewegung, nicht übertreiben
+                moveTargetX = targetX + avoidanceX * 0.8;
+                moveTargetY = targetY + avoidanceY * 0.8;
+                movementReason = "collision_avoidance";
                 
-                console.log(`🔄 ${dino.species.name} weicht ${nearbyDinos.length} Dinos stark aus`);
+            } 
+            // 2. PRIORITÄT: "Direkt unter Ziel" Problem (nur wenn keine Kollision)
+            else {
+                const dx = targetX - dino.tileX;
+                const dy = targetY - dino.tileY;
+                const horizontalDistance = Math.abs(dx);
+                const verticalDistance = Math.abs(dy);
+                
+                // Problematische Situation: Fast direkt unter/über dem Ziel
+                if (horizontalDistance < 0.3 && verticalDistance > 1.5) {
+                    
+                    // EINFACHE LÖSUNG: Bewege dich erst EINMAL zur Seite
+                    if (!dino.hasMovedSideways) {
+                        // Bestimme Seite nur einmal
+                        if (!dino.preferredSide) {
+                            dino.preferredSide = Math.random() > 0.5 ? 1 : -1;
+                        }
+                        
+                        moveTargetX = targetX + (dino.preferredSide * 1.2);
+                        moveTargetY = dino.tileY; // Erstmal auf gleicher Höhe bleiben
+                        movementReason = "sideways_approach";
+                        
+                        // Prüfe ob seitlich angekommen
+                        if (Math.abs(dino.tileX - moveTargetX) < 0.4) {
+                            dino.hasMovedSideways = true;
+                            console.log(`✅ ${dino.species.name} hat sich seitlich positioniert`);
+                        }
+                    } else {
+                        // Jetzt direkt zum Ziel
+                        moveTargetX = targetX;
+                        moveTargetY = targetY;
+                        movementReason = "direct_after_sideways";
+                    }
+                } else {
+                    // Normale Situation - direkt zum Ziel
+                    moveTargetX = targetX;
+                    moveTargetY = targetY;
+                    movementReason = "direct";
+                    
+                    // Reset Seitenbewegung-Flags
+                    dino.hasMovedSideways = false;
+                    dino.preferredSide = null;
+                }
             }
             
-            // Bewegung zur Nahrung/Ausweichziel
-            const dx = targetX - dino.tileX;
-            const dy = targetY - dino.tileY;
-            const moveDistance = Math.sqrt(dx * dx + dy * dy);
+            // BEWEGUNG AUSFÜHREN (nur eine!)
+            const finalDx = moveTargetX - dino.tileX;
+            const finalDy = moveTargetY - dino.tileY;
+            const moveDistance = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
             
             if (moveDistance > 0.1) {
                 let moveSpeed = dino.speed * gameSpeed;
-                if (nearbyDinos.length > 0) {
-                    moveSpeed *= 0.6; // Langsamere Bewegung bei Kollision
+                
+                // Langsamere Bewegung bei Kollisionsvermeidung für mehr Kontrolle
+                if (movementReason === "collision_avoidance") {
+                    moveSpeed *= 0.5;
                 }
                 
-                dino.tileX += (dx / moveDistance) * moveSpeed;
-                dino.tileY += (dy / moveDistance) * moveSpeed;
+                const newX = dino.tileX + (finalDx / moveDistance) * moveSpeed;
+                const newY = dino.tileY + (finalDy / moveDistance) * moveSpeed;
                 
-                // Blickrichtung anpassen
-                if (dx > 0.01) dino.facingRight = false;
-                else if (dx < -0.01) dino.facingRight = true;
+                // Grenzen-Check
+                dino.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
+                dino.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, newY));
+                
+                // Blickrichtung (nur bei deutlicher Bewegung)
+                if (Math.abs(finalDx) > 0.1) {
+                    if (finalDx > 0) dino.facingRight = false;
+                    else dino.facingRight = true;
+                }
+                
+                // Debug-Info (nur ab und zu)
+                if (Math.random() < 0.02) { // 2% Chance
+                    console.log(`🚶 ${dino.species.name} bewegt sich: ${movementReason}`);
+                }
             }
             
-            // STECKEN-DETECTION
+            // STECKEN-DETECTION (vereinfacht)
             if (!dino.lastPosition) {
                 dino.lastPosition = { x: dino.tileX, y: dino.tileY, time: Date.now() };
             }
@@ -4307,16 +4370,50 @@
             
             const timeDiff = (Date.now() - dino.lastPosition.time) / 1000;
             
-            if (timeDiff > 2.5 && positionDiff < 0.2) {
+            if (timeDiff > 3.0 && positionDiff < 0.2) {
                 console.log(`🚫 ${dino.species.name} steckt fest - bricht ab`);
                 releaseFoodReservation(dino);
+                
+                // Reset alle Flags
                 dino.lastPosition = null;
+                dino.hasMovedSideways = false;
+                dino.preferredSide = null;
                 return;
             }
             
-            if (timeDiff > 1) {
+            if (timeDiff > 1.5) {
                 dino.lastPosition = { x: dino.tileX, y: dino.tileY, time: Date.now() };
             }
+        }
+
+        function isPathClear(fromX, fromY, toX, toY) {
+            // Einfacher Terrain-Check: Prüfe einige Punkte auf dem Weg
+            const steps = 5;
+            
+            for (let i = 0; i <= steps; i++) {
+                const progress = i / steps;
+                const checkX = fromX + (toX - fromX) * progress;
+                const checkY = fromY + (toY - fromY) * progress;
+                
+                // Prüfe ob Position im gültigen Bereich
+                if (checkX < 1 || checkX >= mapWidth - 1 || 
+                    checkY < mapHeight * 0.35 || checkY >= mapHeight - 1) {
+                    return false;
+                }
+                
+                // Prüfe Terrain-Typ (Wasser vermeiden)
+                const tileX = Math.floor(checkX);
+                const tileY = Math.floor(checkY);
+                
+                if (tileY >= 0 && tileY < mapHeight && 
+                    tileX >= 0 && tileX < mapWidth && 
+                    tileMap[tileY] && 
+                    tileMap[tileY][tileX] === TILE_TYPES.WATER) {
+                    return false; // Wasser blockiert
+                }
+            }
+            
+            return true; // Weg ist frei
         }
 
         function releaseFoodReservation(dino) {
