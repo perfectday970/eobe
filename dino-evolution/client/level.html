@@ -636,18 +636,18 @@
         const COMBAT_CONFIG = {
             ATTACK_DISTANCE: 1.2, // Kacheln
             DETECTION_BASE: 3, // Basis-Erkennungsradius in Kacheln
-            MOVEMENT_STAMINA_COST: 5, // pro Sekunde
-            STAMINA_RECOVERY: 8, // pro Sekunde bei Stillstand
+            MOVEMENT_STAMINA_COST: 20, // pro Sekunde
+            STAMINA_RECOVERY: 4, // pro Sekunde bei Stillstand
             ATTACK_COOLDOWN: 1.5,
             
             // Konditionskosten für Angriffe
             STAMINA_COSTS: {
-                'Sprung': 15,
-                'Biss': 10,
-                'Tödlicher Biss': 20,
-                'Kopfstoß': 12,
-                'Gift Speien': 18,
-                'Schwanzschlag': 25
+                'Sprung': 25,
+                'Biss': 20,
+                'Tödlicher Biss': 30,
+                'Kopfstoß': 22,
+                'Gift Speien': 28,
+                'Schwanzschlag': 35
             },
             
             // Icons für Angriffstypen
@@ -2399,10 +2399,9 @@
                     case 'rock':
                         this.renderDetailedRock();
                         break;
-                        
                     case 'rodent':
                         // Größere Basis-Größe für bessere Sichtbarkeit
-                        const rodentScale = this.size * 0.8; // Erhöht von 0.192 auf 0.4
+                        const rodentScale = this.size * 0.8;
                         
                         // Körperteile definieren
                         const bodyWidth = rodentScale * 1.2;
@@ -2411,38 +2410,54 @@
                         const tailWidth = rodentScale * 0.3;
                         const tailLength = rodentScale * 1.0;
                         
-                        // Farben
-                        ctx.fillStyle = '#8B4513'; // Braun für Körper
+                        // NEU: Prüfe ob irgendein Dino DIESES spezifische Nagetier anvisiert ODER frisst
+                        const isBeingHunted = gameObjects.some(obj => 
+                            obj instanceof Dino && 
+                            obj.combatState !== 'dead' &&
+                            obj.foodState === 'consuming' &&
+                            obj.foodTarget && 
+                            obj.foodTarget.object === this  // ← Direkte Objekt-Referenz!
+                        );
                         
-                        // Körper (größtes Rechteck, zentriert)
+                        if (isBeingHunted) {
+                            // EINGEFRORENER ZUSTAND
+                            ctx.fillStyle = '#654321'; // Dunkleres Braun = Angst
+                            
+                            // Leichtes Zittern
+                            const fearShake = Math.sin(Date.now() * 0.01) * 0.5;
+                            ctx.translate(fearShake, 0);
+                            
+                            // KEINE BEWEGUNG - Nagetier bleibt an aktueller Position
+                            // (moveTimer wird nicht erhöht)
+                            
+                        } else {
+                            // NORMALER ZUSTAND
+                            ctx.fillStyle = '#8B4513'; // Normal braun
+                            
+                            // NORMALE BEWEGUNG (nur wenn nicht gejagt)
+                            this.moveTimer += gameSpeed / 60;
+                            
+                            if (this.moveTimer >= this.moveDelay) {
+                                this.moveDirection += (Math.random() - 0.5) * 0.8;
+                                
+                                this.tileX += Math.cos(this.moveDirection) * this.moveSpeed;
+                                this.tileY += Math.sin(this.moveDirection) * this.moveSpeed;
+                                
+                                this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+                                this.tileY = Math.max(mapHeight * 0.6, Math.min(mapHeight - 1, this.tileY));
+                                
+                                this.moveTimer = 0;
+                                this.moveDelay = 0.3 + Math.random() * 0.7;
+                            }
+                        }
+                        
+                        // Körper rendern (für beide Zustände gleich)
                         ctx.fillRect(-bodyWidth/2, -bodyHeight/2, bodyWidth, bodyHeight);
-                        
-                        // Kopf (kleines Rechteck, links vom Körper)
                         ctx.fillRect(-bodyWidth/2 - headSize * 0.8, -headSize/2, headSize, headSize);
-                        
-                        // Schwanz (längliches Rechteck, rechts vom Körper)
                         ctx.fillRect(bodyWidth/2, -tailWidth/2, tailLength, tailWidth);
                         
-                        // VERBESSERTE BEWEGUNG
-                        this.moveTimer += gameSpeed / 60; // Timer erhöhen
-                        
-                        if (this.moveTimer >= this.moveDelay) {
-                            // Neue Richtung wählen
-                            this.moveDirection += (Math.random() - 0.5) * 0.8; // Richtung leicht ändern
-                            
-                            // Bewegung anwenden
-                            this.tileX += Math.cos(this.moveDirection) * this.moveSpeed;
-                            this.tileY += Math.sin(this.moveDirection) * this.moveSpeed;
-                            
-                            // Grenzen einhalten
-                            this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
-                            this.tileY = Math.max(mapHeight * 0.6, Math.min(mapHeight - 1, this.tileY));
-                            
-                            // Timer zurücksetzen
-                            this.moveTimer = 0;
-                            this.moveDelay = 0.3 + Math.random() * 0.7; // Neues Intervall (0.3-1.0 Sekunden)
-                        }
                         break;
+
                 }
                 
                 ctx.restore();
@@ -3177,9 +3192,9 @@
             if (dino.combatState === 'dead') return;
             
             // Stamina-Regeneration bei Stillstand
-            if (!dino.wasMovingLastFrame && dino.combatState !== 'fighting') {
-                dino.currentStamina = Math.min(dino.maxStamina, dino.currentStamina + COMBAT_CONFIG.STAMINA_RECOVERY * gameSpeed / 60);
-            }
+            //if (!dino.wasMovingLastFrame && dino.combatState !== 'fighting') {
+            dino.currentStamina = Math.min(dino.maxStamina, dino.currentStamina + COMBAT_CONFIG.STAMINA_RECOVERY * gameSpeed / 60);
+           // }
             
             // Stamina-Verbrauch bei Bewegung (nur wenn NICHT kämpfend)
             if (dino.behaviorState === 'moving' && dino.combatState !== 'fighting') {
@@ -3775,43 +3790,43 @@
             const pixelX = dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
             const pixelY = dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
             
-            const barWidth = 40 * dino.scale;
-            const barHeight = 4;
-            const barSpacing = 6;
+            // SEHR KOMPAKTE WERTE
+            const barWidth = 70 * dino.scale;  // Noch länger
+            const barHeight = 3;               // Dünner (3 statt 4)
+            const barSpacing = 2;              // Sehr eng (2 statt 3)
+            
+            // Startposition noch höher
+            const startY = pixelY - 80 * dino.scale;
             
             // HP-Balken
-            const hpBarY = pixelY - 50 * dino.scale;
             ctx.fillStyle = '#333333';
-            ctx.fillRect(pixelX - barWidth/2, hpBarY, barWidth, barHeight);
+            ctx.fillRect(pixelX - barWidth/2, startY, barWidth, barHeight);
             ctx.fillStyle = '#FF0000';
-            ctx.fillRect(pixelX - barWidth/2, hpBarY, barWidth * (dino.currentHP/dino.maxHP), barHeight);
+            ctx.fillRect(pixelX - barWidth/2, startY, barWidth * (dino.currentHP/dino.maxHP), barHeight);
             
             // Stamina-Balken
-            const staminaBarY = hpBarY + barHeight + barSpacing;
+            const staminaY = startY + barHeight + barSpacing;
             ctx.fillStyle = '#333333';
-            ctx.fillRect(pixelX - barWidth/2, staminaBarY, barWidth, barHeight);
+            ctx.fillRect(pixelX - barWidth/2, staminaY, barWidth, barHeight);
             ctx.fillStyle = '#00AAFF';
-            ctx.fillRect(pixelX - barWidth/2, staminaBarY, barWidth * (dino.currentStamina/dino.maxStamina), barHeight);
+            ctx.fillRect(pixelX - barWidth/2, staminaY, barWidth * (dino.currentStamina/dino.maxStamina), barHeight);
             
-            // NEU: Cooldown-Balken (nur im Kampf und nur wenn Cooldown aktiv)
+            // Cooldown-Balken
             if (dino.combatState === 'fighting') {
                 const timeSinceLastAttack = (Date.now() - dino.lastAttackTime) / 1000;
                 const cooldownProgress = Math.min(1, timeSinceLastAttack / COMBAT_CONFIG.ATTACK_COOLDOWN);
                 
                 if (cooldownProgress < 1) {
-                    const cooldownBarY = staminaBarY + barHeight + barSpacing;
+                    const cooldownY = staminaY + barHeight + barSpacing;
                     
-                    // Cooldown-Hintergrund
                     ctx.fillStyle = '#333333';
-                    ctx.fillRect(pixelX - barWidth/2, cooldownBarY, barWidth, barHeight);
-                    
-                    // Cooldown-Fortschritt
-                    ctx.fillStyle = '#FFD700'; // Gold
-                    ctx.fillRect(pixelX - barWidth/2, cooldownBarY, barWidth * cooldownProgress, barHeight);
+                    ctx.fillRect(pixelX - barWidth/2, cooldownY, barWidth, barHeight);
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(pixelX - barWidth/2, cooldownY, barWidth * cooldownProgress, barHeight);
                 }
             }
             
-            // Kampf-Status Indikator
+            // Kampf-Symbol
             if (dino.combatState === 'fighting') {
                 ctx.fillStyle = '#FF6B35';
                 ctx.strokeStyle = '#000000';
@@ -3819,9 +3834,9 @@
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 
-                const statusY = pixelY - 65 * dino.scale;
-                ctx.strokeText('⚔️', pixelX, statusY);
-                ctx.fillText('⚔️', pixelX, statusY);
+                const symbolY = startY - 12;  // 12px über den Balken
+                ctx.strokeText('⚔️', pixelX, symbolY);
+                ctx.fillText('⚔️', pixelX, symbolY);
             }
         }
 
@@ -3949,9 +3964,21 @@
 
 
         // Beste Nahrungsquelle auswählen
-        function selectBestFoodSource(dino) {
+        function selectBestFoodSourceWithReservation(dino) {
             const sources = findFoodSourcesInRange(dino);
-            return sources.length > 0 ? sources[0] : null;
+            
+            // Probiere Nahrungsquellen in Reihenfolge der Präferenz
+            for (const source of sources) {
+                // Atomare Reservierung: Prüfen und Setzen in einem Schritt
+                if (!occupiedFoodSources.has(source.sourceId)) {
+                    // SOFORT reservieren ohne weitere Delays
+                    occupiedFoodSources.set(source.sourceId, dino);
+                    console.log(`🔒 ${dino.species.name} reserviert atomisch: ${source.sourceId}`);
+                    return source;
+                }
+            }
+            
+            return null; // Keine verfügbare Nahrung
         }
 
         function startFoodConsumption(dino, foodSource) {
@@ -4160,17 +4187,9 @@
 
         function updateFoodNeutralState(dino) {
             if (dino.combatState === 'neutral') {
-                const bestFood = selectBestFoodSource(dino);
+                const bestFood = selectBestFoodSourceWithReservation(dino); // ← Neue Funktion
                 if (bestFood) {
-                    // Double-Check ob noch verfügbar
-                    if (occupiedFoodSources.has(bestFood.sourceId)) {
-                        console.log(`🚫 ${dino.species.name}: Nahrung zwischenzeitlich belegt`);
-                        return;
-                    }
-                    
-                    // SOFORT reservieren
-                    occupiedFoodSources.set(bestFood.sourceId, dino);
-                    
+                    // Reservierung ist bereits erfolgt - direkt zur Suche wechseln
                     dino.foodState = 'seeking';
                     dino.foodTarget = bestFood;
                     dino.seekingStartTime = Date.now();
