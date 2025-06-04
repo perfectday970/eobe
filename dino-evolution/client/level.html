@@ -581,6 +581,7 @@
         let bloodParticles = []; // Bluteffekte
         let attackIcons = []; // Angriffs-Icons
         let corpses = []; // Leichen
+        let leafParticles = []; 
 
         let teamFood = {
             plants: 0,
@@ -3583,6 +3584,27 @@
             }, icon.duration);
         }
 
+        function createLeafEffect(tree, dino) {
+            console.log(`🍃 Blattpartikel für Baum bei (${tree.tileX}, ${tree.tileY}) erstellt`);
+            const particleCount = 3 + Math.random() * 2; // 3-7 Blätter
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = {
+                    x: tree.tileX * tileSize + tileSize / 2 + terrainOffsetX + (Math.random() - 0.5) * 30,
+                    y: tree.tileY * tileSize + tileSize / 4 + terrainOffsetY + (Math.random() - 0.5) * 20, // Etwas höher (Krone)
+                    vx: (Math.random() - 0.5) * 60 + (dino.facingRight ? -20 : 20), // Leicht in Richtung des Dinos
+                    vy: -30 + Math.random() * 20, // Leicht nach oben, dann fallen
+                    life: 1.0,
+                    maxLife: 1.0 + Math.random() * 0.8, // 1-1.8 Sekunden
+                    size: 6 + Math.random() * 4,
+                    rotation: Math.random() * Math.PI * 2, // Zufällige Rotation
+                    rotationSpeed: (Math.random() - 0.5) * 6 // Drehgeschwindigkeit
+                };
+                console.log(`🍃 Blattpartikel erstellt: ${particle.x.toFixed(1)}, ${particle.y.toFixed(1)} (Größe: ${particle.size.toFixed(1)})`);
+                leafParticles.push(particle);
+            }
+        }
+
         // Bluteffekt erstellen
         function createBloodEffect(defender) {
             const particleCount = 5 + Math.random() * 5;
@@ -3693,6 +3715,16 @@
                 
                 return particle.life > 0;
             });
+
+            leafParticles = leafParticles.filter(particle => {
+                particle.x += particle.vx * gameSpeed / 60;
+                particle.y += particle.vy * gameSpeed / 60;
+                particle.vy += 120 * gameSpeed / 60; // Schwerkraft (schwächer als Blut)
+                particle.rotation += particle.rotationSpeed * gameSpeed / 60;
+                particle.life -= gameSpeed / 60 / particle.maxLife;
+                
+                return particle.life > 0;
+            });
             
             // Attack-Icons updaten
             attackIcons.forEach(icon => {
@@ -3726,6 +3758,23 @@
                 ctx.beginPath();
                 ctx.arc(particle.x, particle.y, particle.size, 0, 2 * Math.PI);
                 ctx.fill();
+                ctx.restore();
+            });
+
+            leafParticles.forEach(particle => {
+                ctx.save();
+                ctx.globalAlpha = particle.life;
+                ctx.translate(particle.x, particle.y);
+                ctx.rotate(particle.rotation);
+                
+                // Blattform (einfaches Rechteck in grün)
+                ctx.fillStyle = '#228B22';
+                ctx.fillRect(-particle.size/2, -particle.size/4, particle.size, particle.size/2);
+                
+                // Hellerer Fleck in der Mitte
+                ctx.fillStyle = '#32CD32';
+                ctx.fillRect(-particle.size/4, -particle.size/8, particle.size/2, particle.size/4);
+                
                 ctx.restore();
             });
 
@@ -3995,9 +4044,7 @@
                 dino.foodTarget = null;
                 return;
             }
-            
-            // console.log(`🍽️ ${dino.species.name} beginnt ${foodSource.type} zu konsumieren`);
-            
+       
             // Nahrungsquelle als belegt markieren
             occupiedFoodSources.set(foodSource.sourceId, dino);
             // console.log(`🔒 Nahrungsquelle belegt: ${foodSource.sourceId} von ${dino.species.name}`);
@@ -4034,6 +4081,16 @@
                 }
                 // Bei dx ~= 0: Blickrichtung beibehalten
             }*/
+            const targetObj = dino.foodTarget.object;
+            const targetX = targetObj.tileX !== undefined ? targetObj.tileX : targetObj.tileX;
+
+            const dx = targetX - dino.tileX;
+            // IMMER ausrichten, auch bei kleinen Unterschieden
+            if (dx > 0) {
+                dino.facingRight = false; // Nahrung ist rechts
+            } else if (dx < 0) {
+                dino.facingRight = true;  // Nahrung ist links
+            }
             dino.feedingRotationLocked = true;
             // Erste Konsumtions-Animation starten
             startConsumptionDash(dino);
@@ -4559,11 +4616,31 @@
                     // Neuen Dash starten
                     dino.isConsuming = true;
                     dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
-                    // console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                    console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                    
+                    // NEU: Blatteffekt bei Bäumen
+                    if (dino.foodTarget && dino.foodTarget.object.type === 'tree') {
+                        createLeafEffect(dino.foodTarget.object, dino);
+                    }
                 }
             } else {
                 // Wir sind in der Pause zwischen Dashes
                 dino.isConsuming = false;
+            }
+
+            if (cycleTime < dashDuration) {
+                // Wir sind in einem aktiven Dash
+                if (!dino.isConsuming) {
+                    // Neuen Dash starten
+                    dino.isConsuming = true;
+                    dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
+                    console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                    
+                    // NEU: Blatteffekt bei Bäumen
+                    if (dino.foodTarget && dino.foodTarget.object.type === 'tree') {
+                        createLeafEffect(dino.foodTarget.object, dino);
+                    }
+                }
             }
             
             // Nahrungsaufnahme abgeschlossen?
