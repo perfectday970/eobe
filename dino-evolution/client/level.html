@@ -3106,12 +3106,26 @@
             dino.isAttacking = false;
             dino.attackAnimationStart = 0;
             dino.wasMovingLastFrame = false;
+
+            dino.killCount = 0;
+            dino.hasMuscleBoost = false;
             
             // Erkennungsradius berechnen
             dino.detectionRadius = COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
             
             // Verfügbare Angriffe ermitteln
             dino.availableAttacks = getAvailableAttacks(dino);
+        }
+
+        function trackKill(killer, victim) {
+            killer.killCount++;
+            console.log(`🏆 ${killer.species.name} hat ${victim.species.name} getötet! (Kills: ${killer.killCount}/3)`);
+            
+            // Muskel-Boost bei 3 Kills aktivieren
+            if (killer.killCount >= 2 && !killer.hasMuscleBoost) {
+                killer.hasMuscleBoost = true;
+                console.log(`💪 ${killer.species.name} erreicht Muskel-Boost! (+15% Angriffskraft)`);
+            }
         }
 
         // Verfügbare Angriffe basierend auf Fähigkeiten
@@ -3469,7 +3483,13 @@
             showAttackIcon(attacker, attack.type);
             
             // Schaden berechnen
-            const damage = calculateDamage(attack, attacker, defender);
+            let damage = calculateDamage(attack, attacker, defender);
+
+            // NEU: Muskel-Boost anwenden (15% mehr Schaden)
+            if (attacker.hasMuscleBoost) {
+                damage = Math.round(damage * 1.15);
+                console.log(`💪 ${attacker.species.name} Muskel-Boost: +15% Schaden (${damage})`);
+            }
             
             // Schaden anwenden
             defender.currentHP = Math.max(0, defender.currentHP - damage);
@@ -3481,6 +3501,9 @@
             
             // Tod prüfen
             if (defender.currentHP <= 0) {
+                // NEU: Kill tracken
+                trackKill(attacker, defender);
+                
                 handleDeath(defender);
                 endCombat(attacker, defender);
             } else {
@@ -3880,7 +3903,8 @@
                     ctx.fillRect(pixelX - barWidth/2, cooldownY, barWidth * cooldownProgress, barHeight);
                 }
             }
-            
+            let symbolX = 0;
+            const symbolY = startY - 12; 
             // Kampf-Symbol
             if (dino.combatState === 'fighting') {
                 ctx.fillStyle = '#FF6B35';
@@ -3889,11 +3913,24 @@
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 
-                const symbolY = startY - 12;  // 12px über den Balken
+                 // 12px über den Balken
                 ctx.strokeText('⚔️', pixelX, symbolY);
                 ctx.fillText('⚔️', pixelX, symbolY);
+                symbolX += 15; // Platz für nächstes Icon
             }
-        }
+            
+            // NEU: Muskel-Icon für Dinos mit Boost
+            if (dino.hasMuscleBoost) {
+                ctx.fillStyle = '#FFD700'; // Gold
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                
+                ctx.strokeText('💪', pixelX +symbolX, symbolY);
+                ctx.fillText('💪', pixelX +symbolX, symbolY);
+            }
+        } 
 
         // Nahrungsquellen in der Nähe finden
         function findFoodSourcesInRange(dino) {
