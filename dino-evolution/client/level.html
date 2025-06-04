@@ -705,7 +705,7 @@
                 updateSessionInfo();
                 setLoadingText('Lade Level-Daten...');
                 
-                console.log(`🎮 Lade Level für Session: ${sessionId}`);
+                // console.log(`🎮 Lade Level für Session: ${sessionId}`);
                 
                 const response = await fetch(`${API_BASE}/load-level/${sessionId}`);
                 const data = await response.json();
@@ -716,10 +716,10 @@
                     // WICHTIG: currentLevel aus levelData extrahieren
                     if (levelData.currentLevel) {
                         currentLevel = levelData.currentLevel;
-                        console.log('📊 Level aus levelData geladen:', currentLevel);
+                        // console.log('📊 Level aus levelData geladen:', currentLevel);
                     } else if (levelData.level) {
                         currentLevel = levelData.level;
-                        console.log('📊 Level aus levelData.level geladen:', currentLevel);
+                        // console.log('📊 Level aus levelData.level geladen:', currentLevel);
                     }
                     // Validierung
                     if (!levelData.populationData || levelData.populationData.length === 0) {
@@ -789,7 +789,7 @@
                         saveBtn.textContent = originalText;
                     }, 2000);
                     
-                    console.log('💾 Fortschritt gespeichert');
+                    // console.log('💾 Fortschritt gespeichert');
                 } else {
                     throw new Error(data.error || 'Speichern fehlgeschlagen');
                 }
@@ -808,7 +808,7 @@
 
         function startLevelTimer() {
             levelStartTime = Date.now();
-            console.log('⏰ Level-Timer gestartet: 3 Minuten');
+            // console.log('⏰ Level-Timer gestartet: 3 Minuten');
         }
 
         function updateTimer() {
@@ -1054,8 +1054,8 @@
         // ===================================
 
         async function proceedToNextLevel(earnedPoints) {
-            console.log('🚀 DEBUG: proceedToNextLevel - Session:', sessionId?.substring(0, 8));
-            console.log('🎯 DEBUG: Aktuelles Level:', levelData.currentLevel || 1);
+            // console.log('🚀 DEBUG: proceedToNextLevel - Session:', sessionId?.substring(0, 8));
+            // console.log('🎯 DEBUG: Aktuelles Level:', levelData.currentLevel || 1);
             
             if (!sessionId || sessionId.startsWith('offline')) {
                 // Offline-Modus
@@ -1081,7 +1081,7 @@
                 });
                 
                 const data = await response.json();
-                console.log('📥 DEBUG: Server Response:', data);
+                // console.log('📥 DEBUG: Server Response:', data);
                 
                 if (data.success) {
                     // KRITISCH: Session-ID UND neues Level in URL
@@ -1091,7 +1091,7 @@
                     urlParams.set('level', data.newLevel);         // Neues Level explizit
                     
                     const targetUrl = `index.html?${urlParams.toString()}`;
-                    console.log('🔗 DEBUG: Redirect mit Session:', targetUrl);
+                    // console.log('🔗 DEBUG: Redirect mit Session:', targetUrl);
                     
                     window.location.href = targetUrl;
                 } else {
@@ -1171,7 +1171,7 @@
             levelTitle.textContent = `🎮 Level ${displayLevel} - Überleben`;
            // levelTitle.textContent = `🎮 Level ${currentLevel} - Überleben`;
             
-            console.log(`🎮 Level ${currentLevel} HUD angezeigt`);
+            // console.log(`🎮 Level ${currentLevel} HUD angezeigt`);
             
             // Timer starten
             startLevelTimer();
@@ -1224,7 +1224,7 @@
         }
 
         function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, attempts = 50) {
-            console.log(`Suche gültige Position um (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)}) mit Radius ${maxDistanceInTiles}`);
+            // console.log(`Suche gültige Position um (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)}) mit Radius ${maxDistanceInTiles}`);
             
             for (let attempt = 0; attempt < attempts; attempt++) {
                 let testTileX, testTileY;
@@ -1245,24 +1245,24 @@
                 const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
                 
                 if (tileType !== TILE_TYPES.WATER) {
-                    console.log(`  ✓ Gültige Position gefunden: (${boundedTileX.toFixed(1)}, ${boundedTileY.toFixed(1)})`);
+                    // console.log(`  ✓ Gültige Position gefunden: (${boundedTileX.toFixed(1)}, ${boundedTileY.toFixed(1)})`);
                     return { tileX: boundedTileX, tileY: boundedTileY, valid: true };
                 }
             }
             
-            console.log(`  ⚠ Keine Position gefunden, verwende Fallback`);
+            // console.log(`  ⚠ Keine Position gefunden, verwende Fallback`);
             
             for (let y = Math.floor(mapHeight * 0.3); y < mapHeight - 2; y++) {
                 for (let x = 1; x < mapWidth - 2; x++) {
                     const tileType = getTileTypeAtPosition(x, y);
                     if (tileType !== TILE_TYPES.WATER) {
-                        console.log(`  ✓ Fallback Position: (${x}, ${y})`);
+                        // console.log(`  ✓ Fallback Position: (${x}, ${y})`);
                         return { tileX: x, tileY: y, valid: true };
                     }
                 }
             }
             
-            console.log(`  ❌ Auch Fallback fehlgeschlagen!`);
+            // console.log(`  ❌ Auch Fallback fehlgeschlagen!`);
             return { tileX: centerTileX, tileY: centerTileY, valid: false };
         }
 
@@ -1275,7 +1275,7 @@
             // NEU: Zoom-basierte Kachelgröße mit Min/Max
             tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));
             
-            console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
+            // console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
             
             tileMap = [];
             for (let y = 0; y < mapHeight; y++) {
@@ -1290,12 +1290,12 @@
             ensurePassages();
             smoothTerrain();
             
-            console.log('Terrain generiert mit scrollbarem System');
+            // console.log('Terrain generiert mit scrollbarem System');
         }
 
         function generateLakes() {
             const lakeCount = 2 + Math.floor(Math.random() * 3);
-            console.log(`Generiere ${lakeCount} größere Seen...`);
+            // console.log(`Generiere ${lakeCount} größere Seen...`);
             
             for (let i = 0; i < lakeCount; i++) {
                 const seedX = 10 + Math.floor(Math.random() * (mapWidth - 20));
@@ -1358,7 +1358,7 @@
         }
 
         function generateGrassAroundWater() {
-            console.log('Generiere Wiesen um Wasser...');
+            // console.log('Generiere Wiesen um Wasser...');
             
             const newMap = JSON.parse(JSON.stringify(tileMap));
             
@@ -1410,7 +1410,7 @@
         }
 
         function ensurePassages() {
-            console.log('Stelle Durchgänge sicher...');
+            // console.log('Stelle Durchgänge sicher...');
             ensureHorizontalPassage();
             ensureVerticalPassage();
         }
@@ -1421,7 +1421,7 @@
             const rightEnd = { x: mapWidth - 1, y: startY };
             
             if (!hasPath(leftStart, rightEnd)) {
-                console.log('Erstelle horizontalen Durchgang...');
+                // console.log('Erstelle horizontalen Durchgang...');
                 const passageY = Math.floor(mapHeight * 0.5);
                 for (let x = 0; x < mapWidth; x++) {
                     if (tileMap[passageY][x] === TILE_TYPES.WATER) {
@@ -1437,7 +1437,7 @@
             const topEnd = { x: startX, y: 0 };
             
             if (!hasPath(bottomStart, topEnd)) {
-                console.log('Erstelle vertikalen Durchgang...');
+                // console.log('Erstelle vertikalen Durchgang...');
                 const passageX = Math.floor(mapWidth * 0.5);
                 for (let y = 0; y < mapHeight; y++) {
                     if (tileMap[y][passageX] === TILE_TYPES.WATER) {
@@ -1484,7 +1484,7 @@
         }
 
         function smoothTerrain() {
-            console.log('Glätte Terrain...');
+            // console.log('Glätte Terrain...');
             
             const iterations = 1;
             
@@ -1548,7 +1548,7 @@
                 terrainOffsetY = -scrollY; // Scrolling wenn größer
             }
             
-            //console.log(`Terrain-Offsets: X=${terrainOffsetX.toFixed(1)}, Y=${terrainOffsetY.toFixed(1)}, Scroll: (${scrollX}, ${scrollY})`);
+            //// console.log(`Terrain-Offsets: X=${terrainOffsetX.toFixed(1)}, Y=${terrainOffsetY.toFixed(1)}, Scroll: (${scrollX}, ${scrollY})`);
         }
 
         function renderTerrain() {
@@ -1932,7 +1932,7 @@
                 this.crossMovementTendency = 0.7; // 70% Wahrscheinlichkeit in Richtung Ziel
                 this.randomMovementChance = 0.3;   // 30% für zufällige Bewegung
                 
-                console.log(`🎯 Dino ${this.species.name} (${this.spawnSide}): Ziel -> ${this.currentGoal}`);
+                // console.log(`🎯 Dino ${this.species.name} (${this.spawnSide}): Ziel -> ${this.currentGoal}`);
             }
 
             // NEU: Prüfen ob Dino sein aktuelles Ziel erreicht hat
@@ -1943,7 +1943,7 @@
                     // Ziel erreicht! Wechsle zum anderen Ziel
                     this.currentGoal = this.currentGoal === 'left' ? 'right' : 'left';
                     
-                    console.log(`🎯 Dino ${this.species.name}: Ziel erreicht! Neues Ziel -> ${this.currentGoal}`);
+                    // console.log(`🎯 Dino ${this.species.name}: Ziel erreicht! Neues Ziel -> ${this.currentGoal}`);
                     
                     // Kurze Pause nach Ziel-Erreichung
                     this.behaviorState = 'resting';
@@ -1988,7 +1988,7 @@
                     const angleVariation = (Math.random() - 0.5) * Math.PI * 0.6; // ±54° Streuung
                     angle = baseAngle + angleVariation;
                     
-                    console.log(`🎯 Cross-Movement: ${this.species.name} -> Ziel ${this.currentGoal}, Winkel: ${(angle * 180 / Math.PI).toFixed(1)}°`);
+                    // console.log(`🎯 Cross-Movement: ${this.species.name} -> Ziel ${this.currentGoal}, Winkel: ${(angle * 180 / Math.PI).toFixed(1)}°`);
                 } else {
                     // Random Movement: Normale zufällige Bewegung
                     const shouldChangeDirection = Math.random() < 0.3;
@@ -2021,7 +2021,7 @@
                 // Debug-Info
                 if (useCrossMovement) {
                     const distanceToTarget = Math.abs(this.tileX - targetCenterX);
-                    console.log(`📍 ${this.species.name}: Pos ${this.tileX.toFixed(1)} -> Target ${this.targetTileX.toFixed(1)}, Entfernung zum Ziel: ${distanceToTarget.toFixed(1)}`);
+                    // console.log(`📍 ${this.species.name}: Pos ${this.tileX.toFixed(1)} -> Target ${this.targetTileX.toFixed(1)}, Entfernung zum Ziel: ${distanceToTarget.toFixed(1)}`);
                 }
             }
 
@@ -2146,6 +2146,11 @@
             }
 
             updateFacingDirection(moveTileX, moveTileY) {
+                // NEU: Keine Richtungsänderung wenn Rotation gesperrt
+                if (this.feedingRotationLocked) {
+                    return;
+                }
+                
                 if (moveTileX > 0.001) {
                     this.facingRight = false;
                 } else if (moveTileX < -0.001) {
@@ -2285,7 +2290,8 @@
                 this.consumptionStartTime = 0;
                 this.foodCooldownUntil = 0;        // Timestamp bis wann Cooldown aktiv
                 this.postCombatCooldownUntil = 0;  // Timestamp für Post-Combat Cooldown
-                
+                this.feedingRotationLocked = false; 
+
                 // Nahrungsvorlieben berechnen
                 const props = this.species.properties;
                 this.foodPreferences = {
@@ -2640,9 +2646,9 @@
                 return;
             }
             
-            console.log('=== LEVEL GENERATION START ===');
-            console.log('Canvas Größe:', canvas.width, 'x', canvas.height);
-            console.log('Level Data:', levelData);
+            // console.log('=== LEVEL GENERATION START ===');
+            // console.log('Canvas Größe:', canvas.width, 'x', canvas.height);
+            // console.log('Level Data:', levelData);
             
             setLoadingText('Generiere Terrain...');
             generateTileMap();
@@ -2657,14 +2663,14 @@
             generateOwnDinosFromData(objectCounts);
             generateEnemyDinosFromData(objectCounts);
             
-            console.log('=== OBJEKT COUNTS ===');
-            console.log('Bäume:', objectCounts.trees);
-            console.log('Steine:', objectCounts.rocks);
-            console.log('Nagetiere:', objectCounts.rodents);
-            console.log('Eigene Dinos:', objectCounts.ownDinos);
-            console.log('Gegner Dinos:', objectCounts.enemyDinos);
-            console.log('Gesamt Objekte:', gameObjects.length);
-            console.log('=== LEVEL GENERATION END ===');
+            // console.log('=== OBJEKT COUNTS ===');
+            // console.log('Bäume:', objectCounts.trees);
+            // console.log('Steine:', objectCounts.rocks);
+            // console.log('Nagetiere:', objectCounts.rodents);
+            // console.log('Eigene Dinos:', objectCounts.ownDinos);
+            // console.log('Gegner Dinos:', objectCounts.enemyDinos);
+            // console.log('Gesamt Objekte:', gameObjects.length);
+            // console.log('=== LEVEL GENERATION END ===');
             
             updateAllObjectScales();
             updateHUD();
@@ -2673,12 +2679,12 @@
         }
 
         function generateOwnDinosFromData(objectCounts) {
-            console.log('=== EIGENE DINOS GENERATION START ===');
+            // console.log('=== EIGENE DINOS GENERATION START ===');
             
             levelData.populationData.forEach((species, speciesIndex) => {
                 if (!species.population.isExtinct) {
-                    console.log(`--- ${species.name} ---`);
-                    console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
+                    // console.log(`--- ${species.name} ---`);
+                    // console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
                     
                     const centerTileX = 5 + Math.random() * (mapWidth * 0.25);
                     const centerTileY = mapHeight * 0.4 + Math.random() * (mapWidth * 0.4);
@@ -2709,21 +2715,21 @@
                 }
             });
             
-            console.log(`=== EIGENE DINOS GENERATION END: ${objectCounts.ownDinos} Dinos platziert ===`);
+            // console.log(`=== EIGENE DINOS GENERATION END: ${objectCounts.ownDinos} Dinos platziert ===`);
         }
 
         function generateEnemyDinosFromData(objectCounts) {
-            console.log('=== GEGNER DINOS GENERATION START ===');
+            // console.log('=== GEGNER DINOS GENERATION START ===');
             
             if (!levelData.enemyData || levelData.enemyData.length === 0) {
-                console.log('⚠️ Keine Gegner-Daten vorhanden');
+                // console.log('⚠️ Keine Gegner-Daten vorhanden');
                 return;
             }
             
             levelData.enemyData.forEach((species, speciesIndex) => {
                 if (!species.population.isExtinct) {
-                    console.log(`--- Gegner ${species.name} ---`);
-                    console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
+                    // console.log(`--- Gegner ${species.name} ---`);
+                    // console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
                     
                     const centerTileX = 5 + mapWidth * 0.65 + Math.random() * (mapWidth * 0.25);
                     const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
@@ -2754,7 +2760,7 @@
                 }
             });
             
-            console.log(`=== GEGNER DINOS GENERATION END: ${objectCounts.enemyDinos} Dinos platziert ===`);
+            // console.log(`=== GEGNER DINOS GENERATION END: ${objectCounts.enemyDinos} Dinos platziert ===`);
         }
 
         function generateEnvironment(objectCounts) {
@@ -2858,7 +2864,7 @@
                 const oldTileSize = tileSize;
                 tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));
                 
-                console.log(`Canvas resized: ${canvas.width}x${canvas.height}, tileSize: ${tileSize.toFixed(1)}px`);
+                // console.log(`Canvas resized: ${canvas.width}x${canvas.height}, tileSize: ${tileSize.toFixed(1)}px`);
                 
                 calculateTerrainOffsets();
                 
@@ -3000,11 +3006,11 @@
                 levelTimer = Math.max(0, levelTimer - gameElapsed);
                 levelStartTime = null;
                 
-                console.log(`⏸️ Timer pausiert bei ${Math.floor(levelTimer / 60)}:${Math.floor(levelTimer % 60).toString().padStart(2, '0')}`);
+                // console.log(`⏸️ Timer pausiert bei ${Math.floor(levelTimer / 60)}:${Math.floor(levelTimer % 60).toString().padStart(2, '0')}`);
             } else if (!isPaused && !levelStartTime && !gameEnded) {
                 // Timer beim Fortsetzen wieder starten
                 levelStartTime = Date.now();
-                console.log(`▶️ Timer fortgesetzt, verbleibend: ${Math.floor(levelTimer / 60)}:${Math.floor(levelTimer % 60).toString().padStart(2, '0')}`);
+                // console.log(`▶️ Timer fortgesetzt, verbleibend: ${Math.floor(levelTimer / 60)}:${Math.floor(levelTimer % 60).toString().padStart(2, '0')}`);
             }
         }
 
@@ -3030,7 +3036,7 @@
             // Timer mit neuer Geschwindigkeit neu starten
             if (wasRunning) {
                 levelStartTime = Date.now();
-                console.log(`🚀 Speed geändert auf ${gameSpeed}x, Timer läuft weiter`);
+                // console.log(`🚀 Speed geändert auf ${gameSpeed}x, Timer läuft weiter`);
             }
         }
         // ===================================
@@ -3051,8 +3057,8 @@
             baseZoomLevel = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight) / 32; // 32 = gewünschte Standard-Kachelgröße
             currentZoom = baseZoomLevel;
             
-            console.log('Canvas initialisiert:', canvas.width, 'x', canvas.height);
-            console.log('Basis-Zoom:', baseZoomLevel.toFixed(2));
+            // console.log('Canvas initialisiert:', canvas.width, 'x', canvas.height);
+            // console.log('Basis-Zoom:', baseZoomLevel.toFixed(2));
             
             calculateTerrainOffsets();
             
@@ -3244,10 +3250,10 @@
                         calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
                     );
                     dino.combatState = 'seeking';
-                    console.log(`🎯 ${dino.species.name} entdeckt verfügbaren Feind: ${dino.combatTarget.species.name}`);
+                    // console.log(`🎯 ${dino.species.name} entdeckt verfügbaren Feind: ${dino.combatTarget.species.name}`);
                 } else {
                     // Alle Feinde kämpfen bereits - warte oder suche weiter
-                    console.log(`⏳ ${dino.species.name} wartet - alle Feinde kämpfen bereits`);
+                    // console.log(`⏳ ${dino.species.name} wartet - alle Feinde kämpfen bereits`);
                 }
             }
         }
@@ -3262,7 +3268,7 @@
             // Prüfen ob Ziel bereits von jemand anderem bekämpft wird
             const targetAlreadyFighting = combats.some(c => c.participants.includes(dino.combatTarget));
             if (targetAlreadyFighting) {
-                console.log(`🚫 ${dino.species.name}: Ziel wird bereits bekämpft, suche neues Ziel`);
+                // console.log(`🚫 ${dino.species.name}: Ziel wird bereits bekämpft, suche neues Ziel`);
                 dino.combatTarget = null;
                 dino.combatState = 'neutral';
                 return;
@@ -3345,10 +3351,10 @@
                     performAttack(dino, dino.combatTarget);
                 } else if (!canAttack) {
                     // Cooldown läuft noch - warten
-                    console.log(`⏳ ${dino.species.name} wartet (Cooldown: ${(COMBAT_CONFIG.ATTACK_COOLDOWN - timeSinceLastAttack).toFixed(1)}s)`);
+                    // console.log(`⏳ ${dino.species.name} wartet (Cooldown: ${(COMBAT_CONFIG.ATTACK_COOLDOWN - timeSinceLastAttack).toFixed(1)}s)`);
                 } else {
                     // Keine Stamina - Turn wechseln
-                    console.log(`💤 ${dino.species.name} hat keine Stamina - Turn wechselt`);
+                    // console.log(`💤 ${dino.species.name} hat keine Stamina - Turn wechselt`);
                     combat.currentAttacker = combat.participants.find(p => p !== dino);
                 }
             }
@@ -3389,11 +3395,11 @@
             
             const defenderInCombat = combats.find(c => c.participants.includes(defender));
             if (defenderInCombat) {
-                console.log(`🚫 ${defender.species.name} kämpft bereits - ${attacker.species.name} sucht anderes Ziel`);
+                // console.log(`🚫 ${defender.species.name} kämpft bereits - ${attacker.species.name} sucht anderes Ziel`);
                 return;
             }
             
-            console.log(`⚔️ Neuer Kampf: ${attacker.species.name} vs ${defender.species.name}`);
+            // console.log(`⚔️ Neuer Kampf: ${attacker.species.name} vs ${defender.species.name}`);
             
             // Beide Dinos in Kampfmodus
             attacker.combatState = 'fighting';
@@ -3470,7 +3476,7 @@
             // Bluteffekt
             createBloodEffect(defender);
             
-            console.log(`💥 ${attacker.species.name} ${attack.type} → ${defender.species.name} (${damage} Schaden, ${defender.currentHP}/${defender.maxHP} HP)`);
+            // console.log(`💥 ${attacker.species.name} ${attack.type} → ${defender.species.name} (${damage} Schaden, ${defender.currentHP}/${defender.maxHP} HP)`);
             
             // Tod prüfen
             if (defender.currentHP <= 0) {
@@ -3482,7 +3488,7 @@
                     const combat = combats.find(c => c.participants.includes(attacker));
                     if (combat && combat.currentAttacker === attacker) {
                         combat.currentAttacker = defender;
-                        console.log(`🔄 Turn wechselt zu: ${defender.species.name}`);
+                        // console.log(`🔄 Turn wechselt zu: ${defender.species.name}`);
                     }
                 }, 800); // 800ms statt 500ms für bessere Übersicht
             }
@@ -3598,7 +3604,7 @@
 
         // Tod handhaben
         function handleDeath(dino) {
-            console.log(`💀 ${dino.species.name} ist gestorben`);
+            // console.log(`💀 ${dino.species.name} ist gestorben`);
             
             dino.combatState = 'dead';
             dino.combatTarget = null;
@@ -3622,7 +3628,7 @@
 
         // Kampf beenden
         function endCombat(winner, loser) {
-            console.log(`🏆 ${winner.species.name} gewinnt gegen ${loser.species.name}`);
+            // console.log(`🏆 ${winner.species.name} gewinnt gegen ${loser.species.name}`);
             
             // Kampf aus Liste entfernen
             const combatIndex = combats.findIndex(c => 
@@ -3643,7 +3649,7 @@
                         participant.behaviorTimer = 0;
                         participant.currentBehaviorDuration = participant.getRandomRestDuration();
                         
-                        console.log(`🔓 ${participant.species.name} kann sich wieder bewegen`);
+                        // console.log(`🔓 ${participant.species.name} kann sich wieder bewegen`);
                     }
                 });
                 
@@ -3964,7 +3970,7 @@
 
 
         // Beste Nahrungsquelle auswählen
-        function selectBestFoodSourceWithReservation(dino) {
+        function selectBestFoodSource(dino) {
             const sources = findFoodSourcesInRange(dino);
             
             // Probiere Nahrungsquellen in Reihenfolge der Präferenz
@@ -3984,17 +3990,17 @@
         function startFoodConsumption(dino, foodSource) {
             // Prüfe nochmals ob Nahrungsquelle frei ist (Race Condition vermeiden)
             if (occupiedFoodSources.has(foodSource.sourceId)) {
-                console.log(`🚫 ${dino.species.name}: Nahrungsquelle bereits belegt, suche neue`);
+                // console.log(`🚫 ${dino.species.name}: Nahrungsquelle bereits belegt, suche neue`);
                 dino.foodState = 'neutral';
                 dino.foodTarget = null;
                 return;
             }
             
-            console.log(`🍽️ ${dino.species.name} beginnt ${foodSource.type} zu konsumieren`);
+            // console.log(`🍽️ ${dino.species.name} beginnt ${foodSource.type} zu konsumieren`);
             
             // Nahrungsquelle als belegt markieren
             occupiedFoodSources.set(foodSource.sourceId, dino);
-            console.log(`🔒 Nahrungsquelle belegt: ${foodSource.sourceId} von ${dino.species.name}`);
+            // console.log(`🔒 Nahrungsquelle belegt: ${foodSource.sourceId} von ${dino.species.name}`);
             
             dino.foodState = 'consuming';
             dino.foodTarget = foodSource;
@@ -4006,7 +4012,7 @@
             dino.targetTileX = dino.tileX;  // Aktuelle Position beibehalten
             dino.targetTileY = dino.tileY;  // Aktuelle Position beibehalten
             dino.animationPhase = 'idle';
-            
+            /*
             // Blickrichtung zur Nahrungsquelle ausrichten (optional)
             if (dino.foodTarget && dino.foodTarget.object) {
                 const targetObj = dino.foodTarget.object;
@@ -4027,8 +4033,8 @@
                     }
                 }
                 // Bei dx ~= 0: Blickrichtung beibehalten
-            }
-            
+            }*/
+            dino.feedingRotationLocked = true;
             // Erste Konsumtions-Animation starten
             startConsumptionDash(dino);
         }
@@ -4039,7 +4045,7 @@
             dino.consumptionDashStart = Date.now();
             
             const targetObj = dino.foodTarget.object;
-            console.log(`🦷 ${dino.species.name} startet Konsum-Dash zu ${targetObj.type || 'corpse'}`);
+            // console.log(`🦷 ${dino.species.name} startet Konsum-Dash zu ${targetObj.type || 'corpse'}`);
         }
 
 
@@ -4053,7 +4059,7 @@
             
             // Nahrungsquelle freigeben
             occupiedFoodSources.delete(foodSource.sourceId);
-            console.log(`🔓 Nahrungsquelle freigegeben: ${foodSource.sourceId}`);
+            // console.log(`🔓 Nahrungsquelle freigegeben: ${foodSource.sourceId}`);
             
             // Effizienz basierend auf Vorliebe berechnen
             const preference = foodSource.preference;
@@ -4070,7 +4076,7 @@
                 teamFood.meat += finalValue;
             }
             
-            console.log(`🌟 ${dino.species.name} erhält ${finalValue} ${foodSource.type} Punkte (Effizienz: ${(efficiency*100).toFixed(0)}%)`);
+            // console.log(`🌟 ${dino.species.name} erhält ${finalValue} ${foodSource.type} Punkte (Effizienz: ${(efficiency*100).toFixed(0)}%)`);
             
             // Icon anzeigen
             showFoodIcon(dino, foodSource.type, finalValue);
@@ -4086,7 +4092,7 @@
                 setTimeout(() => {
                     consumedFoodSources.delete(foodSource.sourceId);
                     foodSource.object.hasBeenEaten = false;
-                    console.log(`🌳 Baum regeneriert: ${foodSource.sourceId}`);
+                    // console.log(`🌳 Baum regeneriert: ${foodSource.sourceId}`);
                 }, FOOD_CONFIG.TREE_REGENERATION * 1000);
             }
             
@@ -4110,6 +4116,7 @@
             dino.foodCooldownUntil = Date.now() + (FOOD_CONFIG.POST_FOOD_COOLDOWN * 1000);
             
             // Zustand zurücksetzen
+            dino.feedingRotationLocked = false;
             dino.foodState = 'neutral';
             dino.foodTarget = null;
             
@@ -4118,7 +4125,7 @@
 
         // Nahrungsaufnahme unterbrechen
         function interruptFoodConsumption(dino, reason = 'unknown') {
-            console.log(`❌ ${dino.species.name} Nahrungsaufnahme unterbrochen: ${reason}`);
+            // console.log(`❌ ${dino.species.name} Nahrungsaufnahme unterbrochen: ${reason}`);
             
             // Konsumptions-Animation beenden
             dino.isConsuming = false;
@@ -4127,10 +4134,11 @@
             if (dino.foodTarget && dino.foodTarget.sourceId) {
                 if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
                     occupiedFoodSources.delete(dino.foodTarget.sourceId);
-                    console.log(`🔓 Nahrungsquelle durch Unterbrechung freigegeben: ${dino.foodTarget.sourceId}`);
+                    // console.log(`🔓 Nahrungsquelle durch Unterbrechung freigegeben: ${dino.foodTarget.sourceId}`);
                 }
             }
             
+            dino.feedingRotationLocked = false;
             dino.foodState = 'neutral';
             dino.foodTarget = null;
             dino.consumptionStartTime = 0;
@@ -4187,15 +4195,35 @@
 
         function updateFoodNeutralState(dino) {
             if (dino.combatState === 'neutral') {
-                const bestFood = selectBestFoodSourceWithReservation(dino); // ← Neue Funktion
+            
+                const bestFood = selectBestFoodSource(dino);
+                
                 if (bestFood) {
-                    // Reservierung ist bereits erfolgt - direkt zur Suche wechseln
+                    console.log(`updateFoodNeutralState ${bestFood.sourceId}`);
+                    // Double-Check ob noch verfügbar
+                    const occupiedBy = occupiedFoodSources.get(bestFood.sourceId);
+                    if (occupiedBy && occupiedBy !== dino) {
+                        console.log(`🚫 ${dino.species.name}: Nahrung zwischenzeitlich belegt`);
+                        return;
+                    }
+
+                    console.log(`fertig`);
+                    // NEU: Optimale Feeding-Position berechnen
+                    const feedingPosition = calculateOptimalFeedingPositions(bestFood, {
+                        x: dino.tileX,
+                        y: dino.tileY
+                    });
+                    
+                    // SOFORT reservieren
+                    occupiedFoodSources.set(bestFood.sourceId, dino);
+                    
                     dino.foodState = 'seeking';
                     dino.foodTarget = bestFood;
+                    dino.feedingPosition = feedingPosition; // NEU: Zielposition speichern
                     dino.seekingStartTime = Date.now();
                     dino.lastPosition = null;
                     
-                    console.log(`🔍 ${dino.species.name} startet Nahrungssuche: ${bestFood.type}`);
+                    // console.log(`🔍 ${dino.species.name} startet Nahrungssuche: ${bestFood.type} → Position (${feedingPosition.x.toFixed(1)}, ${feedingPosition.y.toFixed(1)})`);
                 } else {
                     // Keine Nahrung gefunden - kurze Pause
                     dino.foodCooldownUntil = Date.now() + 2000;
@@ -4212,7 +4240,7 @@
             // Timeout
             const seekingTime = (Date.now() - dino.seekingStartTime) / 1000;
             if (seekingTime > 8) { // Etwas mehr Zeit für komplexere Wege
-                console.log(`⏰ ${dino.species.name} seeking timeout - gibt auf`);
+                // console.log(`⏰ ${dino.species.name} seeking timeout - gibt auf`);
                 releaseFoodReservation(dino);
                 return;
             }
@@ -4220,27 +4248,27 @@
             // Feinde in der Nähe? Abbrechen!
             const enemies = findEnemiesInRange(dino);
             if (enemies.length > 0) {
-                console.log(`⚠️ ${dino.species.name} bricht Nahrungssuche ab - Feinde entdeckt`);
+                // console.log(`⚠️ ${dino.species.name} bricht Nahrungssuche ab - Feinde entdeckt`);
                 releaseFoodReservation(dino);
                 return;
             }
             
             const targetObj = dino.foodTarget.object;
-            const targetX = targetObj.tileX;
-            const targetY = targetObj.tileY;
+            const targetX = dino.feedingPosition.x;  // Verwende berechnete Position
+            const targetY = dino.feedingPosition.y;
             
             const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
             
             // Erforderliche Distanz
             let requiredDistance;
-            if (targetObj.type === 'tree') requiredDistance = 1.0;
-            else if (targetObj.type === 'rodent') requiredDistance = 0.4;
-            else if (targetObj.deathTime) requiredDistance = 0.6;
-            else requiredDistance = 0.8;
-            
+            if (targetObj.type === 'tree') requiredDistance = 0.1;        // Vorher: 1.0
+            else if (targetObj.type === 'rodent') requiredDistance = 0.1;  // Vorher: 0.4  
+            else if (targetObj.deathTime) requiredDistance = 0.1;         // Vorher: 0.6
+            else requiredDistance = 0.1;                                  // Vorher: 0.8
+
             // Nah genug zum Fressen?
             if (distance <= requiredDistance) {
-                console.log(`🎯 ${dino.species.name} ist nah genug an ${targetObj.type || 'corpse'}`);
+                console.log(`🎯 ${dino.species.name} ist nah genug an Feeding-Position für ${targetObj.type || 'corpse'}`);
                 startFoodConsumption(dino, dino.foodTarget);
                 return;
             }
@@ -4264,88 +4292,45 @@
                 calculateDistance(dino, obj) < 1.8
             );
             
-            if (nearbyDinos.length > 0) {
+
                 // Prüfen ob andere Dinos das GLEICHE Ziel haben
-                const sameTargetDinos = nearbyDinos.filter(otherDino => 
-                    otherDino.foodState === 'seeking' && 
-                    otherDino.foodTarget && 
-                    otherDino.foodTarget.object === targetObj
-                );
-                
-                if (sameTargetDinos.length > 0) {
-                    console.log(`🔄 ${dino.species.name}: Andere Dinos zielen auf gleiche Nahrung - gibt auf`);
-                    releaseFoodReservation(dino);
-                    dino.foodCooldownUntil = Date.now() + 2000;
-                    return;
-                }
-                
-                // Sanfte Kollisionsvermeidung
-                let avoidanceX = 0;
-                let avoidanceY = 0;
-                
-                nearbyDinos.forEach(otherDino => {
-                    const dx = dino.tileX - otherDino.tileX;
-                    const dy = dino.tileY - otherDino.tileY;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (dist > 0 && dist < 1.8) {
-                        const repulsionStrength = (1.8 - dist) / 1.8;
-                        avoidanceX += (dx / dist) * repulsionStrength;
-                        avoidanceY += (dy / dist) * repulsionStrength;
-                    }
-                });
-                
-                // Nur KLEINE Ausweichbewegung, nicht übertreiben
-                moveTargetX = targetX + avoidanceX * 0.8;
-                moveTargetY = targetY + avoidanceY * 0.8;
-                movementReason = "collision_avoidance";
-                
-            } 
-            // 2. PRIORITÄT: "Direkt unter Ziel" Problem (nur wenn keine Kollision)
-            else {
-                const dx = targetX - dino.tileX;
-                const dy = targetY - dino.tileY;
-                const horizontalDistance = Math.abs(dx);
-                const verticalDistance = Math.abs(dy);
-                
-                // Problematische Situation: Fast direkt unter/über dem Ziel
-                if (horizontalDistance < 0.3 && verticalDistance > 1.5) {
-                    
-                    // EINFACHE LÖSUNG: Bewege dich erst EINMAL zur Seite
-                    if (!dino.hasMovedSideways) {
-                        // Bestimme Seite nur einmal
-                        if (!dino.preferredSide) {
-                            dino.preferredSide = Math.random() > 0.5 ? 1 : -1;
-                        }
-                        
-                        moveTargetX = targetX + (dino.preferredSide * 1.2);
-                        moveTargetY = dino.tileY; // Erstmal auf gleicher Höhe bleiben
-                        movementReason = "sideways_approach";
-                        
-                        // Prüfe ob seitlich angekommen
-                        if (Math.abs(dino.tileX - moveTargetX) < 0.4) {
-                            dino.hasMovedSideways = true;
-                            console.log(`✅ ${dino.species.name} hat sich seitlich positioniert`);
-                        }
-                    } else {
-                        // Jetzt direkt zum Ziel
-                        moveTargetX = targetX;
-                        moveTargetY = targetY;
-                        movementReason = "direct_after_sideways";
-                    }
-                } else {
-                    // Normale Situation - direkt zum Ziel
-                    moveTargetX = targetX;
-                    moveTargetY = targetY;
-                    movementReason = "direct";
-                    
-                    // Reset Seitenbewegung-Flags
-                    dino.hasMovedSideways = false;
-                    dino.preferredSide = null;
-                }
+            const sameTargetDinos = nearbyDinos.filter(otherDino => 
+                otherDino.foodState === 'seeking' && 
+                otherDino.foodTarget && 
+                otherDino.foodTarget.object === targetObj
+            );
+            
+            if (sameTargetDinos.length > 0) {
+                // console.log(`🔄 ${dino.species.name}: Andere Dinos zielen auf gleiche Nahrung - gibt auf`);
+                releaseFoodReservation(dino);
+                dino.foodCooldownUntil = Date.now() + 2000;
+                return;
             }
             
-            // BEWEGUNG AUSFÜHREN (nur eine!)
+            // Sanfte Kollisionsvermeidung
+            let avoidanceX = 0;
+            let avoidanceY = 0;
+            
+            nearbyDinos.forEach(otherDino => {
+                const dx = dino.tileX - otherDino.tileX;
+                const dy = dino.tileY - otherDino.tileY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 0 && dist < 1.8) {
+                    const repulsionStrength = (1.8 - dist) / 1.8;
+                    avoidanceX += (dx / dist) * repulsionStrength;
+                    avoidanceY += (dy / dist) * repulsionStrength;
+                }
+            });
+            
+            // Nur KLEINE Ausweichbewegung, nicht übertreiben
+            moveTargetX = targetX + avoidanceX * 0.8;
+            moveTargetY = targetY + avoidanceY * 0.8;
+            movementReason = "collision_avoidance";
+                
+          //  } 
+            // 2. PRIORITÄT: "Direkt unter Ziel" Problem (nur wenn keine Kollision)
+           // BEWEGUNG AUSFÜHREN (nur eine!)
             const finalDx = moveTargetX - dino.tileX;
             const finalDy = moveTargetY - dino.tileY;
             const moveDistance = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
@@ -4373,7 +4358,7 @@
                 
                 // Debug-Info (nur ab und zu)
                 if (Math.random() < 0.02) { // 2% Chance
-                    console.log(`🚶 ${dino.species.name} bewegt sich: ${movementReason}`);
+                    // console.log(`🚶 ${dino.species.name} bewegt sich: ${movementReason}`);
                 }
             }
             
@@ -4390,7 +4375,7 @@
             const timeDiff = (Date.now() - dino.lastPosition.time) / 1000;
             
             if (timeDiff > 3.0 && positionDiff < 0.2) {
-                console.log(`🚫 ${dino.species.name} steckt fest - bricht ab`);
+                // console.log(`🚫 ${dino.species.name} steckt fest - bricht ab`);
                 releaseFoodReservation(dino);
                 
                 // Reset alle Flags
@@ -4439,7 +4424,7 @@
             if (dino.foodTarget && dino.foodTarget.sourceId) {
                 if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
                     occupiedFoodSources.delete(dino.foodTarget.sourceId);
-                    console.log(`🔓 Nahrungsreservierung freigegeben: ${dino.foodTarget.sourceId}`);
+                    // console.log(`🔓 Nahrungsreservierung freigegeben: ${dino.foodTarget.sourceId}`);
                 }
             }
             
@@ -4447,7 +4432,7 @@
             dino.foodTarget = null;
             dino.lastPosition = null;
         }
-
+/*
         function calculateOptimalFeedingPosition(dino, foodSource) {
             const targetObj = foodSource.object;
             let baseX, baseY;
@@ -4489,6 +4474,64 @@
             // Default: Direkt an der Nahrungsquelle
             return { x: baseX, y: baseY };
         }
+*/
+
+        function calculateOptimalFeedingPositions(foodSource, dinoPosition) {
+            const targetObj = foodSource.object;
+            let baseX, baseY;
+              console.log(`📍${baseX}`);
+           
+            // Basis-Position der Nahrungsquelle
+            if (targetObj.tileX !== undefined) {
+                baseX = targetObj.tileX;
+                baseY = targetObj.tileY;
+            } else {
+                baseX = targetObj.tileX || foodSource.object.tileX;
+                baseY = targetObj.tileY || foodSource.object.tileY;
+            }
+            
+            // Horizontaler Abstand je nach Nahrungstyp
+            let horizontalOffset;
+            if (targetObj.type === 'tree') {
+                horizontalOffset = 1.2;
+            } else if (targetObj.type === 'rodent') {
+                horizontalOffset = 0.8;
+            } else if (targetObj.deathTime) { // Leiche
+                horizontalOffset = 1.0;
+            } else {
+                horizontalOffset = 1.0; // Default
+            }
+            
+            // Zwei mögliche Positionen berechnen
+            const leftPosition = {
+                x: baseX - horizontalOffset,
+                y: baseY
+            };
+            
+            const rightPosition = {
+                x: baseX + horizontalOffset,
+                y: baseY
+            };
+            
+            // Entfernungen zum Dino berechnen
+            const leftDistance = Math.sqrt(
+                (dinoPosition.x - leftPosition.x) ** 2 + 
+                (dinoPosition.y - leftPosition.y) ** 2
+            );
+            
+            const rightDistance = Math.sqrt(
+                (dinoPosition.x - rightPosition.x) ** 2 + 
+                (dinoPosition.y - rightPosition.y) ** 2
+            );
+            
+            // Nähere Position wählen
+            const chosenPosition = leftDistance <= rightDistance ? leftPosition : rightPosition;
+            const chosenSide = leftDistance <= rightDistance ? 'left' : 'right';
+            
+             console.log(`📍 ${foodSource.type} Position gewählt: ${chosenSide} (${chosenPosition.x.toFixed(1)}, ${chosenPosition.y.toFixed(1)})`);
+            
+            return chosenPosition;
+        }
 
         function updateFoodConsumingState(dino) {
             const currentTime = Date.now();
@@ -4516,7 +4559,7 @@
                     // Neuen Dash starten
                     dino.isConsuming = true;
                     dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
-                    console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                    // console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
                 }
             } else {
                 // Wir sind in der Pause zwischen Dashes
@@ -4544,7 +4587,7 @@
                 const stillConsuming = dino.foodState === 'consuming';
                 
                 if (!dinoExists || !stillConsuming) {
-                    //console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
+                    //// console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
                     toDelete.push(sourceId);
                 }
             }
@@ -4575,7 +4618,7 @@
                 }
             });
             
-            console.log('⚔️ Kampfsystem initialisiert für', gameObjects.filter(obj => obj instanceof Dino).length, 'Dinos');
+            // console.log('⚔️ Kampfsystem initialisiert für', gameObjects.filter(obj => obj instanceof Dino).length, 'Dinos');
         }
 
         document.addEventListener('DOMContentLoaded', initGame);
