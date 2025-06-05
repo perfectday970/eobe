@@ -556,8 +556,11 @@
         let tileMap = [];
         let tileSize = 32;
         let baseTileSize = 32;
-        let mapWidth = 60;
-        let mapHeight = 40;
+
+        let baseMapWidth = 60;        // Basis-Breite
+        let baseMapHeight = 40;       // Höhe bleibt konstant
+        let mapWidth = 60;           // Wird dynamisch gesetzt
+        let mapHeight = 40;          // Bleibt konstant
         
         // NEU: Scrolling-Variablen
         let scrollX = 0;
@@ -805,6 +808,22 @@
                 saveBtn.disabled = false;
                 saveInProgress = false;
             }
+        }
+
+        // 2. NEUE FUNKTION - Zufällige Karten-Breite berechnen
+        function calculateRandomMapWidth() {
+            // Basis: 60 Kacheln
+            // Variation: 0% bis +70% = 60 bis 102 Kacheln
+            const variationFactor = Math.random() * 0.7; // 0.0 bis 0.7 (0% bis 70%)
+            const additionalWidth = Math.round(baseMapWidth * variationFactor);
+            
+            mapWidth = baseMapWidth + additionalWidth;
+            
+            // Debug-Info
+            const percentage = Math.round(variationFactor * 100);
+            console.log(`🗺️ Karten-Breite berechnet: ${mapWidth} Kacheln (Basis: ${baseMapWidth}, +${percentage}%)`);
+            
+            return mapWidth;
         }
 
         function startLevelTimer() {
@@ -2651,6 +2670,9 @@
             // console.log('Canvas Größe:', canvas.width, 'x', canvas.height);
             // console.log('Level Data:', levelData);
             
+            calculateRandomMapWidth();
+            console.log('Karten-Dimensionen:', mapWidth, 'x', mapHeight);
+
             setLoadingText('Generiere Terrain...');
             generateTileMap();
             
@@ -2687,8 +2709,9 @@
                     // console.log(`--- ${species.name} ---`);
                     // console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
                     
-                    const centerTileX = 5 + Math.random() * (mapWidth * 0.25);
-                    const centerTileY = mapHeight * 0.4 + Math.random() * (mapWidth * 0.4);
+                    const spawnWidth = mapWidth * 0.25; // 25% der Karten-Breite für Spawning
+                    const centerTileX = 5 + Math.random() * spawnWidth;
+                    const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
                     
                     for (let i = 0; i < species.population.adults; i++) {
                         const position = findValidLandPosition(centerTileX, centerTileY, 8);
@@ -2739,9 +2762,10 @@
                         const position = findValidLandPosition(centerTileX, centerTileY, 8);
                         
                         if (position.valid) {
-                            const finalTileX = Math.max(mapWidth * 0.55, Math.min(mapWidth - 2, position.tileX));
+                            const minEnemyX = mapWidth * 0.55;
+                            const finalTileX = Math.max(minEnemyX, Math.min(mapWidth - 2, position.tileX));
                             const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
-                            
+
                             gameObjects.push(new Dino(finalTileX, finalTileY, species, true, true));
                             objectCounts.enemyDinos++;
                         }
@@ -2771,8 +2795,13 @@
         }
 
         function generateTreeGroups(objectCounts) {
-            const groupCount = 4 + Math.floor(Math.random() * 6);
-            const singleTrees = 3 + Math.floor(Math.random() * 7);
+            const baseGroups = 7;
+            const extraGroups = Math.floor((mapWidth - baseMapWidth) / 10); // +1 Gruppe pro 10 zusätzliche Kacheln
+            const groupCount = baseGroups + extraGroups + Math.floor(Math.random() * 6);
+            
+            const baseSingleTrees = 5;
+            const extraSingleTrees = Math.floor((mapWidth - baseMapWidth) / 15);
+            const singleTrees = baseSingleTrees + extraSingleTrees + Math.floor(Math.random() * 7);
             
             for (let group = 0; group < groupCount; group++) {
                 let groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
