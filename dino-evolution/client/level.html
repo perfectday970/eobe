@@ -542,7 +542,7 @@
         let isLoading = true;
         let saveInProgress = false;
 
-        let levelTimer = 180; // 3 Minuten in Sekunden
+        let levelTimer = 240; // 3 Minuten in Sekunden
         let levelStartTime = null;
         let levelEndTime = null;
         let gameEnded = false;
@@ -605,8 +605,8 @@
         const FOOD_CONFIG = {
             // Nahrungswerte
             FOOD_VALUES: {
-                LARGE_TREE: 5,    // baseSize >= 25
-                SMALL_TREE: 2,    // baseSize < 25
+                LARGE_TREE: 7,    // baseSize >= 25
+                SMALL_TREE: 5,    // baseSize < 25
                 RODENT: 5,
                 ENEMY_CORPSE: 4,
                 OWN_CORPSE: 4     // nur bei Aas >= 70
@@ -2771,8 +2771,8 @@
         }
 
         function generateTreeGroups(objectCounts) {
-            const groupCount = 4 + Math.floor(Math.random() * 3);
-            const singleTrees = 3 + Math.floor(Math.random() * 4);
+            const groupCount = 4 + Math.floor(Math.random() * 6);
+            const singleTrees = 3 + Math.floor(Math.random() * 7);
             
             for (let group = 0; group < groupCount; group++) {
                 let groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
@@ -3109,6 +3109,8 @@
 
             dino.killCount = 0;
             dino.hasMuscleBoost = false;
+            dino.totalFoodConsumed = 0;
+            dino.hasSatiatedBoost = false;
             
             // Erkennungsradius berechnen
             dino.detectionRadius = COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
@@ -3577,7 +3579,13 @@
             
             // Schaden reduzieren (mindestens 1)
             damage = Math.max(1, Math.round(damage * (1 - Math.min(0.9, damageReduction))));
-            
+
+            // NEU: Gesättigt-Boost anwenden (30% weniger Schaden)
+            if (defender.hasSatiatedBoost) {
+                damage = Math.max(1, Math.round(damage * 0.7)); // 30% Schadensreduktion
+                console.log(`🛡️ ${defender.species.name} Gesättigt-Boost: -30% Schaden (${damage})`);
+            }
+
             return damage;
         }
 
@@ -3929,6 +3937,19 @@
                 
                 ctx.strokeText('💪', pixelX +symbolX, symbolY);
                 ctx.fillText('💪', pixelX +symbolX, symbolY);
+                symbolX += 15; // Platz für nächstes Icon
+            }
+
+            // NEU: Schild-Icon für gesättigte Dinos
+            if (dino.hasSatiatedBoost) {
+                ctx.fillStyle = '#4169E1'; // Blau
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                
+                ctx.strokeText('🛡️', pixelX +symbolX, symbolY);
+                ctx.fillText('🛡️', pixelX +symbolX, symbolY);
             }
         } 
 
@@ -4168,6 +4189,28 @@
                 teamFood.plants += finalValue;
             } else {
                 teamFood.meat += finalValue;
+            }
+
+            // NEU: Individuelle Nahrungspunkte für Gesättigt-Boost tracken
+            dino.totalFoodConsumed += finalValue;
+            console.log(`🍽️ ${dino.species.name} hat insgesamt ${dino.totalFoodConsumed} Nahrungspunkte gesammelt`);
+
+            // Gesättigt-Boost bei 20 Nahrungspunkten aktivieren
+            if (dino.totalFoodConsumed >= 12 && !dino.hasSatiatedBoost) {
+                dino.hasSatiatedBoost = true;
+                console.log(`🛡️ ${dino.species.name} ist gesättigt! (+30% Verteidigung)`);
+            }
+
+            if (dino.currentHP < dino.maxHP) {
+                const healingAmount = Math.round(finalValue * 2); // 2 HP pro Nahrungspunkt
+                const oldHP = dino.currentHP;
+                dino.currentHP = Math.min(dino.maxHP, dino.currentHP + healingAmount);
+                const actualHealing = dino.currentHP - oldHP;
+                
+                if (actualHealing > 0) {
+                    console.log(`💚 ${dino.species.name} regeneriert ${actualHealing} HP durch Nahrung (${oldHP}→${dino.currentHP})`);
+                  //  showHealingIcon(dino, actualHealing);
+                }
             }
             
             // console.log(`🌟 ${dino.species.name} erhält ${finalValue} ${foodSource.type} Punkte (Effizienz: ${(efficiency*100).toFixed(0)}%)`);
