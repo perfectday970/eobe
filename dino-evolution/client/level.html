@@ -3109,9 +3109,12 @@
 
             dino.killCount = 0;
             dino.hasMuscleBoost = false;
+            dino.hasMuscleBoostMax = false; // Stufe 2
+
             dino.totalFoodConsumed = 0;
             dino.hasSatiatedBoost = false;
-            
+            dino.hasSatiatedBoostMax = false;
+                        
             // Erkennungsradius berechnen
             dino.detectionRadius = COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
             
@@ -3127,8 +3130,12 @@
             if (killer.killCount >= 2 && !killer.hasMuscleBoost) {
                 killer.hasMuscleBoost = true;
                 console.log(`💪 ${killer.species.name} erreicht Muskel-Boost! (+15% Angriffskraft)`);
+            }else if (killer.killCount >= 3 && !killer.hasMuscleBoostMax) {
+                killer.hasMuscleBoostMax = true;
+                console.log(`⚡ ${killer.species.name} erreicht MAXIMUM Muskel-Boost! (+30% Angriffskraft)`);
             }
         }
+
 
         // Verfügbare Angriffe basierend auf Fähigkeiten
         function getAvailableAttacks(dino) {
@@ -3487,9 +3494,12 @@
             // Schaden berechnen
             let damage = calculateDamage(attack, attacker, defender);
 
-            // NEU: Muskel-Boost anwenden (15% mehr Schaden)
-            if (attacker.hasMuscleBoost) {
-                damage = Math.round(damage * 1.15);
+            // NEU: Muskel-Boost anwenden
+            if (attacker.hasMuscleBoostMax) {
+                damage = Math.round(damage * 1.40); // 30% bei Stufe 2
+                console.log(`⚡ ${attacker.species.name} MAX Muskel-Boost: +40% Schaden (${damage})`);
+            } else if (attacker.hasMuscleBoost) {
+                damage = Math.round(damage * 1.15); // 15% bei Stufe 1
                 console.log(`💪 ${attacker.species.name} Muskel-Boost: +15% Schaden (${damage})`);
             }
             
@@ -3581,8 +3591,11 @@
             damage = Math.max(1, Math.round(damage * (1 - Math.min(0.9, damageReduction))));
 
             // NEU: Gesättigt-Boost anwenden (30% weniger Schaden)
-            if (defender.hasSatiatedBoost) {
-                damage = Math.max(1, Math.round(damage * 0.7)); // 30% Schadensreduktion
+            if (defender.hasSatiatedBoostMax) {
+                damage = Math.max(1, Math.round(damage * 0.3)); // 70% Schadensreduktion bei Stufe 2
+                console.log(`🏰 ${defender.species.name} MAX Gesättigt-Boost: -70% Schaden (${damage})`);
+            } else if (defender.hasSatiatedBoost) {
+                damage = Math.max(1, Math.round(damage * 0.7)); // 30% Schadensreduktion bei Stufe 1
                 console.log(`🛡️ ${defender.species.name} Gesättigt-Boost: -30% Schaden (${damage})`);
             }
 
@@ -3928,7 +3941,16 @@
             }
             
             // NEU: Muskel-Icon für Dinos mit Boost
-            if (dino.hasMuscleBoost) {
+            if (dino.hasMuscleBoostMax) {
+                ctx.fillStyle = '#FF4500'; // Orange-Rot für Stufe 2
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.font = '14px Arial'; // Größer
+                ctx.textAlign = 'center';
+                ctx.strokeText('⚡', pixelX +symbolX, symbolY);
+                ctx.fillText('⚡', pixelX +symbolX, symbolY);                            
+                symbolX += 18; // Mehr Platz für größeres Icon
+            }else if (dino.hasMuscleBoost) {
                 ctx.fillStyle = '#FFD700'; // Gold
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 1;
@@ -3941,13 +3963,20 @@
             }
 
             // NEU: Schild-Icon für gesättigte Dinos
-            if (dino.hasSatiatedBoost) {
+            if (dino.hasSatiatedBoostMax) {
+                ctx.fillStyle = '#8B0000'; // Dunkelrot für Stufe 2
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.font = '14px Arial'; // Größer
+                ctx.textAlign = 'center';
+                ctx.strokeText('🏰', pixelX +symbolX, symbolY);
+                ctx.fillText('🏰', pixelX +symbolX, symbolY);
+            }else if (dino.hasSatiatedBoost) {
                 ctx.fillStyle = '#4169E1'; // Blau
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 1;
                 ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                
+                ctx.textAlign = 'center';              
                 ctx.strokeText('🛡️', pixelX +symbolX, symbolY);
                 ctx.fillText('🛡️', pixelX +symbolX, symbolY);
             }
@@ -4199,6 +4228,12 @@
             if (dino.totalFoodConsumed >= 12 && !dino.hasSatiatedBoost) {
                 dino.hasSatiatedBoost = true;
                 console.log(`🛡️ ${dino.species.name} ist gesättigt! (+30% Verteidigung)`);
+            }
+
+            // Gesättigt-Boost MAX bei 40 Nahrungspunkten aktivieren
+            if (dino.totalFoodConsumed >= 15 && !dino.hasSatiatedBoostMax) {
+                dino.hasSatiatedBoostMax = true;
+                console.log(`🏰 ${dino.species.name} ist MAXIMAL gesättigt! (+70% Verteidigung)`);
             }
 
             if (dino.currentHP < dino.maxHP) {
