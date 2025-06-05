@@ -561,6 +561,67 @@
         let baseMapHeight = 40;       // Höhe bleibt konstant
         let mapWidth = 60;           // Wird dynamisch gesetzt
         let mapHeight = 40;          // Bleibt konstant
+
+        // 1. NEUE VARIABLEN für Ressourcen-Variation (nach mapWidth/mapHeight Deklarationen hinzufügen)
+        let levelBiome = {
+            type: 'balanced',           // 'desert', 'oasis', 'swamp', 'prairie', 'balanced'
+            waterAbundance: 1.0,        // 0.3 bis 2.5 (30% bis 250%)
+            plantAbundance: 1.0,        // 0.2 bis 3.0 (20% bis 300%)
+            rodentAbundance: 1.0,       // 0.1 bis 2.0 (10% bis 200%)
+            description: 'Ausgewogenes Gebiet'
+        };
+
+        // 2. BIOM-TYPEN DEFINIEREN
+        const BIOME_TYPES = {
+            desert: {
+                name: 'Wüste',
+                description: 'Karges, trockenes Gebiet',
+                waterRange: [0.3, 0.7],      // 30-70% Wasser
+                plantRange: [0.2, 0.6],      // 20-60% Pflanzen  
+                rodentRange: [0.4, 0.8],     // 40-80% Nagetiere (überleben in Wüste)
+                probability: 0.15
+            },
+            oasis: {
+                name: 'Oase',
+                description: 'Üppiges, wasserreiches Paradies',
+                waterRange: [1.5, 2.5],      // 150-250% Wasser
+                plantRange: [2.0, 3.0],      // 200-300% Pflanzen
+                rodentRange: [1.2, 2.0],     // 120-200% Nagetiere
+                probability: 0.12
+            },
+            swamp: {
+                name: 'Sumpf',
+                description: 'Wasserreiches, düsteres Sumpfland',
+                waterRange: [2.0, 3.0],      // 200-300% Wasser
+                plantRange: [0.8, 1.5],      // 80-150% Pflanzen
+                rodentRange: [0.3, 0.7],     // 30-70% Nagetiere (ertrinken)
+                probability: 0.15
+            },
+            prairie: {
+                name: 'Prärie',
+                description: 'Weite Graslandschaft',
+                waterRange: [0.4, 0.8],      // 40-80% Wasser
+                plantRange: [1.8, 2.8],      // 180-280% Pflanzen
+                rodentRange: [1.5, 2.2],     // 150-220% Nagetiere
+                probability: 0.18
+            },
+            rocky: {
+                name: 'Steiniges Hochland',
+                description: 'Felsige, karge Landschaft',
+                waterRange: [0.5, 1.0],      // 50-100% Wasser
+                plantRange: [0.3, 0.8],      // 30-80% Pflanzen
+                rodentRange: [0.2, 0.6],     // 20-60% Nagetiere
+                probability: 0.15
+            },
+            balanced: {
+                name: 'Ausgewogenes Gebiet',
+                description: 'Gemischte Landschaft',
+                waterRange: [0.8, 1.4],      // 80-140% Wasser
+                plantRange: [0.7, 1.6],      // 70-160% Pflanzen
+                rodentRange: [0.6, 1.5],     // 60-150% Nagetiere
+                probability: 0.25
+            }
+        };
         
         // NEU: Scrolling-Variablen
         let scrollX = 0;
@@ -826,6 +887,40 @@
             return mapWidth;
         }
 
+        function calculateRandomLevelResources() {
+            // Biom-Typ auswählen
+            const random = Math.random();
+            let cumulativeProbability = 0;
+            let selectedBiome = 'balanced';
+            
+            for (const [biomeKey, biomeData] of Object.entries(BIOME_TYPES)) {
+                cumulativeProbability += biomeData.probability;
+                if (random <= cumulativeProbability) {
+                    selectedBiome = biomeKey;
+                    break;
+                }
+            }
+            
+            const biomeData = BIOME_TYPES[selectedBiome];
+            
+            // Zufällige Werte innerhalb der Biom-Bereiche
+            levelBiome = {
+                type: selectedBiome,
+                waterAbundance: biomeData.waterRange[0] + Math.random() * (biomeData.waterRange[1] - biomeData.waterRange[0]),
+                plantAbundance: biomeData.plantRange[0] + Math.random() * (biomeData.plantRange[1] - biomeData.plantRange[0]),
+                rodentAbundance: biomeData.rodentRange[0] + Math.random() * (biomeData.rodentRange[1] - biomeData.rodentRange[0]),
+                description: biomeData.description
+            };
+            
+            console.log(`🌍 Biom generiert: ${biomeData.name} (${biomeData.description})`);
+            console.log(`💧 Wasser: ${(levelBiome.waterAbundance * 100).toFixed(0)}%`);
+            console.log(`🌳 Pflanzen: ${(levelBiome.plantAbundance * 100).toFixed(0)}%`);
+            console.log(`🐭 Nagetiere: ${(levelBiome.rodentAbundance * 100).toFixed(0)}%`);
+            
+            return levelBiome;
+        }
+
+
         function startLevelTimer() {
             levelStartTime = Date.now();
             // console.log('⏰ Level-Timer gestartet: 3 Minuten');
@@ -969,6 +1064,10 @@
             const plantPoints = Math.floor(teamFood.plants * 0.5);
             const totalEvoPoints = meatPoints + plantPoints;
             
+            // Biom-Info
+            const biomeInfo = BIOME_TYPES[levelBiome.type];
+            const biomeText = `${biomeInfo.name}: ${biomeInfo.description}`;
+            
             const modal = document.createElement('div');
             modal.className = 'level-end-modal';
             modal.innerHTML = `
@@ -976,6 +1075,9 @@
                     <div class="level-end-header">
                         <h2>${result.victory ? '🏆 SIEG!' : '💀 NIEDERLAGE'}</h2>
                         <p class="end-reason">${result.reason}</p>
+                        <p style="color: #cd853f; font-size: 0.9em; margin-top: 5px;">
+                            🌍 ${biomeText}
+                        </p>
                     </div>
                     
                     ${result.victory ? `
@@ -1287,15 +1389,13 @@
         }
 
         function generateTileMap() {
-            // ÜBERARBEITET: Keine festen Größenbegrenzungen mehr
             const canvasTileSizeByWidth = canvas.width / mapWidth;
             const canvasTileSizeByHeight = canvas.height / mapHeight;
             const canvasTileSize = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight);
             
-            // NEU: Zoom-basierte Kachelgröße mit Min/Max
             tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));
             
-            // console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
+            console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
             
             tileMap = [];
             for (let y = 0; y < mapHeight; y++) {
@@ -1305,22 +1405,47 @@
                 }
             }
             
-            generateLakes();
+            // NEU: Wassergenerierung basierend auf Biom
+            generateLakesWithAbundance();
             generateGrassAroundWater();
             ensurePassages();
             smoothTerrain();
             
-            // console.log('Terrain generiert mit scrollbarem System');
+            console.log(`Terrain generiert: ${levelBiome.type} Biom (${(levelBiome.waterAbundance * 100).toFixed(0)}% Wasser)`);
         }
 
-        function generateLakes() {
-            const lakeCount = 2 + Math.floor(Math.random() * 3);
-            // console.log(`Generiere ${lakeCount} größere Seen...`);
+
+        function generateLakesWithAbundance() {
+            // Basis-Seen-Anzahl basierend auf Biom
+            const baseLakeCount = 2;
+            const abundanceFactor = levelBiome.waterAbundance;
+            
+            let lakeCount, avgLakeSize;
+            
+            if (abundanceFactor < 0.5) {
+                // Wenig Wasser: Wenige, kleine Seen
+                lakeCount = Math.max(1, Math.floor(baseLakeCount * abundanceFactor));
+                avgLakeSize = 30 + Math.random() * 40; // 30-70
+            } else if (abundanceFactor > 1.5) {
+                // Viel Wasser: Viele oder große Seen
+                const extraLakes = Math.floor((abundanceFactor - 1.0) * 3);
+                lakeCount = baseLakeCount + extraLakes + Math.floor(Math.random() * 3);
+                avgLakeSize = 50 + Math.random() * 80; // 50-130
+            } else {
+                // Normal: Standard mit leichter Variation
+                lakeCount = baseLakeCount + Math.floor(Math.random() * 2);
+                avgLakeSize = 40 + Math.random() * 60; // 40-100
+            }
+            
+            console.log(`💧 Generiere ${lakeCount} Seen mit Durchschnittsgröße ${avgLakeSize.toFixed(0)} (Faktor: ${abundanceFactor.toFixed(2)})`);
             
             for (let i = 0; i < lakeCount; i++) {
                 const seedX = 10 + Math.floor(Math.random() * (mapWidth - 20));
                 const seedY = 10 + Math.floor(Math.random() * (mapHeight - 20));
-                const targetSize = 40 + Math.floor(Math.random() * 60);
+                
+                // Größenvariation ±30%
+                const sizeVariation = 0.7 + Math.random() * 0.6; // 0.7 bis 1.3
+                const targetSize = Math.floor(avgLakeSize * sizeVariation);
                 
                 growLake(seedX, seedY, targetSize);
             }
@@ -2670,6 +2795,8 @@
             // console.log('Canvas Größe:', canvas.width, 'x', canvas.height);
             // console.log('Level Data:', levelData);
             
+            calculateRandomLevelResources();
+
             calculateRandomMapWidth();
             console.log('Karten-Dimensionen:', mapWidth, 'x', mapHeight);
 
@@ -2795,20 +2922,49 @@
         }
 
         function generateTreeGroups(objectCounts) {
-            const baseGroups = 7;
-            const extraGroups = Math.floor((mapWidth - baseMapWidth) / 10); // +1 Gruppe pro 10 zusätzliche Kacheln
-            const groupCount = baseGroups + extraGroups + Math.floor(Math.random() * 6);
+            const abundanceFactor = levelBiome.plantAbundance;
             
-            const baseSingleTrees = 5;
-            const extraSingleTrees = Math.floor((mapWidth - baseMapWidth) / 15);
-            const singleTrees = baseSingleTrees + extraSingleTrees + Math.floor(Math.random() * 7);
+            // Basis-Werte
+            const baseGroups = 4;
+            const baseSingleTrees = 3;
             
+            let groupCount, singleTrees, treesPerGroup;
+            
+            if (abundanceFactor < 0.5) {
+                // Wenig Pflanzen: Spärliche Vegetation
+                groupCount = Math.max(1, Math.floor(baseGroups * abundanceFactor));
+                singleTrees = Math.max(1, Math.floor(baseSingleTrees * abundanceFactor));
+                treesPerGroup = 2 + Math.floor(Math.random() * 3); // 2-4 Bäume pro Gruppe
+            } else if (abundanceFactor > 2.0) {
+                // Viele Pflanzen: Dichte Wälder
+                const extraGroups = Math.floor((abundanceFactor - 1.0) * 4);
+                const extraSingles = Math.floor((abundanceFactor - 1.0) * 6);
+                
+                groupCount = baseGroups + extraGroups + Math.floor(Math.random() * 6);
+                singleTrees = baseSingleTrees + extraSingles + Math.floor(Math.random() * 10);
+                treesPerGroup = 4 + Math.floor(Math.random() * 8); // 4-11 Bäume pro Gruppe
+            } else {
+                // Normal: Standard mit Variation
+                const extraGroups = Math.floor((mapWidth - baseMapWidth) / 10);
+                const extraSingles = Math.floor((mapWidth - baseMapWidth) / 15);
+                
+                groupCount = Math.floor((baseGroups + extraGroups) * abundanceFactor) + Math.floor(Math.random() * 4);
+                singleTrees = Math.floor((baseSingleTrees + extraSingles) * abundanceFactor) + Math.floor(Math.random() * 5);
+                treesPerGroup = 3 + Math.floor(Math.random() * 5); // 3-7 Bäume pro Gruppe
+            }
+            
+            console.log(`🌳 Generiere ${groupCount} Baum-Gruppen (${treesPerGroup} Bäume/Gruppe) und ${singleTrees} einzelne Bäume`);
+            console.log(`   Pflanzen-Abundanz: ${(abundanceFactor * 100).toFixed(0)}%`);
+            
+            // Baum-Gruppen generieren
             for (let group = 0; group < groupCount; group++) {
                 let groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
-                let groupCenterTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);              
-                const treesInGroup = 3 + Math.floor(Math.random() * 5);
+                let groupCenterTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
                 
-                for (let i = 0; i < treesInGroup; i++) {
+                // Variable Bäume pro Gruppe
+                const actualTreesInGroup = Math.floor(treesPerGroup * (0.7 + Math.random() * 0.6)); // ±30% Variation
+                
+                for (let i = 0; i < actualTreesInGroup; i++) {
                     const position = findValidLandPosition(groupCenterTileX, groupCenterTileY, 4);
                     
                     if (position.valid) {
@@ -2818,6 +2974,7 @@
                 }
             }
             
+            // Einzelne Bäume
             for (let i = 0; i < singleTrees; i++) {
                 const position = findValidLandPosition(
                     Math.random() * mapWidth, 
@@ -2860,13 +3017,40 @@
         }
 
         function generateRodentGroups(objectCounts) {
-            for (let i = 0; i < 8; i++) {
+            const abundanceFactor = levelBiome.rodentAbundance;
+            
+            // Basis-Werte
+            const baseRodentGroups = 8;
+            const extraRodentGroups = Math.floor((mapWidth - baseMapWidth) / 12);
+            
+            let rodentGroups, rodentsPerGroup;
+            
+            if (abundanceFactor < 0.4) {
+                // Wenig Nagetiere: Seltene Beute
+                rodentGroups = Math.max(2, Math.floor((baseRodentGroups + extraRodentGroups) * abundanceFactor));
+                rodentsPerGroup = 1 + Math.floor(Math.random() * 2); // 1-2 pro Gruppe
+            } else if (abundanceFactor > 1.5) {
+                // Viele Nagetiere: Reichhaltige Jagdgründe
+                const extraGroups = Math.floor((abundanceFactor - 1.0) * 8);
+                rodentGroups = baseRodentGroups + extraRodentGroups + extraGroups;
+                rodentsPerGroup = 2 + Math.floor(Math.random() * 5); // 2-6 pro Gruppe
+            } else {
+                // Normal: Standard-Verteilung
+                rodentGroups = Math.floor((baseRodentGroups + extraRodentGroups) * abundanceFactor);
+                rodentsPerGroup = 1 + Math.floor(Math.random() * 3); // 1-3 pro Gruppe
+            }
+            
+            console.log(`🐭 Generiere ${rodentGroups} Nagetier-Gruppen (${rodentsPerGroup} Nagetiere/Gruppe)`);
+            console.log(`   Nagetier-Abundanz: ${(abundanceFactor * 100).toFixed(0)}%`);
+            
+            for (let i = 0; i < rodentGroups; i++) {
                 const centerTileX = 5 + Math.random() * (mapWidth - 10);
                 const centerTileY = mapHeight * 0.6 + Math.random() * (mapHeight * 0.3);
                 
-                const rodentsInGroup = 1 + Math.floor(Math.random() * 3);
+                // Variable Nagetiere pro Gruppe
+                const actualRodentsInGroup = Math.floor(rodentsPerGroup * (0.6 + Math.random() * 0.8)); // ±40% Variation
                 
-                for (let j = 0; j < rodentsInGroup; j++) {
+                for (let j = 0; j < actualRodentsInGroup; j++) {
                     const position = findValidLandPosition(centerTileX, centerTileY, 2.0);
                     
                     if (position.valid) {
@@ -3159,7 +3343,7 @@
             if (killer.killCount >= 2 && !killer.hasMuscleBoost) {
                 killer.hasMuscleBoost = true;
                 console.log(`💪 ${killer.species.name} erreicht Muskel-Boost! (+15% Angriffskraft)`);
-            }else if (killer.killCount >= 3 && !killer.hasMuscleBoostMax) {
+            }else if (killer.killCount >= 4 && !killer.hasMuscleBoostMax) {
                 killer.hasMuscleBoostMax = true;
                 console.log(`⚡ ${killer.species.name} erreicht MAXIMUM Muskel-Boost! (+30% Angriffskraft)`);
             }
@@ -4260,7 +4444,7 @@
             }
 
             // Gesättigt-Boost MAX bei 40 Nahrungspunkten aktivieren
-            if (dino.totalFoodConsumed >= 15 && !dino.hasSatiatedBoostMax) {
+            if (dino.totalFoodConsumed >= 24 && !dino.hasSatiatedBoostMax) {
                 dino.hasSatiatedBoostMax = true;
                 console.log(`🏰 ${dino.species.name} ist MAXIMAL gesättigt! (+70% Verteidigung)`);
             }
