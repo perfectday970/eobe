@@ -2055,7 +2055,7 @@
                 this.phaseStartTime = Date.now();
             }
 
-            getCollisionBox(checkX, checkY) {
+            getCollisionBox(checkTileX, checkTileY) {
                 // Kollisionsbox basierend auf Dino-Größe
                 const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8;
                 const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6;
@@ -2064,14 +2064,13 @@
                 // Verschiebung nach unten um etwa 25% der Körperhöhe
                 const verticalOffset = boxHeight * 0.5 ;
 
-                let pixelX = checkX * tileSize + tileSize / 2 + terrainOffsetX;
-                let pixelY = checkY * tileSize + tileSize / 2 + terrainOffsetY;
+                let pixel = tileToPixel(checkTileX, checkTileY)
               
                 return {
-                    left: pixelX - boxWidth / 2,
-                    right: pixelX + boxWidth / 2,
-                    top: pixelY + boxHeight / 2 + verticalOffset,
-                    bottom: pixelY - boxHeight / 2 + verticalOffset
+                    left: pixel.x - boxWidth / 2,
+                    right: pixel.x + boxWidth / 2,
+                    top: pixel.y + boxHeight / 2 + verticalOffset,
+                    bottom: pixel.y - boxHeight / 2 + verticalOffset
                 };
             }
 
@@ -2904,6 +2903,26 @@
                 // [Gekürzt für Platz - identisch mit Original]
             }
         }
+
+        // ===================================
+        // CALCULATIONS UND HELPER-FUNKTIONEN
+        // ===================================
+
+        function tileToPixel(tileX, tileY) {
+            return {
+                x: tileX * tileSize + tileSize / 2 + terrainOffsetX,
+                y: tileY * tileSize + tileSize / 2 + terrainOffsetY
+            };
+        }
+
+        function pixelToTile(pixelX, pixelY) {
+            return {
+                tileX: (pixelX - terrainOffsetX) / tileSize,
+                tileY: (pixelY - terrainOffsetY) / tileSize
+            };
+        }
+        
+
 
         // ===================================
         // LEVEL GENERATION (unverändert)
