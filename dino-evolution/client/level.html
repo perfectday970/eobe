@@ -541,6 +541,7 @@
         let selectedDino = null;
         let isLoading = true;
         let saveInProgress = false;
+        let debugMode = false;
 
         let levelTimer = 240; // 3 Minuten in Sekunden
         let levelStartTime = null;
@@ -870,6 +871,7 @@
                 saveInProgress = false;
             }
         }
+
 
         // 2. NEUE FUNKTION - Zufällige Karten-Breite berechnen
         function calculateRandomMapWidth() {
@@ -2053,6 +2055,107 @@
                 this.phaseStartTime = Date.now();
             }
 
+            getCollisionBox(checkX, checkY) {
+                // Kollisionsbox basierend auf Dino-Größe
+                const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8;
+                const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6;
+                
+                // Box sollte beim Körper/Beinen sein, nicht beim Kopf
+                // Verschiebung nach unten um etwa 25% der Körperhöhe
+                const verticalOffset = boxHeight * 0.5 ;
+
+                let pixelX = checkX * tileSize + tileSize / 2 + terrainOffsetX;
+                let pixelY = checkY * tileSize + tileSize / 2 + terrainOffsetY;
+              
+                return {
+                    left: pixelX - boxWidth / 2,
+                    right: pixelX + boxWidth / 2,
+                    top: pixelY + boxHeight / 2 + verticalOffset,
+                    bottom: pixelY - boxHeight / 2 + verticalOffset
+                };
+            }
+
+            isPositionValidForMovement(newTileX, newTileY) {
+                // Prüft ob die neue Position gültig ist (kein Wasser für Nicht-Schwimmer)
+                if (this.canSwim()) {
+                    return true; // Schwimmer können überall hin
+                }
+
+                newTileX = newTileX + 0.5;
+                newTileY = newTileY+ 0.5;  
+
+                // Kollisionsbox für die neue Position berechnen
+                const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8;
+                const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6;
+                const verticalOffset = boxHeight * 0.5 / tileSize;
+                
+                const testBox = {
+                    left: newTileX - boxWidth / (2 * tileSize),
+                    right: newTileX + boxWidth / (2 * tileSize),
+                    top: newTileY - boxHeight / (2 * tileSize) + verticalOffset,
+                    bottom: newTileY + boxHeight / (2 * tileSize) + verticalOffset
+                };
+                
+                // Prüfe alle Ecken und die Mitte der Kollisionsbox
+                const checkPoints = [
+                    { x: testBox.left, y: testBox.top },      // Oben links
+                    { x: testBox.right, y: testBox.top },     // Oben rechts
+                    { x: testBox.left, y: testBox.bottom },   // Unten links
+                    { x: testBox.right, y: testBox.bottom },  // Unten rechts
+                    { x: newTileX, y: newTileY + verticalOffset }  // Mitte (auch mit Offset)
+                ];
+    
+                for (const point of checkPoints) {
+                    const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
+                    if (tileType === TILE_TYPES.WATER) {
+                        return false; // Mindestens ein Punkt ist auf Wasser
+                    }
+                }
+                
+                return true;
+            }
+
+            renderDebugInfo(pixelX, pixelY) {
+                ctx.save();
+                
+                // Kollisionsbox visualisieren
+                const box = this.getCollisionBox(this.tileX, this.tileY);
+                if(this.selected){
+                    console.log('Kollisionsbox-Check 1:', box);
+                }
+                ctx.strokeStyle = this.canSwim() ? '#00FFFF' : '#FF00FF'; // Cyan für Schwimmer, Magenta für Nicht-Schwimmer
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(
+                    box.left,
+                    box.top,
+                    box.right - box.left,
+                    box.bottom - box.top
+                );
+                
+                // Mittelpunkt markieren
+                ctx.fillStyle = '#FFFF00';
+                ctx.beginPath();
+                ctx.arc(pixelX, pixelY, 3, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Schwimm-Status anzeigen
+                if (this.canSwim()) {
+                    ctx.fillStyle = '#00FFFF';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('🏊', pixelX, pixelY - 40 * this.scale);
+                }
+                
+                ctx.restore();
+            }
+
+
+            canSwim() {
+                // Prüft ob der Dino schwimmen kann
+                return this.abilities && this.abilities['Schwimmen'] && this.abilities['Schwimmen'] > 0;
+            }
+
             // NEU: Cross-Movement Initialisierung
             initializeCrossMovement() {
                 // Spawn-Bereiche definieren
@@ -2276,10 +2379,25 @@
                     const moveTileX = (dx / distance) * this.speed * gameSpeed;
                     const moveTileY = (dy / distance) * this.speed * gameSpeed;
                     
-                    this.tileX += moveTileX;
-                    this.tileY += moveTileY;
+                    // Neue Position berechnen
+                    const newTileX = this.tileX + moveTileX;
+                    const newTileY = this.tileY + moveTileY;
                     
-                    this.updateFacingDirection(moveTileX, moveTileY);
+                    // Prüfe ob die neue Position gültig ist (kein Wasser für Nicht-Schwimmer)
+                    if (this.isPositionValidForMovement(newTileX, newTileY)) {
+                        this.tileX = newTileX;
+                        this.tileY = newTileY;
+                        this.updateFacingDirection(moveTileX, moveTileY);
+                    } else {
+                        // Bewegung gestoppt wegen Wasser
+                        // Ziel auf aktuelle Position setzen, um weitere Bewegungsversuche zu stoppen
+                        this.targetTileX = this.tileX;
+                        this.targetTileY = this.tileY;
+                        
+                        if (debugMode) {
+                            console.log(`🚫 ${this.species.name} gestoppt: Wasser-Kollision (kann nicht schwimmen)`);
+                        }
+                    }
                 } else {
                     if (this.behaviorTimer < this.currentBehaviorDuration * 0.8) {
                         this.chooseNewMovementTarget();
@@ -2397,7 +2515,13 @@
                 }
 
                 renderCombatUI(this);
+
+                if (debugMode) {
+                    this.renderDebugInfo(pixelX, pixelY);
+                }
+
             }
+
 
             renderShadow(pixelX, pixelY) {
                 const shadowWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.768;
@@ -3597,6 +3721,7 @@
             }
         }
         // Auf Feind zubewegen
+        // In der seekEnemy() Funktion
         function seekEnemy(dino) {
             if (!dino.combatTarget) return;
             
@@ -3606,18 +3731,35 @@
             
             if (distance > 0.1) {
                 const moveSpeed = dino.speed * gameSpeed * 1.5; // Schneller im Kampf
-                dino.tileX += (dx / distance) * moveSpeed;
-                dino.tileY += (dy / distance) * moveSpeed;
+                const moveTileX = (dx / distance) * moveSpeed;
+                const moveTileY = (dy / distance) * moveSpeed;
                 
-                // Blickrichtung anpassen
-                if (dx > 0.01) {
-                    dino.facingRight = false;
-                } else if (dx < -0.01) {
-                    dino.facingRight = true;
+                // Neue Position berechnen
+                const newTileX = dino.tileX + moveTileX;
+                const newTileY = dino.tileY + moveTileY;
+                
+                // Wasser-Kollision auch beim Verfolgen prüfen
+                if (dino.isPositionValidForMovement(newTileX, newTileY)) {
+                    dino.tileX = newTileX;
+                    dino.tileY = newTileY;
+                    
+                    // Blickrichtung anpassen
+                    if (dx > 0.01) {
+                        dino.facingRight = false;
+                    } else if (dx < -0.01) {
+                        dino.facingRight = true;
+                    }
+                } else {
+                    // Kann Feind nicht verfolgen wegen Wasser
+                    dino.combatTarget = null;
+                    dino.combatState = 'neutral';
+                    
+                    if (debugMode) {
+                        console.log(`🚫 ${dino.species.name} bricht Verfolgung ab: Wasser blockiert Weg`);
+                    }
                 }
             }
         }
-
         // Kampf starten
         function startCombat(attacker, defender) {
             if (attacker.foodState === 'consuming') {
@@ -4732,18 +4874,25 @@
                 const newY = dino.tileY + (finalDy / moveDistance) * moveSpeed;
                 
                 // Grenzen-Check
-                dino.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
-                dino.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, newY));
-                
-                // Blickrichtung (nur bei deutlicher Bewegung)
-                if (Math.abs(finalDx) > 0.1) {
-                    if (finalDx > 0) dino.facingRight = false;
-                    else dino.facingRight = true;
-                }
-                
-                // Debug-Info (nur ab und zu)
-                if (Math.random() < 0.02) { // 2% Chance
-                    // console.log(`🚶 ${dino.species.name} bewegt sich: ${movementReason}`);
+                if (dino.isPositionValidForMovement(newX, newY)) {
+                    // Grenzen-Check
+                    dino.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
+                    dino.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, newY));
+                    
+                    // Blickrichtung (nur bei deutlicher Bewegung)
+                    if (Math.abs(finalDx) > 0.1) {
+                        if (finalDx > 0) dino.facingRight = false;
+                        else dino.facingRight = true;
+                    }
+                } else {
+                    // Nahrungssuche abbrechen wenn Wasser im Weg
+                    releaseFoodReservation(dino);
+                    dino.foodCooldownUntil = Date.now() + 2000;
+                    
+                    if (debugMode) {
+                        console.log(`🚫 ${dino.species.name} bricht Nahrungssuche ab: Wasser blockiert`);
+                    }
+                    return;
                 }
             }
             
@@ -5027,6 +5176,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', initGame);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'd' || event.key === 'D') {
+                debugMode = !debugMode;
+                console.log('🐛 Debug-Modus:', debugMode ? 'AN' : 'AUS');
+            }
+        });
     </script>
 </body>
 </html>
