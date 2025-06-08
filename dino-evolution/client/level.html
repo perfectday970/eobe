@@ -2102,7 +2102,7 @@
                     this.avoidanceMode.attemptCount++;
                     
                     // Nach 5 Versuchen Seite wechseln
-                    if (this.avoidanceMode.attemptCount >= 4) {
+                    if (this.avoidanceMode.attemptCount >= 12) {
                         this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
                         this.avoidanceMode.attemptCount = 0;
                         // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
@@ -2182,7 +2182,7 @@
                         this.avoidanceMode.blockedPosition = pathCheck.position;
                         this.avoidanceMode.currentStep = 1;
                         this.avoidanceMode.attemptCount++;
-                        if (this.avoidanceMode.attemptCount >= 14) {
+                        if (this.avoidanceMode.attemptCount >= 12) {
                             this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
                             this.avoidanceMode.attemptCount = 0;
                             // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
@@ -2245,11 +2245,8 @@
                     this.avoidanceMode.blockedPosition,
                     this.avoidanceMode.originalDirection
                 );
-                
-                // Durchschnittliche Bewegungslänge
-              //  const oneMovementLength = (this.minMoveDistance + this.maxMoveDistance) / 0.5;
-                
-                return progress >= 0.2;
+                           
+                return progress >= 2;
             }
 
             // Aktiviert den Umgehungs-Modus
@@ -2392,9 +2389,9 @@
                     
                     // Blockierungslinie visualisieren
                     if (this.avoidanceMode.blockedPosition) {
-                        const blockX = this.avoidanceMode.blockedPosition.x * tileSize + terrainOffsetX;
-                        const blockY = this.avoidanceMode.blockedPosition.y * tileSize + terrainOffsetY;
-                        
+                        const blockPixel = tileToPixel(this.avoidanceMode.blockedPosition.x, this.avoidanceMode.blockedPosition.y);
+                        const blockX = blockPixel.x;
+                        const blockY = blockPixel.y;                       
                         // Linie perpendikular zur Original-Richtung
                         const perpX = -this.avoidanceMode.originalDirection.y * 50;
                         const perpY = this.avoidanceMode.originalDirection.x * 50;
