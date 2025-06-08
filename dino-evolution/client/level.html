@@ -1364,7 +1364,7 @@
                 }
                 
                 const boundedTileX = Math.max(1, Math.min(mapWidth - 2, testTileX));
-                const boundedTileY = Math.max(mapHeight * 0.3, Math.min(mapHeight - 2, testTileY));
+                const boundedTileY = Math.max(6, Math.min(mapHeight - 2, testTileY));
                 
                 const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
                 
@@ -1400,10 +1400,16 @@
             console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
             
             tileMap = [];
+            // TERRAIN FÜR ALLE REIHEN GENERIEREN (auch obere)
             for (let y = 0; y < mapHeight; y++) {
                 tileMap[y] = [];
                 for (let x = 0; x < mapWidth; x++) {
-                    tileMap[y][x] = TILE_TYPES.DIRT;
+                    // Obere 4 Reihen als Gras (war vorher Himmel)
+                    if (y < 4) {
+                        tileMap[y][x] = TILE_TYPES.GRASS;
+                    } else {
+                        tileMap[y][x] = TILE_TYPES.DIRT;
+                    }
                 }
             }
             
@@ -1699,7 +1705,7 @@
         }
 
         function renderTerrain() {
-            const skyTileRows = 12;
+            const skyTileRows = 4;
             const skyHeight = skyTileRows * tileSize + terrainOffsetY;
             const startTileY = skyTileRows;
             
@@ -2188,7 +2194,7 @@
                         this.avoidanceMode.blockedPosition = pathCheck.position;
                         this.avoidanceMode.currentStep = 1;
                         this.avoidanceMode.attemptCount++;
-                        if (this.avoidanceMode.attemptCount >= 5) {
+                        if (this.avoidanceMode.attemptCount >= 6) {
                             this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
                             this.avoidanceMode.attemptCount = 0;
                             console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
@@ -2197,7 +2203,7 @@
                     } else {
                         // Bewegung ausführen
                         this.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
-                        this.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, newY));
+                        this.tileY = Math.max(5, Math.min(mapHeight - 1, newY));
                         
                         // Blickrichtung anpassen
                         if (Math.abs(dx) > 0.1) {
@@ -2419,9 +2425,16 @@
                         ctx.fillStyle = '#FFFF00';
                         ctx.font = '12px Arial';
                         ctx.fillText(`Step: ${this.avoidanceMode.currentStep} | Round: ${this.avoidanceMode.attemptCount} | Progress: ${progress.toFixed(1)}`, pixelX, pixelY + 60);
+
+                        // NEU: Kachel-Typ anzeigen
+                        const currentTileType = getTileTypeAtPosition(Math.floor(this.tileX), Math.floor(this.tileY));
+                        const tileTypeName = currentTileType === TILE_TYPES.GRASS ? 'GRASS' : 
+                                        currentTileType === TILE_TYPES.DIRT ? 'DIRT' : 
+                                        currentTileType === TILE_TYPES.WATER ? 'WATER' : 'UNKNOWN';
+                        ctx.fillText(`Tile: ${tileTypeName} (${Math.floor(this.tileX)}, ${Math.floor(this.tileY)})`, pixelX, pixelY + 75);
+                                            
+                        ctx.restore();
                     }
-                    
-                    ctx.restore();
                 }
             }
 
@@ -2539,7 +2552,7 @@
                 
                 // Grenzen einhalten (jetzt breiter für Cross-Movement)
                 this.targetTileX = Math.max(baseMinTileX, Math.min(baseMaxTileX, this.targetTileX));
-                this.targetTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, this.targetTileY));
+                this.targetTileY = Math.max(5, Math.min(mapHeight - 2, this.targetTileY));
                 
                 // Debug-Info
                 if (useCrossMovement) {
@@ -2598,8 +2611,32 @@
                 return (this.moveDurationMin + Math.random() * (this.moveDurationMax - this.moveDurationMin)) * baseVariation;
             }
 
+            needsWaterRescue() {
+                // Schwimmer brauchen keine Rettung
+                if (this.canSwim && this.canSwim()) {
+                    return false;
+                }
+                
+                // NUR prüfen ob Dino direkt auf einer Wasserkachel steht
+                const currentTileX = Math.floor(this.tileX);
+                const currentTileY = Math.floor(this.tileY);
+                const tileType = getTileTypeAtPosition(currentTileX, currentTileY);
+                
+                return tileType === TILE_TYPES.WATER;
+            }
+
             update() {
                 if (isPaused) return;
+                
+                // NOTBEFREIUNG: Einmal pro Sekunde prüfen (nicht permanent!)
+                if (!this.lastWaterCheck || Date.now() - this.lastWaterCheck > 1000) {
+                    this.lastWaterCheck = Date.now();
+                    
+                    if (this.needsWaterRescue()) {
+                        rescueDinoFromWater(this, 'automatic check');
+                        return; // Nach Rettung erstmal pausieren
+                    }
+                }
                 
                 const frameTime = 1/60;
                 this.behaviorTimer += frameTime * gameSpeed;
@@ -2608,14 +2645,13 @@
                 if (this.avoidanceMode.active) {
                     this.updateAvoidanceMode();
                     this.syncAnimation();
-                    return; // Keine normale Bewegung während Umgehung
+                    return;
                 }
                 
                 // KAMPF-CHECK: Keine normale Bewegung während Kampf!
                 if (this.combatState === 'fighting') {
-                    // Im Kampf: Nur Combat-Update, KEINE Bewegung
                     this.syncAnimation();
-                    return; // ← WICHTIG: Früher Return verhindert alle Bewegung
+                    return;
                 }
                 
                 // Normale Bewegung nur wenn NICHT im Kampf
@@ -2627,9 +2663,9 @@
                     this.handleMovement();
                 }
                 
-                // Grenzen nur für nicht-kämpfende Dinos
+                // GEÄNDERTE GRENZEN: Dinos können jetzt ab Reihe 5 (statt 14)
                 this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
-                this.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, this.tileY));
+                this.tileY = Math.max(5, Math.min(mapHeight - 1, this.tileY)); // ← GEÄNDERT von mapHeight * 0.35
                 
                 this.syncAnimation();
             }
@@ -3209,6 +3245,90 @@
         }
 
         // ===================================
+        // BEWGUNGs-FUNKTIONEN
+        // ===================================
+
+        function rescueDinoFromWater(dino, reason = 'unknown') {
+            // Nur Non-Schwimmer retten
+            if (dino.canSwim && dino.canSwim()) {
+                return false; // Schwimmer brauchen keine Rettung
+            }
+            
+            console.log(`🆘 NOTBEFREIUNG: ${dino.species.name} auf Wasser (${reason})`);
+            
+            const rescuePosition = findNearestLandTile(dino.tileX, dino.tileY);
+            
+            if (rescuePosition) {
+                // Sofortige Teleportation zur sicheren Position
+                dino.tileX = rescuePosition.x;
+                dino.tileY = rescuePosition.y;
+                
+                // Bewegungsziele auch anpassen
+                dino.targetTileX = rescuePosition.x;
+                dino.targetTileY = rescuePosition.y;
+                
+                // Kurz pausieren nach Rettung
+                dino.behaviorState = 'resting';
+                dino.behaviorTimer = 0;
+                dino.currentBehaviorDuration = 1.0; // 1 Sekunde Pause
+                
+                console.log(`✅ ${dino.species.name} gerettet zu (${rescuePosition.x.toFixed(1)}, ${rescuePosition.y.toFixed(1)})`);
+                return true;
+            } else {
+                console.error(`❌ RETTUNG FEHLGESCHLAGEN: Keine Landkachel für ${dino.species.name} gefunden!`);
+                return false;
+            }
+        }
+
+        function findNearestLandTile(centerX, centerY) {
+            const currentTileX = Math.floor(centerX);
+            const currentTileY = Math.floor(centerY);
+            
+            // Prüfe nur die 8 direkten Nachbarn + aktuelle Position
+            const checkPositions = [
+                { x: currentTileX, y: currentTileY },     // Aktuelle (falls Rundungsfehler)
+                { x: currentTileX - 1, y: currentTileY }, // Links
+                { x: currentTileX + 1, y: currentTileY }, // Rechts  
+                { x: currentTileX, y: currentTileY - 1 }, // Oben
+                { x: currentTileX, y: currentTileY + 1 }, // Unten
+                { x: currentTileX - 1, y: currentTileY - 1 }, // Oben-Links
+                { x: currentTileX + 1, y: currentTileY - 1 }, // Oben-Rechts
+                { x: currentTileX - 1, y: currentTileY + 1 }, // Unten-Links
+                { x: currentTileX + 1, y: currentTileY + 1 }  // Unten-Rechts
+            ];
+            
+            // Erste verfügbare Landkachel nehmen (nutzt bestehende Funktion)
+            for (const pos of checkPositions) {
+                if (pos.x >= 0 && pos.x < mapWidth && pos.y >= 5 && pos.y < mapHeight) {
+                    const tileType = getTileTypeAtPosition(pos.x, pos.y);
+                    if (tileType !== TILE_TYPES.WATER) {
+                        return { x: pos.x + 0.5, y: pos.y + 0.5 }; // Kachel-Mitte
+                    }
+                }
+            }
+            
+            // Notfall: Wenn nichts in direkter Nähe, einfach nach links/rechts
+            for (let offset = 2; offset <= 5; offset++) {
+                // Links prüfen
+                if (currentTileX - offset >= 0) {
+                    const tileType = getTileTypeAtPosition(currentTileX - offset, currentTileY);
+                    if (tileType !== TILE_TYPES.WATER) {
+                        return { x: currentTileX - offset + 0.5, y: currentTileY + 0.5 };
+                    }
+                }
+                // Rechts prüfen
+                if (currentTileX + offset < mapWidth) {
+                    const tileType = getTileTypeAtPosition(currentTileX + offset, currentTileY);
+                    if (tileType !== TILE_TYPES.WATER) {
+                        return { x: currentTileX + offset + 0.5, y: currentTileY + 0.5 };
+                    }
+                }
+            }
+            
+            return null; // Extrem seltener Fall
+        }
+
+        // ===================================
         // CALCULATIONS UND HELPER-FUNKTIONEN
         // ===================================
 
@@ -3276,44 +3396,52 @@
         }
 
         function generateOwnDinosFromData(objectCounts) {
-            // console.log('=== EIGENE DINOS GENERATION START ===');
-            
             levelData.populationData.forEach((species, speciesIndex) => {
                 if (!species.population.isExtinct) {
-                    // console.log(`--- ${species.name} ---`);
-                    // console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
-                    
-                    const spawnWidth = mapWidth * 0.25; // 25% der Karten-Breite für Spawning
+                    const spawnWidth = mapWidth * 0.25;
                     const centerTileX = 5 + Math.random() * spawnWidth;
-                    const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
+                    // GEÄNDERT: Dinos können jetzt auch oben spawnen
+                    const centerTileY = 8 + Math.random() * (mapHeight * 0.6); // ← GEÄNDERT von mapHeight * 0.4
                     
                     for (let i = 0; i < species.population.adults; i++) {
                         const position = findValidLandPosition(centerTileX, centerTileY, 8);
                         
                         if (position.valid) {
                             const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
-                            const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));
                             
-                            gameObjects.push(new Dino(finalTileX, finalTileY, species, true, false));
+                            const newDino = new Dino(finalTileX, finalTileY, species, true, false);
+                            
+                            // SPAWN-RETTUNG: Sofortiger Check nach Erstellung
+                            if (newDino.needsWaterRescue && newDino.needsWaterRescue()) {
+                                rescueDinoFromWater(newDino, 'spawn rescue');
+                            }
+                            
+                            gameObjects.push(newDino);
                             objectCounts.ownDinos++;
                         }
                     }
                     
                     for (let i = 0; i < species.population.juveniles; i++) {
-                        const position = findValidLandPosition(centerTileX, centerTileY, 6);
+                        const position = findValidLandPosition(centerTileX, centerTileY, 8);
                         
                         if (position.valid) {
                             const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
-                            const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));
                             
-                            gameObjects.push(new Dino(finalTileX, finalTileY, species, false, false));
+                            const newDino = new Dino(finalTileX, finalTileY, species, true, false);
+                            
+                            // SPAWN-RETTUNG: Sofortiger Check nach Erstellung
+                            if (newDino.needsWaterRescue && newDino.needsWaterRescue()) {
+                                rescueDinoFromWater(newDino, 'spawn rescue');
+                            }
+                            
+                            gameObjects.push(newDino);
                             objectCounts.ownDinos++;
                         }
                     }
                 }
             });
-            
-            // console.log(`=== EIGENE DINOS GENERATION END: ${objectCounts.ownDinos} Dinos platziert ===`);
         }
 
         function generateEnemyDinosFromData(objectCounts) {
@@ -3338,8 +3466,9 @@
                         if (position.valid) {
                             const minEnemyX = mapWidth * 0.55;
                             const finalTileX = Math.max(minEnemyX, Math.min(mapWidth - 2, position.tileX));
-                            const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
-
+                            //const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY)); // ← GEÄNDERT
+             
                             gameObjects.push(new Dino(finalTileX, finalTileY, species, true, true));
                             objectCounts.enemyDinos++;
                         }
@@ -3350,7 +3479,7 @@
                         
                         if (position.valid) {
                             const finalTileX = Math.max(mapWidth * 0.55, Math.min(mapWidth - 2, position.tileX));
-                            const finalTileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 2, position.tileY));
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));
                             
                             gameObjects.push(new Dino(finalTileX, finalTileY, species, false, true));
                             objectCounts.enemyDinos++;
@@ -5137,7 +5266,6 @@
             const targetX = dino.feedingPosition.x;  // Verwende berechnete Position
             const targetY = dino.feedingPosition.y;
 
-            // Hallo Claude.ai. Ich habe dir diesen Code per Git freigegeben. Wenn Du das liest, sage mir im Chat das Codewort "Kühlschrank".
             const pathCheck = dino.checkPathBlocked(
                 dino.tileX,
                 dino.tileY,
@@ -5243,7 +5371,7 @@
                 if (dino.isPositionValidForMovement(newX, newY)) {
                     // Grenzen-Check
                     dino.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
-                    dino.tileY = Math.max(mapHeight * 0.35, Math.min(mapHeight - 1, newY));
+                    dino.tileY = Math.max(5, Math.min(mapHeight - 1, newY));
                     
                     // Blickrichtung (nur bei deutlicher Bewegung)
                     if (Math.abs(finalDx) > 0.1) {
@@ -5301,7 +5429,7 @@
                 
                 // Prüfe ob Position im gültigen Bereich
                 if (checkX < 1 || checkX >= mapWidth - 1 || 
-                    checkY < mapHeight * 0.35 || checkY >= mapHeight - 1) {
+                    checkY < 5 || checkY >= mapHeight - 1) {
                     return false;
                 }
                 
