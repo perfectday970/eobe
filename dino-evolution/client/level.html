@@ -1404,15 +1404,11 @@
             for (let y = 0; y < mapHeight; y++) {
                 tileMap[y] = [];
                 for (let x = 0; x < mapWidth; x++) {
-                    // Obere 4 Reihen als Gras (war vorher Himmel)
-                    if (y < 4) {
-                        tileMap[y][x] = TILE_TYPES.GRASS;
-                    } else {
-                        tileMap[y][x] = TILE_TYPES.DIRT;
-                    }
+                    // Alle Zeilen bekommen normales Terrain
+                    tileMap[y][x] = TILE_TYPES.DIRT;
                 }
             }
-            
+    
             // NEU: Wassergenerierung basierend auf Biom
             generateLakesWithAbundance();
             generateGrassAroundWater();
@@ -1705,20 +1701,12 @@
         }
 
         function renderTerrain() {
-            const skyTileRows = 4;
-            const skyHeight = skyTileRows * tileSize + terrainOffsetY;
-            const startTileY = skyTileRows;
-            
+            // KEIN Himmel mehr - kompletter Hintergrund
             ctx.fillStyle = '#1a3a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            const gradient = ctx.createLinearGradient(0, terrainOffsetY, 0, skyHeight);
-            gradient.addColorStop(0, '#87CEEB');
-            gradient.addColorStop(1, '#B0E0E6');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(terrainOffsetX, terrainOffsetY, mapWidth * tileSize, skyHeight - terrainOffsetY);
-            
-            for (let y = startTileY; y < mapHeight; y++) {
+            // ALLE Kacheln rendern (ab Zeile 0)
+            for (let y = 0; y < mapHeight; y++) {
                 for (let x = 0; x < mapWidth; x++) {
                     if (tileMap[y] && tileMap[y][x] !== undefined) {
                         renderTile(x, y, tileMap[y][x], animationTime);
@@ -2194,7 +2182,7 @@
                         this.avoidanceMode.blockedPosition = pathCheck.position;
                         this.avoidanceMode.currentStep = 1;
                         this.avoidanceMode.attemptCount++;
-                        if (this.avoidanceMode.attemptCount >= 6) {
+                        if (this.avoidanceMode.attemptCount >= 14) {
                             this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
                             this.avoidanceMode.attemptCount = 0;
                             // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
@@ -2259,13 +2247,25 @@
                 );
                 
                 // Durchschnittliche Bewegungslänge
-                const oneMovementLength = (this.minMoveDistance + this.maxMoveDistance) / 1.75;
+              //  const oneMovementLength = (this.minMoveDistance + this.maxMoveDistance) / 0.5;
                 
-                return progress >= oneMovementLength;
+                return progress >= 0.2;
             }
 
             // Aktiviert den Umgehungs-Modus
             activateAvoidanceMode(targetX, targetY, blockedAt) {
+                // NEU: Prüfe ob Hindernis wirklich im Weg liegt
+                if (!this.isObstacleInMovementPath(targetX, targetY, blockedAt)) {
+                    // Hindernis liegt nicht in Bewegungsrichtung - ignorieren
+                    if (debugMode && this.selected) {
+                        console.log(`🚫 ${this.species.name}: Hindernis nicht im Weg, ignoriere Umgehung`);
+                    }
+                    
+                    // Einfach Ziel anpassen und weitermachen
+                    this.chooseNewMovementTarget();
+                    return;
+                }
+                
                 // Speichere aktuellen Zustand
                 this.avoidanceMode.originalBehaviorState = this.behaviorState;
                 this.avoidanceMode.originalTarget = { x: targetX, y: targetY };
@@ -2283,14 +2283,45 @@
                 };
                 this.avoidanceMode.currentStep = 1;
                 this.avoidanceMode.attemptCount = 0;
-                this.avoidanceMode.useRightSide = true;
+                this.avoidanceMode.useRightSide = Math.random() < 0.5;
                 this.avoidanceMode.stepStartTime = Date.now();
                 
                 // Setze Verhalten auf speziellen Modus
                 this.behaviorState = 'avoiding';
                 
-               // console.log(`🚧 ${this.species.name} aktiviert Umgehungs-Modus bei (${blockedAt.x.toFixed(1)}, ${blockedAt.y.toFixed(1)})`);
+                if (debugMode && this.selected) {
+                    console.log(`🚧 ${this.species.name} aktiviert Umgehungs-Modus bei (${blockedAt.x.toFixed(1)}, ${blockedAt.y.toFixed(1)})`);
+                }
             }
+            
+            isObstacleInMovementPath(targetX, targetY, obstaclePos) {
+                // EINFACHE LOGIK: Prüfe nur X-Koordinate basierend auf Cross-Movement Ziel
+                
+                if (!this.currentGoal) {
+                    // Kein Cross-Movement Ziel definiert - immer umgehen
+                    return true;
+                }
+                
+                const dinoX = this.tileX;
+                const obstacleX = obstaclePos.x;
+                
+                let isInPath = false;
+                
+                if (this.currentGoal === 'right') {
+                    // Dino wandert nach rechts → nur Hindernisse rechts vom Dino sind "im Weg"
+                    isInPath = obstacleX > dinoX;
+                } else if (this.currentGoal === 'left') {
+                    // Dino wandert nach links → nur Hindernisse links vom Dino sind "im Weg"  
+                    isInPath = obstacleX < dinoX;
+                }
+                
+                if (debugMode && this.selected) {
+                    console.log(`🎯 ${this.species.name} Ziel: ${this.currentGoal} | Dino X: ${dinoX.toFixed(1)} | Hindernis X: ${obstacleX.toFixed(1)} -> ${isInPath ? 'IM WEG' : 'NICHT IM WEG'}`);
+                }
+                
+                return isInPath;
+            }
+
 
             // Beendet den Umgehungs-Modus
             exitAvoidanceMode(reason = 'success') {
@@ -2627,7 +2658,7 @@
                 
                 // GEÄNDERTE GRENZEN: Dinos können jetzt ab Reihe 5 (statt 14)
                 this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
-                this.tileY = Math.max(5, Math.min(mapHeight - 1, this.tileY)); // ← GEÄNDERT von mapHeight * 0.35
+                this.tileY = Math.max(1, Math.min(mapHeight - 1, this.tileY));                
                 
                 this.syncAnimation();
             }
@@ -3211,6 +3242,7 @@
         // ===================================
         // BEWGUNGs-FUNKTIONEN
         // ===================================
+        
 
         function isPositionValidForMovement(checkDino, newTileX, newTileY) {
            // console.log(' checkDino: ', checkDino, newTileX, newTileY);
@@ -3407,7 +3439,8 @@
                 if (!species.population.isExtinct) {
                     const spawnWidth = mapWidth * 0.25;
                     const centerTileX = 5 + Math.random() * spawnWidth;
-                    const centerTileY = 8 + Math.random() * (mapHeight * 0.6);
+                    const centerTileY = 2 + Math.random() * (mapHeight * 0.8); // Von Zeile 2 bis 80% der Karte
+  
                     
                     for (let i = 0; i < species.population.adults; i++) {
                         let dinoPlaced = false;
