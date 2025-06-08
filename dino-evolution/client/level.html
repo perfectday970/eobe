@@ -914,10 +914,10 @@
                 description: biomeData.description
             };
             
-            console.log(`🌍 Biom generiert: ${biomeData.name} (${biomeData.description})`);
-            console.log(`💧 Wasser: ${(levelBiome.waterAbundance * 100).toFixed(0)}%`);
-            console.log(`🌳 Pflanzen: ${(levelBiome.plantAbundance * 100).toFixed(0)}%`);
-            console.log(`🐭 Nagetiere: ${(levelBiome.rodentAbundance * 100).toFixed(0)}%`);
+            // console.log(`🌍 Biom generiert: ${biomeData.name} (${biomeData.description})`);
+            // console.log(`💧 Wasser: ${(levelBiome.waterAbundance * 100).toFixed(0)}%`);
+            // console.log(`🌳 Pflanzen: ${(levelBiome.plantAbundance * 100).toFixed(0)}%`);
+            // console.log(`🐭 Nagetiere: ${(levelBiome.rodentAbundance * 100).toFixed(0)}%`);
             
             return levelBiome;
         }
@@ -1397,7 +1397,7 @@
             
             tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));
             
-            console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
+            // console.log(`Kachel-Map: ${mapWidth}x${mapHeight}, tileSize: ${tileSize.toFixed(1)}px, zoom: ${currentZoom.toFixed(2)}x`);
             
             tileMap = [];
             // TERRAIN FÜR ALLE REIHEN GENERIEREN (auch obere)
@@ -1419,7 +1419,7 @@
             ensurePassages();
             smoothTerrain();
             
-            console.log(`Terrain generiert: ${levelBiome.type} Biom (${(levelBiome.waterAbundance * 100).toFixed(0)}% Wasser)`);
+            // console.log(`Terrain generiert: ${levelBiome.type} Biom (${(levelBiome.waterAbundance * 100).toFixed(0)}% Wasser)`);
         }
 
 
@@ -1445,7 +1445,7 @@
                 avgLakeSize = 40 + Math.random() * 60; // 40-100
             }
             
-            console.log(`💧 Generiere ${lakeCount} Seen mit Durchschnittsgröße ${avgLakeSize.toFixed(0)} (Faktor: ${abundanceFactor.toFixed(2)})`);
+            // console.log(`💧 Generiere ${lakeCount} Seen mit Durchschnittsgröße ${avgLakeSize.toFixed(0)} (Faktor: ${abundanceFactor.toFixed(2)})`);
             
             for (let i = 0; i < lakeCount; i++) {
                 const seedX = 10 + Math.floor(Math.random() * (mapWidth - 20));
@@ -2117,7 +2117,7 @@
                     if (this.avoidanceMode.attemptCount >= 4) {
                         this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
                         this.avoidanceMode.attemptCount = 0;
-                        console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
+                        // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
                     }
                 }
                 
@@ -2186,7 +2186,7 @@
                     const newY = this.tileY + moveY;
                     
                     // Prüfe ob neue Position blockiert ist
-                    const pathCheck = this.checkPathBlocked(this.tileX, this.tileY, newX, newY);
+                    const pathCheck = this.checkPathBlocked(this, this.tileX, this.tileY, newX, newY);
                     
                     if (pathCheck.blocked) {
                         // Neues Hindernis! Von hier neu starten
@@ -2197,7 +2197,7 @@
                         if (this.avoidanceMode.attemptCount >= 6) {
                             this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
                             this.avoidanceMode.attemptCount = 0;
-                            console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
+                            // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
                         }
                         this.calculateAvoidanceTarget();
                     } else {
@@ -2214,7 +2214,7 @@
             }
 
             // Prüft ob ein Pfad blockiert ist
-            checkPathBlocked(fromX, fromY, toX, toY, stepSize = 0.1) {
+            checkPathBlocked(checkDino, fromX, fromY, toX, toY, stepSize = 0.1) {
                 const dx = toX - fromX;
                 const dy = toY - fromY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
@@ -2224,8 +2224,8 @@
                     const progress = i / steps;
                     const checkX = fromX + dx * progress;
                     const checkY = fromY + dy * progress;
-                    
-                    if (!this.isPositionValidForMovement(checkX, checkY)) {
+                    // console.log("dieser dino? checkPathBlocked ", checkDino);
+                    if (!isPositionValidForMovement(checkDino, checkX, checkY)) {
                         // Blockierung gefunden, gebe Position zurück
                         return {
                             blocked: true,
@@ -2321,46 +2321,6 @@
                     top: pixel.y + boxHeight / 2 + verticalOffset,
                     bottom: pixel.y - boxHeight / 2 + verticalOffset
                 };
-            }
-
-            isPositionValidForMovement(newTileX, newTileY) {
-                // Prüft ob die neue Position gültig ist (kein Wasser für Nicht-Schwimmer)
-                if (this.canSwim()) {
-                    return true; // Schwimmer können überall hin
-                }
-
-                newTileX = newTileX + 0.5;
-                newTileY = newTileY+ 0.5;  
-
-                // Kollisionsbox für die neue Position berechnen
-                const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8;
-                const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6;
-                const verticalOffset = boxHeight * 0.5 / tileSize;
-                
-                const testBox = {
-                    left: newTileX - boxWidth / (2 * tileSize),
-                    right: newTileX + boxWidth / (2 * tileSize),
-                    top: newTileY - boxHeight / (2 * tileSize) + verticalOffset,
-                    bottom: newTileY + boxHeight / (2 * tileSize) + verticalOffset
-                };
-                
-                // Prüfe alle Ecken und die Mitte der Kollisionsbox
-                const checkPoints = [
-                    { x: testBox.left, y: testBox.top },      // Oben links
-                    { x: testBox.right, y: testBox.top },     // Oben rechts
-                    { x: testBox.left, y: testBox.bottom },   // Unten links
-                    { x: testBox.right, y: testBox.bottom },  // Unten rechts
-                    { x: newTileX, y: newTileY + verticalOffset }  // Mitte (auch mit Offset)
-                ];
-    
-                for (const point of checkPoints) {
-                    const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
-                    if (tileType === TILE_TYPES.WATER) {
-                        return false; // Mindestens ein Punkt ist auf Wasser
-                    }
-                }
-                
-                return true;
             }
 
             renderDebugInfo(pixelX, pixelY) {
@@ -2610,33 +2570,35 @@
                 const baseVariation = 0.8 + Math.random() * 0.4;
                 return (this.moveDurationMin + Math.random() * (this.moveDurationMax - this.moveDurationMin)) * baseVariation;
             }
-
+/*
             needsWaterRescue() {
                 // Schwimmer brauchen keine Rettung
                 if (this.canSwim && this.canSwim()) {
                     return false;
                 }
-                
+                //hier
                 // NUR prüfen ob Dino direkt auf einer Wasserkachel steht
                 const currentTileX = Math.floor(this.tileX);
                 const currentTileY = Math.floor(this.tileY);
                 const tileType = getTileTypeAtPosition(currentTileX, currentTileY);
                 
                 return tileType === TILE_TYPES.WATER;
-            }
+            }*/
 
             update() {
                 if (isPaused) return;
-                
+                // console.log("before lastWaterCheck ", this.lastWaterCheck);
                 // NOTBEFREIUNG: Einmal pro Sekunde prüfen (nicht permanent!)
-                if (!this.lastWaterCheck || Date.now() - this.lastWaterCheck > 1000) {
-                    this.lastWaterCheck = Date.now();
-                    
-                    if (this.needsWaterRescue()) {
-                        rescueDinoFromWater(this, 'automatic check');
-                        return; // Nach Rettung erstmal pausieren
-                    }
-                }
+             //   if (!this.lastWaterCheck || Date.now() - this.lastWaterCheck > 1000) {
+                    //this.lastWaterCheck = Date.now();
+                  // console.log("after lastWaterCheck 1", this);
+                 //   if (!isPositionValidForMovement(this, this.tileX, this.tileY)){
+                   //     console.log("after lastWaterCheck 2", this);
+                    //if (this.needsWaterRescue()) {
+                   //    rescueDinoFromWater(this, 'automatic check');
+                   //     return; // Nach Rettung erstmal pausieren
+                   // }
+          //      }
                 
                 const frameTime = 1/60;
                 this.behaviorTimer += frameTime * gameSpeed;
@@ -2700,6 +2662,7 @@
                 
                 if (distance > 0.3) {
                     const pathCheck = this.checkPathBlocked(
+                        this,
                         this.tileX, 
                         this.tileY, 
                         this.targetTileX, 
@@ -2719,7 +2682,8 @@
                     const newTileY = this.tileY + moveTileY;
                     
                     // Prüfe ob die neue Position gültig ist (kein Wasser für Nicht-Schwimmer)
-                    if (this.isPositionValidForMovement(newTileX, newTileY)) {
+                    // // console.log("dieser dino? handleMovement ", this);
+                    if (isPositionValidForMovement(this, newTileX, newTileY)) {
                         this.tileX = newTileX;
                         this.tileY = newTileY;
                         this.updateFacingDirection(moveTileX, moveTileY);
@@ -3248,6 +3212,49 @@
         // BEWGUNGs-FUNKTIONEN
         // ===================================
 
+        function isPositionValidForMovement(checkDino, newTileX, newTileY) {
+           // console.log(' checkDino: ', checkDino, newTileX, newTileY);
+            // Prüft ob die neue Position gültig ist (kein Wasser für Nicht-Schwimmer)
+            if (checkDino.canSwim()) {
+                return true; // Schwimmer können überall hin
+            }
+
+            newTileX = newTileX + 0.5;
+            newTileY = newTileY+ 0.5;  
+
+            // Kollisionsbox für die neue Position berechnen
+            const boxWidth = (checkDino.species.properties.körper_länge || 50) * checkDino.scale * 0.8;
+            const boxHeight = (checkDino.species.properties.körper_höhe || 50) * checkDino.scale * 0.6;
+            const verticalOffset = boxHeight * 0.5 / tileSize;
+            
+            const testBox = {
+                left: newTileX - boxWidth / (2 * tileSize),
+                right: newTileX + boxWidth / (2 * tileSize),
+                top: newTileY - boxHeight / (2 * tileSize) + verticalOffset,
+                bottom: newTileY + boxHeight / (2 * tileSize) + verticalOffset
+            };
+            
+            // Prüfe alle Ecken und die Mitte der Kollisionsbox
+            const checkPoints = [
+                { x: testBox.left, y: testBox.top },      // Oben links
+                { x: testBox.right, y: testBox.top },     // Oben rechts
+                { x: testBox.left, y: testBox.bottom },   // Unten links
+                { x: testBox.right, y: testBox.bottom },  // Unten rechts
+                { x: newTileX, y: newTileY + verticalOffset }  // Mitte (auch mit Offset)
+            ];
+
+           // console.log(' checkPoints: ', checkPoints);
+
+            for (const point of checkPoints) {
+                const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
+                if (tileType === TILE_TYPES.WATER) {
+                    return false; // Mindestens ein Punkt ist auf Wasser
+                }
+            }
+            
+            return true;
+        }
+/*
         function rescueDinoFromWater(dino, reason = 'unknown') {
             // Nur Non-Schwimmer retten
             if (dino.canSwim && dino.canSwim()) {
@@ -3272,14 +3279,14 @@
                 dino.behaviorTimer = 0;
                 dino.currentBehaviorDuration = 1.0; // 1 Sekunde Pause
                 
-                console.log(`✅ ${dino.species.name} gerettet zu (${rescuePosition.x.toFixed(1)}, ${rescuePosition.y.toFixed(1)})`);
+                // console.log(`✅ ${dino.species.name} gerettet zu (${rescuePosition.x.toFixed(1)}, ${rescuePosition.y.toFixed(1)})`);
                 return true;
             } else {
                 console.error(`❌ RETTUNG FEHLGESCHLAGEN: Keine Landkachel für ${dino.species.name} gefunden!`);
                 return false;
             }
         }
-
+*//*
         function findNearestLandTile(centerX, centerY) {
             const currentTileX = Math.floor(centerX);
             const currentTileY = Math.floor(centerY);
@@ -3327,7 +3334,7 @@
             
             return null; // Extrem seltener Fall
         }
-
+*/
         // ===================================
         // CALCULATIONS UND HELPER-FUNKTIONEN
         // ===================================
@@ -3365,7 +3372,7 @@
             calculateRandomLevelResources();
 
             calculateRandomMapWidth();
-            console.log('Karten-Dimensionen:', mapWidth, 'x', mapHeight);
+            // console.log('Karten-Dimensionen:', mapWidth, 'x', mapHeight);
 
             setLoadingText('Generiere Terrain...');
             generateTileMap();
@@ -3400,44 +3407,37 @@
                 if (!species.population.isExtinct) {
                     const spawnWidth = mapWidth * 0.25;
                     const centerTileX = 5 + Math.random() * spawnWidth;
-                    // GEÄNDERT: Dinos können jetzt auch oben spawnen
-                    const centerTileY = 8 + Math.random() * (mapHeight * 0.6); // ← GEÄNDERT von mapHeight * 0.4
+                    const centerTileY = 8 + Math.random() * (mapHeight * 0.6);
                     
                     for (let i = 0; i < species.population.adults; i++) {
-                        const position = findValidLandPosition(centerTileX, centerTileY, 8);
-                        
-                        if (position.valid) {
+                        let dinoPlaced = false;
+                        while (!dinoPlaced) {                               
+                            const position = findValidLandPosition(centerTileX, centerTileY, 8);
                             const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
-                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));
-                            
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                               
                             const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                             
-                            // SPAWN-RETTUNG: Sofortiger Check nach Erstellung
-                            if (newDino.needsWaterRescue && newDino.needsWaterRescue()) {
-                                rescueDinoFromWater(newDino, 'spawn rescue');
-                            }
-                            
-                            gameObjects.push(newDino);
-                            objectCounts.ownDinos++;
+                            if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                                gameObjects.push(newDino);
+                                objectCounts.ownDinos++;
+                                dinoPlaced = true;
+                            }                            
                         }
                     }
                     
                     for (let i = 0; i < species.population.juveniles; i++) {
-                        const position = findValidLandPosition(centerTileX, centerTileY, 8);
-                        
-                        if (position.valid) {
+                        let dinoPlaced = false;
+                        while (!dinoPlaced) {     
+                            const position = findValidLandPosition(centerTileX, centerTileY, 8);
                             const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
-                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));
-                            
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                              
                             const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                             
-                            // SPAWN-RETTUNG: Sofortiger Check nach Erstellung
-                            if (newDino.needsWaterRescue && newDino.needsWaterRescue()) {
-                                rescueDinoFromWater(newDino, 'spawn rescue');
+                            if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                                gameObjects.push(newDino);
+                                objectCounts.ownDinos++;
+                                dinoPlaced = true;                                
                             }
-                            
-                            gameObjects.push(newDino);
-                            objectCounts.ownDinos++;
                         }
                     }
                 }
@@ -3453,13 +3453,10 @@
             }
             
             levelData.enemyData.forEach((species, speciesIndex) => {
-                if (!species.population.isExtinct) {
-                    // console.log(`--- Gegner ${species.name} ---`);
-                    // console.log(`Generiere ${species.population.adults} Erwachsene, ${species.population.juveniles} Jungtiere`);
-                    
+                if (!species.population.isExtinct) {           
                     const centerTileX = 5 + mapWidth * 0.65 + Math.random() * (mapWidth * 0.25);
                     const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
-                    
+                    /*
                     for (let i = 0; i < species.population.adults; i++) {
                         const position = findValidLandPosition(centerTileX, centerTileY, 8);
                         
@@ -3483,6 +3480,39 @@
                             
                             gameObjects.push(new Dino(finalTileX, finalTileY, species, false, true));
                             objectCounts.enemyDinos++;
+                        }
+                    }*/
+
+                    for (let i = 0; i < species.population.adults; i++) {
+                        let dinoPlaced = false;
+                        while (!dinoPlaced) {                               
+                            const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                            const minEnemyX = mapWidth * 0.55;
+                            const finalTileX = Math.max(minEnemyX, Math.min(mapWidth - 2, position.tileX));
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY)); // ← GEÄNDERT                             
+                            const newDino = new Dino(finalTileX, finalTileY, species, true, true);
+                            
+                            if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                                gameObjects.push(newDino);
+                                objectCounts.enemyDinos++;
+                                dinoPlaced = true;
+                            }                            
+                        }
+                    }
+                    
+                    for (let i = 0; i < species.population.juveniles; i++) {
+                        let dinoPlaced = false;
+                        while (!dinoPlaced) {     
+                            const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                            const finalTileX = Math.max(mapWidth * 0.55, Math.min(mapWidth - 2, position.tileX));
+                            const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                             
+                            const newDino = new Dino(finalTileX, finalTileY, species, true, true);
+                            
+                            if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                                gameObjects.push(newDino);
+                                objectCounts.enemyDinos++;
+                                dinoPlaced = true;                                
+                            }
                         }
                     }
                 }
@@ -3529,8 +3559,8 @@
                 treesPerGroup = 3 + Math.floor(Math.random() * 5); // 3-7 Bäume pro Gruppe
             }
             
-            console.log(`🌳 Generiere ${groupCount} Baum-Gruppen (${treesPerGroup} Bäume/Gruppe) und ${singleTrees} einzelne Bäume`);
-            console.log(`   Pflanzen-Abundanz: ${(abundanceFactor * 100).toFixed(0)}%`);
+            // console.log(`🌳 Generiere ${groupCount} Baum-Gruppen (${treesPerGroup} Bäume/Gruppe) und ${singleTrees} einzelne Bäume`);
+            // console.log(`   Pflanzen-Abundanz: ${(abundanceFactor * 100).toFixed(0)}%`);
             
             // Baum-Gruppen generieren
             for (let group = 0; group < groupCount; group++) {
@@ -3616,8 +3646,8 @@
                 rodentsPerGroup = 1 + Math.floor(Math.random() * 3); // 1-3 pro Gruppe
             }
             
-            console.log(`🐭 Generiere ${rodentGroups} Nagetier-Gruppen (${rodentsPerGroup} Nagetiere/Gruppe)`);
-            console.log(`   Nagetier-Abundanz: ${(abundanceFactor * 100).toFixed(0)}%`);
+            // console.log(`🐭 Generiere ${rodentGroups} Nagetier-Gruppen (${rodentsPerGroup} Nagetiere/Gruppe)`);
+            // console.log(`   Nagetier-Abundanz: ${(abundanceFactor * 100).toFixed(0)}%`);
             
             for (let i = 0; i < rodentGroups; i++) {
                 const centerTileX = 5 + Math.random() * (mapWidth - 10);
@@ -3913,12 +3943,12 @@
 
         function trackKill(killer, victim) {
             killer.killCount++;
-            console.log(`🏆 ${killer.species.name} hat ${victim.species.name} getötet! (Kills: ${killer.killCount}/3)`);
+            // console.log(`🏆 ${killer.species.name} hat ${victim.species.name} getötet! (Kills: ${killer.killCount}/3)`);
             
             // Muskel-Boost bei 3 Kills aktivieren
             if (killer.killCount >= 2 && !killer.hasMuscleBoost) {
                 killer.hasMuscleBoost = true;
-                console.log(`💪 ${killer.species.name} erreicht Muskel-Boost! (+15% Angriffskraft)`);
+                // console.log(`💪 ${killer.species.name} erreicht Muskel-Boost! (+15% Angriffskraft)`);
             }else if (killer.killCount >= 4 && !killer.hasMuscleBoostMax) {
                 killer.hasMuscleBoostMax = true;
                 console.log(`⚡ ${killer.species.name} erreicht MAXIMUM Muskel-Boost! (+30% Angriffskraft)`);
@@ -4066,7 +4096,7 @@
                         calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
                     );
                     dino.combatState = 'seeking';
-                    // console.log(`🎯 ${dino.species.name} entdeckt verfügbaren Feind: ${dino.combatTarget.species.name}`);
+                    // // console.log(`🎯 ${dino.species.name} entdeckt verfügbaren Feind: ${dino.combatTarget.species.name}`);
                 } else {
                     // Alle Feinde kämpfen bereits - warte oder suche weiter
                     // console.log(`⏳ ${dino.species.name} wartet - alle Feinde kämpfen bereits`);
@@ -4191,6 +4221,7 @@
             
             if (distance > 0.1) {
                 const pathCheck = dino.checkPathBlocked(
+                    dino,
                     dino.tileX,
                     dino.tileY,
                     dino.combatTarget.tileX,
@@ -4215,7 +4246,9 @@
                 const newTileY = dino.tileY + moveTileY;
                 
                 // Wasser-Kollision auch beim Verfolgen prüfen
-                if (dino.isPositionValidForMovement(newTileX, newTileY)) {
+               // // console.log("dieser dino? seekEnemy ", dino);
+                if (isPositionValidForMovement(dino, newTileX, newTileY)) {
+                    
                     dino.tileX = newTileX;
                     dino.tileY = newTileY;
                     
@@ -4328,10 +4361,10 @@
             // NEU: Muskel-Boost anwenden
             if (attacker.hasMuscleBoostMax) {
                 damage = Math.round(damage * 1.40); // 30% bei Stufe 2
-                console.log(`⚡ ${attacker.species.name} MAX Muskel-Boost: +40% Schaden (${damage})`);
+                // console.log(`⚡ ${attacker.species.name} MAX Muskel-Boost: +40% Schaden (${damage})`);
             } else if (attacker.hasMuscleBoost) {
                 damage = Math.round(damage * 1.15); // 15% bei Stufe 1
-                console.log(`💪 ${attacker.species.name} Muskel-Boost: +15% Schaden (${damage})`);
+                // console.log(`💪 ${attacker.species.name} Muskel-Boost: +15% Schaden (${damage})`);
             }
             
             // Schaden anwenden
@@ -4424,10 +4457,10 @@
             // NEU: Gesättigt-Boost anwenden (30% weniger Schaden)
             if (defender.hasSatiatedBoostMax) {
                 damage = Math.max(1, Math.round(damage * 0.3)); // 70% Schadensreduktion bei Stufe 2
-                console.log(`🏰 ${defender.species.name} MAX Gesättigt-Boost: -70% Schaden (${damage})`);
+                // console.log(`🏰 ${defender.species.name} MAX Gesättigt-Boost: -70% Schaden (${damage})`);
             } else if (defender.hasSatiatedBoost) {
                 damage = Math.max(1, Math.round(damage * 0.7)); // 30% Schadensreduktion bei Stufe 1
-                console.log(`🛡️ ${defender.species.name} Gesättigt-Boost: -30% Schaden (${damage})`);
+                // console.log(`🛡️ ${defender.species.name} Gesättigt-Boost: -30% Schaden (${damage})`);
             }
 
             return damage;
@@ -4460,7 +4493,7 @@
         }
 
         function createLeafEffect(tree, dino) {
-            console.log(`🍃 Blattpartikel für Baum bei (${tree.tileX}, ${tree.tileY}) erstellt`);
+            // console.log(`🍃 Blattpartikel für Baum bei (${tree.tileX}, ${tree.tileY}) erstellt`);
             const particleCount = 3 + Math.random() * 2; // 3-7 Blätter
             
             for (let i = 0; i < particleCount; i++) {
@@ -4475,7 +4508,7 @@
                     rotation: Math.random() * Math.PI * 2, // Zufällige Rotation
                     rotationSpeed: (Math.random() - 0.5) * 6 // Drehgeschwindigkeit
                 };
-                console.log(`🍃 Blattpartikel erstellt: ${particle.x.toFixed(1)}, ${particle.y.toFixed(1)} (Größe: ${particle.size.toFixed(1)})`);
+               // console.log(`🍃 Blattpartikel erstellt: ${particle.x.toFixed(1)}, ${particle.y.toFixed(1)} (Größe: ${particle.size.toFixed(1)})`);
                 leafParticles.push(particle);
             }
         }
@@ -4501,7 +4534,7 @@
 
         // Tod handhaben
         function handleDeath(dino) {
-            // console.log(`💀 ${dino.species.name} ist gestorben`);
+            // // console.log(`💀 ${dino.species.name} ist gestorben`);
             
             dino.combatState = 'dead';
             dino.combatTarget = null;
@@ -4946,7 +4979,7 @@
                 if (!occupiedFoodSources.has(source.sourceId)) {
                     // SOFORT reservieren ohne weitere Delays
                     occupiedFoodSources.set(source.sourceId, dino);
-                    console.log(`🔒 ${dino.species.name} reserviert atomisch: ${source.sourceId}`);
+                    // console.log(`🔒 ${dino.species.name} reserviert atomisch: ${source.sourceId}`);
                     return source;
                 }
             }
@@ -5053,18 +5086,18 @@
 
             // NEU: Individuelle Nahrungspunkte für Gesättigt-Boost tracken
             dino.totalFoodConsumed += finalValue;
-            console.log(`🍽️ ${dino.species.name} hat insgesamt ${dino.totalFoodConsumed} Nahrungspunkte gesammelt`);
+            // console.log(`🍽️ ${dino.species.name} hat insgesamt ${dino.totalFoodConsumed} Nahrungspunkte gesammelt`);
 
             // Gesättigt-Boost bei 20 Nahrungspunkten aktivieren
             if (dino.totalFoodConsumed >= 12 && !dino.hasSatiatedBoost) {
                 dino.hasSatiatedBoost = true;
-                console.log(`🛡️ ${dino.species.name} ist gesättigt! (+30% Verteidigung)`);
+                // console.log(`🛡️ ${dino.species.name} ist gesättigt! (+30% Verteidigung)`);
             }
 
             // Gesättigt-Boost MAX bei 40 Nahrungspunkten aktivieren
             if (dino.totalFoodConsumed >= 24 && !dino.hasSatiatedBoostMax) {
                 dino.hasSatiatedBoostMax = true;
-                console.log(`🏰 ${dino.species.name} ist MAXIMAL gesättigt! (+70% Verteidigung)`);
+                // console.log(`🏰 ${dino.species.name} ist MAXIMAL gesättigt! (+70% Verteidigung)`);
             }
 
             if (dino.currentHP < dino.maxHP) {
@@ -5074,7 +5107,7 @@
                 const actualHealing = dino.currentHP - oldHP;
                 
                 if (actualHealing > 0) {
-                    console.log(`💚 ${dino.species.name} regeneriert ${actualHealing} HP durch Nahrung (${oldHP}→${dino.currentHP})`);
+                    // console.log(`💚 ${dino.species.name} regeneriert ${actualHealing} HP durch Nahrung (${oldHP}→${dino.currentHP})`);
                   //  showHealingIcon(dino, actualHealing);
                 }
             }
@@ -5202,15 +5235,15 @@
                 const bestFood = selectBestFoodSource(dino);
                 
                 if (bestFood) {
-                    console.log(`updateFoodNeutralState ${bestFood.sourceId}`);
+                    // console.log(`updateFoodNeutralState ${bestFood.sourceId}`);
                     // Double-Check ob noch verfügbar
                     const occupiedBy = occupiedFoodSources.get(bestFood.sourceId);
                     if (occupiedBy && occupiedBy !== dino) {
-                        console.log(`🚫 ${dino.species.name}: Nahrung zwischenzeitlich belegt`);
+                        // console.log(`🚫 ${dino.species.name}: Nahrung zwischenzeitlich belegt`);
                         return;
                     }
 
-                    console.log(`fertig`);
+                    // console.log(`fertig`);
                     // NEU: Optimale Feeding-Position berechnen
                     const feedingPosition = calculateOptimalFeedingPositions(bestFood, {
                         x: dino.tileX,
@@ -5267,6 +5300,7 @@
             const targetY = dino.feedingPosition.y;
 
             const pathCheck = dino.checkPathBlocked(
+                dino,
                 dino.tileX,
                 dino.tileY,
                 targetX,
@@ -5289,7 +5323,7 @@
 
             // Nah genug zum Fressen?
             if (distance <= requiredDistance) {
-                console.log(`🎯 ${dino.species.name} ist nah genug an Feeding-Position für ${targetObj.type || 'corpse'}`);
+                // console.log(`🎯 ${dino.species.name} ist nah genug an Feeding-Position für ${targetObj.type || 'corpse'}`);
                 startFoodConsumption(dino, dino.foodTarget);
                 return;
             }
@@ -5368,7 +5402,8 @@
                 const newY = dino.tileY + (finalDy / moveDistance) * moveSpeed;
                 
                 // Grenzen-Check
-                if (dino.isPositionValidForMovement(newX, newY)) {
+                // console.log("dieser dino? updateFoodSeekingState ", dino);
+                if (isPositionValidForMovement(dino, newX, newY)) {
                     // Grenzen-Check
                     dino.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
                     dino.tileY = Math.max(5, Math.min(mapHeight - 1, newY));
@@ -5384,7 +5419,7 @@
                     dino.foodCooldownUntil = Date.now() + 2000;
                     
                     if (debugMode) {
-                        console.log(`🚫 ${dino.species.name} bricht Nahrungssuche ab: Wasser blockiert`);
+                        // console.log(`🚫 ${dino.species.name} bricht Nahrungssuche ab: Wasser blockiert`);
                     }
                     return;
                 }
@@ -5507,7 +5542,7 @@
         function calculateOptimalFeedingPositions(foodSource, dinoPosition) {
             const targetObj = foodSource.object;
             let baseX, baseY;
-              console.log(`📍${baseX}`);
+              // console.log(`📍${baseX}`);
            
             // Basis-Position der Nahrungsquelle
             if (targetObj.tileX !== undefined) {
@@ -5556,7 +5591,7 @@
             const chosenPosition = leftDistance <= rightDistance ? leftPosition : rightPosition;
             const chosenSide = leftDistance <= rightDistance ? 'left' : 'right';
             
-             console.log(`📍 ${foodSource.type} Position gewählt: ${chosenSide} (${chosenPosition.x.toFixed(1)}, ${chosenPosition.y.toFixed(1)})`);
+             // console.log(`📍 ${foodSource.type} Position gewählt: ${chosenSide} (${chosenPosition.x.toFixed(1)}, ${chosenPosition.y.toFixed(1)})`);
             
             return chosenPosition;
         }
@@ -5587,7 +5622,7 @@
                     // Neuen Dash starten
                     dino.isConsuming = true;
                     dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
-                    console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                    // console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
                     
                     // NEU: Blatteffekt bei Bäumen
                     if (dino.foodTarget && dino.foodTarget.object.type === 'tree') {
@@ -5605,7 +5640,7 @@
                     // Neuen Dash starten
                     dino.isConsuming = true;
                     dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
-                    console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
+                    // console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
                     
                     // NEU: Blatteffekt bei Bäumen
                     if (dino.foodTarget && dino.foodTarget.object.type === 'tree') {
