@@ -977,8 +977,8 @@
         function checkVictoryConditions() {
             if (gameEnded || isLoading) return;
             
-            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.combatState !== 'dead');
-            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.combatState !== 'dead');
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.overallState !== 'dead');
+            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.overallState !== 'dead');
             
             if (ownDinos.length === 0) {
                 endLevelByDefeat();
@@ -996,8 +996,8 @@
             gameEnded = true;
             levelEndTime = Date.now();
             
-            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.combatState !== 'dead');
-            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.combatState !== 'dead');
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.overallState !== 'dead');
+            const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.overallState !== 'dead');
             
             const ownWeight = calculateTotalWeight(ownDinos);
             const enemyWeight = calculateTotalWeight(enemyDinos);
@@ -1019,7 +1019,7 @@
             gameEnded = true;
             levelEndTime = Date.now();
             
-            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.combatState !== 'dead');
+            const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.overallState !== 'dead');
             
             showLevelEndScreen({
                 victory: true,
@@ -2039,6 +2039,9 @@
                 this.preferredSide = null;      // Welche Seite für Umweg
                 this.spiralDirection = null;
                 this.lastTileX = tileX;
+
+                this.baseSpeed = this.speed; // Normalisiert auf 0-1
+                this.currentSpeedMultiplier = 1.0
                 
                 // NEU: Cross-Movement System
                 this.initializeCrossMovement();
@@ -2061,6 +2064,17 @@
                     originalBehaviorState: null, // Ursprünglicher Zustand speichern
                     originalTarget: null         // Ursprüngliches Ziel {x, y}
                 };
+            }
+
+            getMovementSpeed() {
+                let multiplier = 1.0;
+                
+                // Geschwindigkeits-Multiplikator basierend auf aktuellem Zustand
+                if (this.overallState === 'seeking') {
+                    multiplier = 1.3; // 30% schneller bei Verfolgung/Nahrungssuche
+                }
+                
+                return this.baseSpeed * multiplier * gameSpeed;
             }
 
             // Neue Methode in der Dino-Klasse
@@ -2166,7 +2180,7 @@
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
                 if (distance > 0.1) {
-                    const moveSpeed = this.speed * gameSpeed * 0.5;
+                    const moveSpeed = this.getMovementSpeed();
                     const moveX = (dx / distance) * moveSpeed;
                     const moveY = (dy / distance) * moveSpeed;
                     
@@ -2273,6 +2287,7 @@
                 const length = Math.sqrt(dx * dx + dy * dy);
                 
                 this.avoidanceMode.active = true;
+                this.overallState === 'avoiding'
                 this.avoidanceMode.blockedPosition = blockedAt;
                 this.avoidanceMode.originalDirection = {
                     x: dx / length,
@@ -2323,6 +2338,7 @@
             // Beendet den Umgehungs-Modus
             exitAvoidanceMode(reason = 'success') {
                 this.avoidanceMode.active = false;
+                this.overallState === 'neutral';
                 
                 // Stelle ursprünglichen Zustand wieder her
                 if (this.avoidanceMode.originalBehaviorState) {
@@ -2384,11 +2400,15 @@
                 }
                 
                 ctx.restore();
-                if (this.avoidanceMode.active && debugMode && this.selected) {
-                    ctx.save();
-                    
-                    // Blockierungslinie visualisieren
-                    if (this.avoidanceMode.blockedPosition) {
+                if(debugMode && this.selected) {
+                    ctx.save(); 
+                    ctx.fillStyle = '#FFFF00';
+                    ctx.font = '12px Arial';
+
+                    if (this.avoidanceMode.active) {
+                                             
+                        // Blockierungslinie visualisieren
+
                         const blockPixel = tileToPixel(this.avoidanceMode.blockedPosition.x, this.avoidanceMode.blockedPosition.y);
                         const blockX = blockPixel.x;
                         const blockY = blockPixel.y;                       
@@ -2410,19 +2430,20 @@
                             this.avoidanceMode.originalDirection
                         );
                         
-                        ctx.fillStyle = '#FFFF00';
-                        ctx.font = '12px Arial';
+
                         ctx.fillText(`Step: ${this.avoidanceMode.currentStep} | Round: ${this.avoidanceMode.attemptCount} | Progress: ${progress.toFixed(1)}`, pixelX, pixelY + 60);
 
                         // NEU: Kachel-Typ anzeigen
                         const currentTileType = getTileTypeAtPosition(Math.floor(this.tileX), Math.floor(this.tileY));
                         const tileTypeName = currentTileType === TILE_TYPES.GRASS ? 'GRASS' : 
                                         currentTileType === TILE_TYPES.DIRT ? 'DIRT' : 
-                                        currentTileType === TILE_TYPES.WATER ? 'WATER' : 'UNKNOWN';
-                        ctx.fillText(`Tile: ${tileTypeName} (${Math.floor(this.tileX)}, ${Math.floor(this.tileY)})`, pixelX, pixelY + 75);
-                                            
-                        ctx.restore();
+                                        currentTileType === TILE_TYPES.WATER ? 'WATER' : 'UNKNOWN';        
+                        ctx.fillText(`Tile: ${tileTypeName} (${Math.floor(this.tileX)}, ${Math.floor(this.tileY)})`, pixelX, pixelY + 75);         
+                                               
                     }
+                                                               
+                    ctx.fillText(`Geschwindgkeit: ${this.getMovementSpeed()}) | overallState: ${this.overallState}`, pixelX, pixelY + 90);                       
+                    ctx.restore();
                 }
             }
 
@@ -2639,7 +2660,7 @@
                 }
                 
                 // KAMPF-CHECK: Keine normale Bewegung während Kampf!
-                if (this.combatState === 'fighting') {
+                if (this.overallState === 'fighting') {
                     this.syncAnimation();
                     return;
                 }
@@ -2702,8 +2723,9 @@
                         return;
                     }
 
-                    const moveTileX = (dx / distance) * this.speed * gameSpeed;
-                    const moveTileY = (dy / distance) * this.speed * gameSpeed;
+                    const moveSpeed = this.getMovementSpeed();
+                    const moveTileX = (dx / distance) * moveSpeed;
+                    const moveTileY = (dy / distance) * moveSpeed;
                     
                     // Neue Position berechnen
                     const newTileX = this.tileX + moveTileX;
@@ -2805,7 +2827,7 @@
                 };
                 
                 // KAMPF-SPEZIFISCHE ANIMATION: Im Kampf weniger Bewegung
-                if (this.combatState === 'fighting') {
+                if (this.overallState === 'fighting') {
                     // Kampf-Idle: Nur leichte Atmung
                     animationData.bodyAnimationY = Math.sin(animationTime * 2) * 1; // Weniger Bewegung
                     animationData.headAnimationX = Math.sin(animationTime * 0.5) * 2; // Langsamere Kopfbewegung
@@ -3019,7 +3041,7 @@
                         // NEU: Prüfe ob irgendein Dino DIESES spezifische Nagetier anvisiert ODER frisst
                         const isBeingHunted = gameObjects.some(obj => 
                             obj instanceof Dino && 
-                            obj.combatState !== 'dead' &&
+                            obj.overallState !== 'dead' &&
                             obj.foodState === 'consuming' &&
                             obj.foodTarget && 
                             obj.foodTarget.object === this  // ← Direkte Objekt-Referenz!
@@ -3940,7 +3962,8 @@
             
             // Fähigkeiten berechnen
             dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
-            
+            dino.baseSpeed = 0.00 + dino.abilities['Geschwindigkeit'] / 2000;
+
             // Kampfwerte
             dino.maxHP = dino.abilities['Lebenspunkte'];
             dino.currentHP = dino.maxHP;
@@ -3948,7 +3971,7 @@
             dino.currentStamina = dino.maxStamina;
             
             // Kampfzustand
-            dino.combatState = 'neutral';
+            dino.overallState = 'neutral';
             dino.combatTarget = null;
             dino.lastAttackTime = 0; // NEU: Cooldown-Timer
             dino.combatTurn = false;
@@ -4047,11 +4070,11 @@
 
         // Feinde in Erkennungsradius suchen
         function findEnemiesInRange(dino) {
-            if (dino.combatState === 'dead') return [];
+            if (dino.overallState === 'dead') return [];
             
             const enemies = gameObjects.filter(obj => 
                 obj instanceof Dino && 
-                obj.combatState !== 'dead' &&
+                obj.overallState !== 'dead' &&
                 obj.isEnemy !== dino.isEnemy && // Unterschiedliche Fraktionen
                 calculateDistance(dino, obj) <= dino.detectionRadius
             );
@@ -4068,18 +4091,18 @@
 
         // Kampf-Update für jeden Dino
         function updateCombat(dino) {
-            if (dino.combatState === 'dead') return;
+            if (dino.overallState === 'dead') return;
             
-            if (dino.combatState === 'fighting' && dino.avoidanceMode.active) {
+            if (dino.overallState === 'fighting' && dino.avoidanceMode.active) {
                 dino.exitAvoidanceMode('interrupted by combat');
             }
             // Stamina-Regeneration bei Stillstand
-            //if (!dino.wasMovingLastFrame && dino.combatState !== 'fighting') {
+            //if (!dino.wasMovingLastFrame && dino.overallState !== 'fighting') {
             dino.currentStamina = Math.min(dino.maxStamina, dino.currentStamina + COMBAT_CONFIG.STAMINA_RECOVERY * gameSpeed / 60);
            // }
             
             // Stamina-Verbrauch bei Bewegung (nur wenn NICHT kämpfend)
-            if (dino.behaviorState === 'moving' && dino.combatState !== 'fighting') {
+            if (dino.behaviorState === 'moving' && dino.overallState !== 'fighting') {
                 dino.currentStamina = Math.max(0, dino.currentStamina - COMBAT_CONFIG.MOVEMENT_STAMINA_COST * gameSpeed / 60);
                 dino.wasMovingLastFrame = true;
             } else {
@@ -4087,7 +4110,7 @@
             }
             
             // Zustandsmaschine
-            switch (dino.combatState) {
+            switch (dino.overallState) {
                 case 'neutral':
                     updateNeutralState(dino);
                     break;
@@ -4125,7 +4148,7 @@
                     dino.combatTarget = availableEnemies.reduce((nearest, enemy) => 
                         calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
                     );
-                    dino.combatState = 'seeking';
+                    dino.overallState = 'seeking';
                     // // console.log(`🎯 ${dino.species.name} entdeckt verfügbaren Feind: ${dino.combatTarget.species.name}`);
                 } else {
                     // Alle Feinde kämpfen bereits - warte oder suche weiter
@@ -4135,9 +4158,9 @@
         }
 
         function updateSeekingState(dino) {
-            if (!dino.combatTarget || dino.combatTarget.combatState === 'dead') {
+            if (!dino.combatTarget || dino.combatTarget.overallState === 'dead') {
                 dino.combatTarget = null;
-                dino.combatState = 'neutral';
+                dino.overallState = 'neutral';
                 return;
             }
             
@@ -4146,7 +4169,7 @@
             if (targetAlreadyFighting) {
                 // console.log(`🚫 ${dino.species.name}: Ziel wird bereits bekämpft, suche neues Ziel`);
                 dino.combatTarget = null;
-                dino.combatState = 'neutral';
+                dino.overallState = 'neutral';
                 return;
             }
             
@@ -4155,7 +4178,7 @@
             // Zu weit weg? Aufgeben
             if (distance > dino.detectionRadius * 1.5) {
                 dino.combatTarget = null;
-                dino.combatState = 'neutral';
+                dino.overallState = 'neutral';
                 return;
             }
             
@@ -4166,7 +4189,7 @@
             }
             
             // WICHTIG: seekEnemy() nur wenn NICHT bereits im Kampf
-            if (dino.combatState !== 'fighting') {
+            if (dino.overallState !== 'fighting') {
                 seekEnemy(dino);
             }
         }
@@ -4207,8 +4230,8 @@
         }
 
         function updateFightingState(dino) {
-            if (!dino.combatTarget || dino.combatTarget.combatState === 'dead') {
-                dino.combatState = 'neutral';
+            if (!dino.combatTarget || dino.combatTarget.overallState === 'dead') {
+                dino.overallState = 'neutral';
                 dino.combatTarget = null;
                 return;
             }
@@ -4267,7 +4290,7 @@
                     return;
                 }
 
-                const moveSpeed = dino.speed * gameSpeed * 1.5; // Schneller im Kampf
+                const moveSpeed = dino.getMovementSpeed();
                 const moveTileX = (dx / distance) * moveSpeed;
                 const moveTileY = (dy / distance) * moveSpeed;
                 
@@ -4291,7 +4314,7 @@
                 } else {
                     // Kann Feind nicht verfolgen wegen Wasser
                     dino.combatTarget = null;
-                    dino.combatState = 'neutral';
+                    dino.overallState = 'neutral';
                     
                     if (debugMode) {
                         console.log(`🚫 ${dino.species.name} bricht Verfolgung ab: Wasser blockiert Weg`);
@@ -4320,8 +4343,8 @@
             // console.log(`⚔️ Neuer Kampf: ${attacker.species.name} vs ${defender.species.name}`);
             
             // Beide Dinos in Kampfmodus
-            attacker.combatState = 'fighting';
-            defender.combatState = 'fighting';
+            attacker.overallState = 'fighting';
+            defender.overallState = 'fighting';
             attacker.combatTarget = defender;
             defender.combatTarget = attacker;
             
@@ -4566,7 +4589,7 @@
         function handleDeath(dino) {
             // // console.log(`💀 ${dino.species.name} ist gestorben`);
             
-            dino.combatState = 'dead';
+            dino.overallState = 'dead';
             dino.combatTarget = null;
             
             // Leiche erstellen
@@ -4600,15 +4623,14 @@
                 
                 // Alle Teilnehmer zurück zu neutral setzen
                 combat.participants.forEach(participant => {
-                    if (participant !== loser && participant.combatState !== 'dead') {
-                        participant.combatState = 'neutral';
+                    if (participant !== loser && participant.overallState !== 'dead') {
+                        participant.overallState = 'neutral';
                         participant.combatTarget = null;
                         
                         // NEU: Bewegung wieder aktivieren
                         participant.behaviorState = 'resting';
                         participant.behaviorTimer = 0;
                         participant.currentBehaviorDuration = participant.getRandomRestDuration();
-                        
                         // console.log(`🔓 ${participant.species.name} kann sich wieder bewegen`);
                     }
                 });
@@ -4617,8 +4639,8 @@
             }
             
             // Gewinner spezifisch zurück zu neutral
-            if (winner.combatState !== 'dead') {
-                winner.combatState = 'neutral';
+            if (winner.overallState !== 'dead') {
+                winner.overallState = 'neutral'
                 winner.postCombatCooldownUntil = Date.now() + (FOOD_CONFIG.POST_COMBAT_COOLDOWN * 1000);
                 winner.combatTarget = null;
                 
@@ -4778,7 +4800,7 @@
 
         // HP/Stamina Balken zur bestehenden Dino.render() hinzufügen
         function renderCombatUI(dino) {
-            if (dino.combatState === 'dead') return;
+            if (dino.overallState === 'dead') return;
             
             const pixelX = dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
             const pixelY = dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
@@ -4805,7 +4827,7 @@
             ctx.fillRect(pixelX - barWidth/2, staminaY, barWidth * (dino.currentStamina/dino.maxStamina), barHeight);
             
             // Cooldown-Balken
-            if (dino.combatState === 'fighting') {
+            if (dino.overallState === 'fighting') {
                 const timeSinceLastAttack = (Date.now() - dino.lastAttackTime) / 1000;
                 const cooldownProgress = Math.min(1, timeSinceLastAttack / COMBAT_CONFIG.ATTACK_COOLDOWN);
                 
@@ -4821,7 +4843,7 @@
             let symbolX = 0;
             const symbolY = startY - 12; 
             // Kampf-Symbol
-            if (dino.combatState === 'fighting') {
+            if (dino.overallState === 'fighting') {
                 ctx.fillStyle = '#FF6B35';
                 ctx.strokeStyle = '#000000';
                 ctx.lineWidth = 1;
@@ -4878,7 +4900,7 @@
 
         // Nahrungsquellen in der Nähe finden
         function findFoodSourcesInRange(dino) {
-            if (dino.combatState === 'dead' || dino.foodState === 'consuming') return [];
+            if (dino.overallState === 'dead' || dino.foodState === 'consuming') return [];
             
             const sources = [];
             const detectionRadius = dino.detectionRadius;
@@ -4987,7 +5009,7 @@
             gameObjects.forEach(obj => {
                 if (obj instanceof Dino && 
                     obj !== excludeDino && 
-                    obj.combatState !== 'dead' && 
+                    obj.overallState !== 'dead' && 
                     obj.foodState === 'seeking' && 
                     obj.foodTarget && 
                     obj.foodTarget.object === foodObject) {
@@ -5234,7 +5256,7 @@
         }
 
         function updateFood(dino) {
-            if (dino.combatState === 'dead') return;
+            if (dino.overallState === 'dead') return;
             
             const currentTime = Date.now();
             
@@ -5243,7 +5265,7 @@
             const inFoodCooldown = currentTime < dino.foodCooldownUntil;
             
             // Nahrungsverhalten nur wenn nicht im Cooldown und nicht kämpfend
-            if (!inPostCombatCooldown && !inFoodCooldown && dino.combatState !== 'fighting') {
+            if (!inPostCombatCooldown && !inFoodCooldown && dino.overallState !== 'fighting') {
                 
                 switch (dino.foodState) {
                     case 'neutral':
@@ -5260,7 +5282,7 @@
         }
 
         function updateFoodNeutralState(dino) {
-            if (dino.combatState === 'neutral') {
+            if (dino.overallState === 'neutral') {
             
                 const bestFood = selectBestFoodSource(dino);
                 
@@ -5373,7 +5395,7 @@
             const nearbyDinos = gameObjects.filter(obj => 
                 obj instanceof Dino && 
                 obj !== dino && 
-                obj.combatState !== 'dead' &&
+                obj.overallState !== 'dead' &&
                 calculateDistance(dino, obj) < 1.8
             );
             
@@ -5421,12 +5443,12 @@
             const moveDistance = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
             
             if (moveDistance > 0.1) {
-                let moveSpeed = dino.speed * gameSpeed;
-                
-                // Langsamere Bewegung bei Kollisionsvermeidung für mehr Kontrolle
+                let moveSpeed = dino.getMovementSpeed();
+/*
+                // Bei Kollisionsvermeidung temporär langsamer
                 if (movementReason === "collision_avoidance") {
-                    moveSpeed *= 0.5;
-                }
+                    moveSpeed *= 0.7; // Nur 30% langsamer statt 50%
+                }*/
                 
                 const newX = dino.tileX + (finalDx / moveDistance) * moveSpeed;
                 const newY = dino.tileY + (finalDy / moveDistance) * moveSpeed;
