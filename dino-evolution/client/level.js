@@ -170,34 +170,6 @@ const FOOD_CONFIG = {
 };
 
 
-// Konstanten für Kampfsystem
-const COMBAT_CONFIG = {
-    ATTACK_DISTANCE: 1.2, // Kacheln
-    DETECTION_BASE: 2, // Basis-Erkennungsradius in Kacheln
-    MOVEMENT_STAMINA_COST: 20, // pro Sekunde
-    STAMINA_RECOVERY: 4, // pro Sekunde bei Stillstand
-    ATTACK_COOLDOWN: 1.5,
-    
-    // Konditionskosten für Angriffe
-    STAMINA_COSTS: {
-        'Sprung': 25,
-        'Biss': 20,
-        'Tödlicher Biss': 30,
-        'Kopfstoß': 22,
-        'Gift Speien': 28,
-        'Schwanzschlag': 35
-    },
-    
-    // Icons für Angriffstypen
-    ATTACK_ICONS: {
-        'Sprung': '🦘',
-        'Biss': '🦷',
-        'Tödlicher Biss': '💀',
-        'Kopfstoß': '🎯',
-        'Gift Speien': '☠️',
-        'Schwanzschlag': '🐉'
-    }
-};
 
 // Kachel-Typen und Farben
 const TILE_TYPES = {
@@ -345,7 +317,6 @@ async function saveProgress() {
 }
 
 
-// 2. NEUE FUNKTION - Zufällige Karten-Breite berechnen
 function calculateRandomMapWidth() {
     // Basis: 60 Kacheln
     // Variation: 0% bis +70% = 60 bis 102 Kacheln
@@ -385,12 +356,6 @@ function calculateRandomLevelResources() {
         rodentAbundance: biomeData.rodentRange[0] + Math.random() * (biomeData.rodentRange[1] - biomeData.rodentRange[0]),
         description: biomeData.description
     };
-    
-    // console.log(`🌍 Biom generiert: ${biomeData.name} (${biomeData.description})`);
-    // console.log(`💧 Wasser: ${(levelBiome.waterAbundance * 100).toFixed(0)}%`);
-    // console.log(`🌳 Pflanzen: ${(levelBiome.plantAbundance * 100).toFixed(0)}%`);
-    // console.log(`🐭 Nagetiere: ${(levelBiome.rodentAbundance * 100).toFixed(0)}%`);
-    
     return levelBiome;
 }
 
@@ -1006,44 +971,6 @@ function getDistanceToWater(x, y) {
     }
     
     return minDistance === Infinity ? 999 : minDistance;
-}
-
-function ensurePassages() {
-    // console.log('Stelle Durchgänge sicher...');
-    ensureHorizontalPassage();
-    ensureVerticalPassage();
-}
-
-function ensureHorizontalPassage() {
-    const startY = Math.floor(mapHeight * 0.5);
-    const leftStart = { x: 0, y: startY };
-    const rightEnd = { x: mapWidth - 1, y: startY };
-    
-    if (!hasPath(leftStart, rightEnd)) {
-        // console.log('Erstelle horizontalen Durchgang...');
-        const passageY = Math.floor(mapHeight * 0.5);
-        for (let x = 0; x < mapWidth; x++) {
-            if (tileMap[passageY][x] === TILE_TYPES.WATER) {
-                tileMap[passageY][x] = TILE_TYPES.GRASS;
-            }
-        }
-    }
-}
-
-function ensureVerticalPassage() {
-    const startX = Math.floor(mapWidth * 0.5);
-    const bottomStart = { x: startX, y: mapHeight - 1 };
-    const topEnd = { x: startX, y: 0 };
-    
-    if (!hasPath(bottomStart, topEnd)) {
-        // console.log('Erstelle vertikalen Durchgang...');
-        const passageX = Math.floor(mapWidth * 0.5);
-        for (let y = 0; y < mapHeight; y++) {
-            if (tileMap[y][passageX] === TILE_TYPES.WATER) {
-                tileMap[y][passageX] = TILE_TYPES.GRASS;
-            }
-        }
-    }
 }
 
 function hasPath(start, end) {
@@ -3189,7 +3116,7 @@ function addCombatPropertiesToDino(dino) {
     dino.hasSatiatedBoostMax = false;
                 
     // Erkennungsradius berechnen
-    dino.detectionRadius = COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
+    dino.detectionRadius = window.DinoAbilities.COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
     
     // Verfügbare Angriffe ermitteln
     dino.availableAttacks = getAvailableAttacks(dino);

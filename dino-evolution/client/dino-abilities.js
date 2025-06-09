@@ -502,6 +502,36 @@ function canChangeProperty(properties, propertyName, newValue, availablePoints) 
     return { possible: true, cost: 0, refund: 0 };
 }
 
+// Konstanten für Kampfsystem
+const COMBAT_CONFIG = {
+    ATTACK_DISTANCE: 1.2, // Kacheln
+    DETECTION_BASE: 2, // Basis-Erkennungsradius in Kacheln
+    MOVEMENT_STAMINA_COST: 20, // pro Sekunde
+    STAMINA_RECOVERY: 4, // pro Sekunde bei Stillstand
+    ATTACK_COOLDOWN: 1.5,
+    
+    // Konditionskosten für Angriffe
+    STAMINA_COSTS: {
+        'Sprung': 25,
+        'Biss': 20,
+        'Tödlicher Biss': 30,
+        'Kopfstoß': 22,
+        'Gift Speien': 28,
+        'Schwanzschlag': 35
+    },
+    
+    // Icons für Angriffstypen
+    ATTACK_ICONS: {
+        'Sprung': '🦘',
+        'Biss': '🦷',
+        'Tödlicher Biss': '💀',
+        'Kopfstoß': '🎯',
+        'Gift Speien': '☠️',
+        'Schwanzschlag': '🐉'
+    }
+};
+
+
 // ===================================
 // EXPORT (Browser & Node.js kompatibel)
 // ===================================
@@ -512,6 +542,7 @@ if (typeof window !== 'undefined') {
         PROPERTY_CONFIG,
         DINO_ABILITIES_CONFIG,
         SPECIAL_ABILITIES,
+        COMBAT_CONFIG,
         calculateDinoAbilities,
         findPropertyConfig,
         getAvailableSpecialAbilities,
@@ -526,6 +557,7 @@ if (typeof module !== 'undefined' && module.exports) {
         PROPERTY_CONFIG,
         DINO_ABILITIES_CONFIG,
         SPECIAL_ABILITIES,
+        COMBAT_CONFIG,
         calculateDinoAbilities,
         findPropertyConfig,
         getAvailableSpecialAbilities,
