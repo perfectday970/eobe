@@ -197,7 +197,7 @@ const TILE_COLORS = {
 };
 
 // ===================================
-// API-FUNKTIONEN
+// API-FUNKTIONEN (unverändert)
 // ===================================
 
 async function loadLevelData() {
@@ -248,140 +248,74 @@ async function loadLevelData() {
     }
 }
 
-// ===================================
-// INITIALISIERUNG
-// ===================================
-
-async function initGame() {
-    canvas = document.getElementById('gameCanvas');
-    ctx = canvas.getContext('2d');
-    
-    // Canvas nimmt immer volle Fenstergröße ein
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    
-    // Basis-Zoom setzen
-    const canvasTileSizeByWidth = canvas.width / mapWidth;
-    const canvasTileSizeByHeight = canvas.height / mapHeight;
-    baseZoomLevel = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight) / 32; // 32 = gewünschte Standard-Kachelgröße
-    currentZoom = baseZoomLevel;
-    
-    calculateTerrainOffsets();
-    
-    window.addEventListener('resize', resizeCanvas);
-
-    initScrollingAndZoom();
-    
-    const loadSuccess = await loadLevelData();
-    
-    if (loadSuccess) {
-        setLoadingText('Generiere Level...');
-        
-        setTimeout(() => {
-            generateLevel();
-            initializeCombatForAllDinos()
-            hideLoadingShowGame();
-            startGameLoop();
-        }, 1000);
-    }
-}
-
-
-async function proceedToNextLevel(earnedPoints) {
-  
-    if (!sessionId || sessionId.startsWith('offline')) {
-        // Offline-Modus
-        const nextLevel = (levelData.currentLevel || 1) + 1;
-        const urlParams = new URLSearchParams();
-        urlParams.set('level', nextLevel);
-        urlParams.set('earnedPoints', earnedPoints);
-        window.location.href = `index.html?${urlParams.toString()}`;
+async function saveProgress() {
+    if (saveInProgress || !sessionId || sessionId.startsWith('offline')) {
         return;
     }
     
+    saveInProgress = true;
+    const saveBtn = document.getElementById('saveBtn');
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = '💾 Speichere...';
+    saveBtn.disabled = true;
+    
     try {
-        // Server-Request
-        const response = await fetch(`${API_BASE}/complete-level`, {
+        // Aktuelle Population aus gameObjects extrahieren
+        const currentPopulation = levelData.populationData.map(species => {
+            const ownDinos = gameObjects.filter(obj => 
+                obj instanceof Dino && 
+                !obj.isEnemy && 
+                obj.species.name === species.name
+            );
+            
+            return {
+                ...species,
+                population: {
+                    total: ownDinos.length,
+                    adults: ownDinos.filter(d => d.isAdult).length,
+                    juveniles: ownDinos.filter(d => !d.isAdult).length,
+                    isExtinct: ownDinos.length === 0
+                }
+            };
+        });
+        
+        const response = await fetch(`${API_BASE}/save-progress`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({
                 sessionId: sessionId,
-                completedLevel: currentLevel || levelData.currentLevel || 1,
-                earnedPoints: earnedPoints,
-                victory: true
+                currentLevel: currentLevel || levelData.currentLevel || levelData.level || 1,
+                populationData: currentPopulation
             })
         });
         
         const data = await response.json();
-        // console.log('📥 DEBUG: Server Response:', data);
         
         if (data.success) {
-            // KRITISCH: Session-ID UND neues Level in URL
-            const urlParams = new URLSearchParams();
-            urlParams.set('session', sessionId);           // Session beibehalten!
-            urlParams.set('earnedPoints', earnedPoints);
-            urlParams.set('level', data.newLevel);         // Neues Level explizit
+            saveBtn.textContent = '✅ Gespeichert';
+            setTimeout(() => {
+                saveBtn.textContent = originalText;
+            }, 2000);
             
-            const targetUrl = `index.html?${urlParams.toString()}`;
-           
-            window.location.href = targetUrl;
+            // console.log('💾 Fortschritt gespeichert');
         } else {
-            throw new Error(data.error || 'Level-Abschluss fehlgeschlagen');
+            throw new Error(data.error || 'Speichern fehlgeschlagen');
         }
         
     } catch (error) {
-        console.error('❌ DEBUG: Fehler beim Level-Abschluss:', error);
-        
-        // Fallback mit Session-Erhaltung
-        const nextLevel = (currentLevel || levelData.currentLevel || 1) + 1;
-        const urlParams = new URLSearchParams();
-        urlParams.set('session', sessionId);  // WICHTIG: Session beibehalten
-        urlParams.set('level', nextLevel);
-        urlParams.set('earnedPoints', earnedPoints);
-        window.location.href = `index.html?${urlParams.toString()}`;
+        console.error('❌ Fehler beim Speichern:', error);
+        saveBtn.textContent = '❌ Fehler';
+        setTimeout(() => {
+            saveBtn.textContent = originalText;
+        }, 2000);
+    } finally {
+        saveBtn.disabled = false;
+        saveInProgress = false;
     }
 }
 
-
-function addCombatPropertiesToDino(dino) {
-    if (!window.DinoAbilities || !window.DinoAbilities.calculateDinoAbilities) {
-        console.error('❌ DinoAbilities nicht verfügbar! Script nicht geladen?');
-        return;
-    }
-    
-    // Fähigkeiten berechnen
-    dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
-    dino.baseSpeed = 0.00 + dino.abilities['Geschwindigkeit'] / 2000;
-
-    // Kampfwerte
-    dino.maxHP = dino.abilities['Lebenspunkte'];
-    dino.currentHP = dino.maxHP;
-    dino.maxStamina = dino.abilities['Kondition'];
-    dino.currentStamina = dino.maxStamina;
-    
-    // Kampfzustand
-    dino.overallState = 'neutral';
-    dino.combatTarget = null;
-    dino.lastAttackTime = 0; // NEU: Cooldown-Timer
-    dino.combatTurn = false;
-    dino.isAttacking = false;
-    dino.attackAnimationStart = 0;
-    dino.wasMovingLastFrame = false;
-
-    dino.killCount = 0;
-    dino.hasMuscleBoost = false;
-    dino.hasMuscleBoostMax = false; // Stufe 2
-
-    dino.totalFoodConsumed = 0;
-    dino.hasSatiatedBoost = false;
-    dino.hasSatiatedBoostMax = false;
-                
-    // Erkennungsradius berechnen
-    dino.detectionRadius = window.DinoAbilities.COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
-    
-    // Verfügbare Angriffe ermitteln
-    dino.availableAttacks = getAvailableAttacks(dino);
-}
 
 function calculateRandomMapWidth() {
     // Basis: 60 Kacheln
@@ -680,6 +614,61 @@ function animateCounter(element, start, end, duration) {
 // NAVIGATION
 // ===================================
 
+async function proceedToNextLevel(earnedPoints) {
+  
+    if (!sessionId || sessionId.startsWith('offline')) {
+        // Offline-Modus
+        const nextLevel = (levelData.currentLevel || 1) + 1;
+        const urlParams = new URLSearchParams();
+        urlParams.set('level', nextLevel);
+        urlParams.set('earnedPoints', earnedPoints);
+        window.location.href = `index.html?${urlParams.toString()}`;
+        return;
+    }
+    
+    try {
+        // Server-Request
+        const response = await fetch(`${API_BASE}/complete-level`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: sessionId,
+                completedLevel: currentLevel || levelData.currentLevel || 1,
+                earnedPoints: earnedPoints,
+                victory: true
+            })
+        });
+        
+        const data = await response.json();
+        // console.log('📥 DEBUG: Server Response:', data);
+        
+        if (data.success) {
+            // KRITISCH: Session-ID UND neues Level in URL
+            const urlParams = new URLSearchParams();
+            urlParams.set('session', sessionId);           // Session beibehalten!
+            urlParams.set('earnedPoints', earnedPoints);
+            urlParams.set('level', data.newLevel);         // Neues Level explizit
+            
+            const targetUrl = `index.html?${urlParams.toString()}`;
+           
+            window.location.href = targetUrl;
+        } else {
+            throw new Error(data.error || 'Level-Abschluss fehlgeschlagen');
+        }
+        
+    } catch (error) {
+        console.error('❌ DEBUG: Fehler beim Level-Abschluss:', error);
+        
+        // Fallback mit Session-Erhaltung
+        const nextLevel = (currentLevel || levelData.currentLevel || 1) + 1;
+        const urlParams = new URLSearchParams();
+        urlParams.set('session', sessionId);  // WICHTIG: Session beibehalten
+        urlParams.set('level', nextLevel);
+        urlParams.set('earnedPoints', earnedPoints);
+        window.location.href = `index.html?${urlParams.toString()}`;
+    }
+}
+
 function retryLevel() {
     const urlParams = new URLSearchParams();
     urlParams.set('session', sessionId);
@@ -767,7 +756,507 @@ function goBackToGenerator() {
 }
 
 // ===================================
-// SCROLLING & ZOOM EVENTS
+// TERRAIN-GENERATION
+// ===================================
+
+function simpleNoise(x, y, seed = 1000) {
+    let n = Math.sin((x * 127.1 + y * 311.7) * 43758.5453 + seed);
+    return (n - Math.floor(n));
+}
+
+function getTileTypeAtPosition(tileX, tileY) {
+    if (tileY < 0 || tileY >= mapHeight || tileX < 0 || tileX >= mapWidth) {
+        return TILE_TYPES.GRASS;
+    }
+    
+    if (tileMap[tileY] && tileMap[tileY][tileX] !== undefined) {
+        return tileMap[tileY][tileX];
+    }
+    
+    return TILE_TYPES.GRASS;
+}
+
+function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, attempts = 50) { 
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        let testTileX, testTileY;
+        
+        if (maxDistanceInTiles === 0) {
+            testTileX = centerTileX;
+            testTileY = centerTileY;
+        } else {
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = Math.random() * maxDistanceInTiles;
+            testTileX = centerTileX + Math.cos(angle) * distance;
+            testTileY = centerTileY + Math.sin(angle) * distance;
+        }
+        
+        const boundedTileX = Math.max(1, Math.min(mapWidth - 2, testTileX));
+        const boundedTileY = Math.max(6, Math.min(mapHeight - 2, testTileY));
+        
+        const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
+        
+        if (tileType !== TILE_TYPES.WATER) {
+            // console.log(`  ✓ Gültige Position gefunden: (${boundedTileX.toFixed(1)}, ${boundedTileY.toFixed(1)})`);
+            return { tileX: boundedTileX, tileY: boundedTileY, valid: true };
+        }
+    }
+
+    for (let y = Math.floor(mapHeight * 0.3); y < mapHeight - 2; y++) {
+        for (let x = 1; x < mapWidth - 2; x++) {
+            const tileType = getTileTypeAtPosition(x, y);
+            if (tileType !== TILE_TYPES.WATER) {
+                // console.log(`  ✓ Fallback Position: (${x}, ${y})`);
+                return { tileX: x, tileY: y, valid: true };
+            }
+        }
+    }
+    
+    // console.log(`  ❌ Auch Fallback fehlgeschlagen!`);
+    return { tileX: centerTileX, tileY: centerTileY, valid: false };
+}
+
+function generateTileMap() {
+    const canvasTileSizeByWidth = canvas.width / mapWidth;
+    const canvasTileSizeByHeight = canvas.height / mapHeight;
+    const canvasTileSize = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight);
+    
+    tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));  
+    tileMap = [];
+
+    for (let y = 0; y < mapHeight; y++) {
+        tileMap[y] = [];
+        for (let x = 0; x < mapWidth; x++) {
+            // Alle Zeilen bekommen normales Terrain
+            tileMap[y][x] = TILE_TYPES.DIRT;
+        }
+    }
+
+    generateLakesWithAbundance();
+    generateGrassAroundWater();
+    ensurePassages();
+    smoothTerrain();
+}
+
+
+function generateLakesWithAbundance() {
+    // Basis-Seen-Anzahl basierend auf Biom
+    const baseLakeCount = 2;
+    const abundanceFactor = levelBiome.waterAbundance;
+    
+    let lakeCount, avgLakeSize;
+    
+    if (abundanceFactor < 0.5) {
+        // Wenig Wasser: Wenige, kleine Seen
+        lakeCount = Math.max(1, Math.floor(baseLakeCount * abundanceFactor));
+        avgLakeSize = 30 + Math.random() * 40; // 30-70
+    } else if (abundanceFactor > 1.5) {
+        // Viel Wasser: Viele oder große Seen
+        const extraLakes = Math.floor((abundanceFactor - 1.0) * 3);
+        lakeCount = baseLakeCount + extraLakes + Math.floor(Math.random() * 3);
+        avgLakeSize = 50 + Math.random() * 80; // 50-130
+    } else {
+        // Normal: Standard mit leichter Variation
+        lakeCount = baseLakeCount + Math.floor(Math.random() * 2);
+        avgLakeSize = 40 + Math.random() * 60; // 40-100
+    }
+
+    for (let i = 0; i < lakeCount; i++) {
+        const seedX = 10 + Math.floor(Math.random() * (mapWidth - 20));
+        const seedY = 10 + Math.floor(Math.random() * (mapHeight - 20));
+        
+        // Größenvariation ±30%
+        const sizeVariation = 0.7 + Math.random() * 0.6; // 0.7 bis 1.3
+        const targetSize = Math.floor(avgLakeSize * sizeVariation);
+        
+        growLake(seedX, seedY, targetSize);
+    }
+}
+
+function growLake(startX, startY, targetSize) {
+    const waterTiles = [{x: startX, y: startY}];
+    
+    if (isValidPosition(startX, startY)) {
+        tileMap[startY][startX] = TILE_TYPES.WATER;
+    }
+    
+    while (waterTiles.length < targetSize) {
+        const expansion = [];
+        
+        for (const waterTile of waterTiles) {
+            const directions = [[-1,0], [1,0], [0,-1], [0,1]];
+            
+            for (const [dx, dy] of directions) {
+                const newX = waterTile.x + dx;
+                const newY = waterTile.y + dy;
+                
+                if (isValidPosition(newX, newY) && 
+                    tileMap[newY][newX] !== TILE_TYPES.WATER) {
+                    
+                    if (!expansion.some(e => e.x === newX && e.y === newY)) {
+                        expansion.push({x: newX, y: newY});
+                    }
+                }
+            }
+        }
+        
+        if (expansion.length === 0) {
+            break;
+        }
+        
+        const expansionsThisRound = Math.min(
+            expansion.length, 
+            targetSize - waterTiles.length,
+            1 + Math.floor(Math.random() * 4)
+        );
+        
+        for (let i = 0; i < expansionsThisRound; i++) {
+            const randomIndex = Math.floor(Math.random() * expansion.length);
+            const candidate = expansion.splice(randomIndex, 1)[0];
+            
+            tileMap[candidate.y][candidate.x] = TILE_TYPES.WATER;
+            waterTiles.push(candidate);
+            
+            if (waterTiles.length >= targetSize) {
+                break;
+            }
+        }
+    }
+}
+
+function generateGrassAroundWater() {
+
+    const newMap = JSON.parse(JSON.stringify(tileMap));
+    
+    for (let y = 0; y < mapHeight; y++) {
+        for (let x = 0; x < mapWidth; x++) {
+            if (tileMap[y][x] !== TILE_TYPES.WATER) {
+                const waterDistance = getDistanceToWater(x, y);
+                
+                let grassProbability = 0;
+                if (waterDistance === 1) {
+                    grassProbability = 0.9;
+                } else if (waterDistance === 2) {
+                    grassProbability = 0.7;
+                } else if (waterDistance === 3) {
+                    grassProbability = 0.4;
+                } else if (waterDistance <= 5) {
+                    grassProbability = 0.2;
+                } else {
+                    grassProbability = 0.1;
+                }
+                
+                if (Math.random() < grassProbability) {
+                    newMap[y][x] = TILE_TYPES.GRASS;
+                }
+            }
+        }
+    }   
+    tileMap = newMap;
+}
+
+function getDistanceToWater(x, y) {
+    let minDistance = Infinity;
+    
+    for (let dy = -8; dy <= 8; dy++) {
+        for (let dx = -8; dx <= 8; dx++) {
+            const checkX = x + dx;
+            const checkY = y + dy;
+            
+            if (isValidPosition(checkX, checkY) && 
+                tileMap[checkY][checkX] === TILE_TYPES.WATER) {
+                const distance = Math.abs(dx) + Math.abs(dy);
+                minDistance = Math.min(minDistance, distance);
+            }
+        }
+    }
+    
+    return minDistance === Infinity ? 999 : minDistance;
+}
+
+function hasPath(start, end) {
+    if (!isValidPosition(start.x, start.y) || !isValidPosition(end.x, end.y)) {
+        return false;
+    }
+    
+    const visited = new Set();
+    const queue = [start];
+    visited.add(`${start.x},${start.y}`);
+    
+    const directions = [[-1,0], [1,0], [0,-1], [0,1]];
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        
+        if (current.x === end.x && current.y === end.y) {
+            return true;
+        }
+        
+        for (const [dx, dy] of directions) {
+            const newX = current.x + dx;
+            const newY = current.y + dy;
+            const key = `${newX},${newY}`;
+            
+            if (isValidPosition(newX, newY) && 
+                !visited.has(key) &&
+                tileMap[newY][newX] !== TILE_TYPES.WATER) {
+                
+                visited.add(key);
+                queue.push({ x: newX, y: newY });
+            }
+        }
+    }
+    
+    return false;
+}
+
+function smoothTerrain() {
+    const iterations = 1;
+    
+    for (let iter = 0; iter < iterations; iter++) {
+        const newMap = JSON.parse(JSON.stringify(tileMap));
+        
+        for (let y = 1; y < mapHeight - 1; y++) {
+            for (let x = 1; x < mapWidth - 1; x++) {
+                if (tileMap[y][x] === TILE_TYPES.DIRT) {
+                    const nearbyGrass = countNearbyType(x, y, TILE_TYPES.GRASS);
+                    if (nearbyGrass >= 6) {
+                        newMap[y][x] = TILE_TYPES.GRASS;
+                    }
+                }
+            }
+        }
+        
+        tileMap = newMap;
+    }
+}
+
+function countNearbyType(x, y, tileType) {
+    let count = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const checkX = x + dx;
+            const checkY = y + dy;
+            
+            if (isValidPosition(checkX, checkY) && 
+                tileMap[checkY][checkX] === tileType) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+function isValidPosition(x, y) {
+    return x >= 0 && x < mapWidth && y >= 0 && y < mapHeight;
+}
+
+// ===================================
+// TERRAIN-RENDERING (ANGEPASST FÜR SCROLLING)
+// ===================================
+
+function calculateTerrainOffsets() {
+    const terrainPixelWidth = mapWidth * tileSize;
+    const terrainPixelHeight = mapHeight * tileSize;
+    
+    // NEU: Zentrieren nur wenn Terrain kleiner als Canvas
+    if (terrainPixelWidth < canvas.width) {
+        terrainOffsetX = (canvas.width - terrainPixelWidth) / 2 - scrollX;
+    } else {
+        terrainOffsetX = -scrollX; // Scrolling wenn größer
+    }
+    
+    if (terrainPixelHeight < canvas.height) {
+        terrainOffsetY = (canvas.height - terrainPixelHeight) / 2 - scrollY;
+    } else {
+        terrainOffsetY = -scrollY; // Scrolling wenn größer
+    }
+}
+
+function renderTerrain() {
+    ctx.fillStyle = '#1a3a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    for (let y = 0; y < mapHeight; y++) {
+        for (let x = 0; x < mapWidth; x++) {
+            if (tileMap[y] && tileMap[y][x] !== undefined) {
+                renderTile(x, y, tileMap[y][x], animationTime);
+            }
+        }
+    }
+}
+
+function renderTile(x, y, tileType, time = 0) {
+    const tileX = x * tileSize + terrainOffsetX;
+    const tileY = y * tileSize + terrainOffsetY;
+    const colors = TILE_COLORS[tileType];
+    
+    ctx.fillStyle = colors.base;
+    ctx.fillRect(tileX, tileY, tileSize, tileSize);
+    
+    const shadowSize = Math.max(1, Math.floor(tileSize / 32));
+    
+    ctx.fillStyle = colors.highlight;
+    ctx.fillRect(tileX, tileY, tileSize, shadowSize);
+    ctx.fillRect(tileX, tileY, shadowSize, tileSize);
+    
+    ctx.fillStyle = colors.shadow;
+    ctx.fillRect(tileX, tileY + tileSize - shadowSize, tileSize, shadowSize);
+    ctx.fillRect(tileX + tileSize - shadowSize, tileY, shadowSize, tileSize);
+    
+    const noiseSeed = x * 73 + y * 149;
+    const scale = tileSize / baseTileSize;
+    
+    if (tileType === TILE_TYPES.GRASS) {
+        const grassColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.15)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.15)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.15)})`;
+        ctx.fillStyle = grassColor;
+        
+        const grassBlades = 2;
+        for (let i = 0; i < grassBlades; i++) {
+            const randomX = ((noiseSeed + i * 37) % 100) / 100;
+            const randomY = ((noiseSeed + i * 67) % 100) / 100;
+            const randomHeight = ((noiseSeed + i * 23) % 100) / 100;
+            
+            const bladeX = tileX + (2 * scale) + (randomX * (tileSize - 6 * scale));
+            const bladeY = tileY + (2 * scale) + (randomY * (tileSize - 12 * scale));
+            const bladeWidth = 2 * scale;
+            const bladeHeight = 4 * scale + randomHeight * 8 * scale;
+            
+            if (bladeX >= tileX && bladeX + bladeWidth <= tileX + tileSize &&
+                bladeY >= tileY && bladeY + bladeHeight <= tileY + tileSize) {
+                ctx.fillRect(bladeX, bladeY, bladeWidth, bladeHeight);
+            }
+        }
+        
+        const flowerColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.85)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.85)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.85)})`;
+        ctx.fillStyle = flowerColor;
+        
+        const flowers = 1;
+        for (let i = 0; i < flowers; i++) {
+            const randomX = ((noiseSeed + i * 91) % 100) / 100;
+            const randomY = ((noiseSeed + i * 113) % 100) / 100;
+            
+            const flowerSize = 3 * scale;
+            const flowerX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - flowerSize));
+            const flowerY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - flowerSize));
+            
+            if (flowerX >= tileX && flowerX + flowerSize <= tileX + tileSize &&
+                flowerY >= tileY && flowerY + flowerSize <= tileY + tileSize) {
+                ctx.fillRect(flowerX, flowerY, flowerSize, flowerSize);
+            }
+        }
+    }
+    
+    if (tileType === TILE_TYPES.DIRT) {
+        const rockColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
+                                ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
+                                ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`;
+        ctx.fillStyle = rockColor;
+        
+        const rocks = 2;
+        for (let i = 0; i < rocks; i++) {
+            const randomX = ((noiseSeed + i * 41) % 100) / 100;
+            const randomY = ((noiseSeed + i * 83) % 100) / 100;
+            const randomSize = ((noiseSeed + i * 29) % 100) / 100;
+            
+            const rockSize = (4 + randomSize * 6) * scale;
+            const rockX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - rockSize));
+            const rockY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - rockSize));
+            
+            if (rockX >= tileX && rockX + rockSize <= tileX + tileSize &&
+                rockY >= tileY && rockY + rockSize <= tileY + tileSize) {
+                ctx.fillRect(rockX, rockY, rockSize, rockSize);
+            }
+        }
+        
+        const crumbColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.1)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.1)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.1)})`;
+        ctx.fillStyle = crumbColor;
+        
+        const crumbs = 3;
+        for (let i = 0; i < crumbs; i++) {
+            const randomX = ((noiseSeed + i * 127) % 100) / 100;
+            const randomY = ((noiseSeed + i * 179) % 100) / 100;
+            
+            const crumbSize = 2 * scale;
+            const crumbX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - crumbSize));
+            const crumbY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - crumbSize));
+            
+            if (crumbX >= tileX && crumbX + crumbSize <= tileX + tileSize &&
+                crumbY >= tileY && crumbY + crumbSize <= tileY + tileSize) {
+                ctx.fillRect(crumbX, crumbY, crumbSize, crumbSize);
+            }
+        }
+    }
+    
+    if (tileType === TILE_TYPES.WATER) {
+        for (let layer = 0; layer < 2; layer++) {
+            const waveSpeed = 1.0 + layer * 0.5;
+            const waveFreq = 0.15 + layer * 0.08;
+            const waveAmplitude = (4 - layer * 1) * scale;
+            
+            const waveColors = [
+                `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.1)}, 
+                        ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.1)}, 
+                        ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.1)})`,
+                `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
+                        ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
+                        ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`
+            ];
+            ctx.fillStyle = waveColors[layer];
+            
+            for (let i = 0; i < 2; i++) {
+                const baseY = tileY + (8 + i * 12) * scale;
+                const waveY = baseY + Math.sin((x * waveFreq + time * waveSpeed + layer * 0.8)) * waveAmplitude;
+                
+                if (waveY >= tileY + 2 * scale && waveY <= tileY + tileSize - 4 * scale) {
+                    const segments = 3;
+                    for (let seg = 0; seg < segments; seg++) {
+                        const segWidth = tileSize / segments;
+                        const segX = tileX + seg * segWidth;
+                        const segWaveY = waveY + Math.sin((segX * 0.08 + time * waveSpeed)) * (waveAmplitude * 0.6);
+                        
+                        if (segX >= tileX && segX + segWidth <= tileX + tileSize &&
+                            segWaveY >= tileY && segWaveY + 3 * scale <= tileY + tileSize) {
+                            
+                            if (((noiseSeed + seg + layer * 10) % 2) === 0) {
+                                ctx.fillRect(segX, segWaveY, segWidth * 0.8, 3 * scale);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        const bubbleColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.85)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.85)}, 
+                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.85)})`;
+        ctx.fillStyle = bubbleColor;
+        
+        const bubbles = 1;
+        for (let i = 0; i < bubbles; i++) {
+            const randomX = ((noiseSeed + i * 157) % 100) / 100;
+            const randomY = ((noiseSeed + i * 193) % 100) / 100;
+            
+            const bubbleSize = 4 * scale;
+            const bubbleX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - bubbleSize));
+            const bubbleY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - bubbleSize));
+            
+            if (bubbleX >= tileX && bubbleX + bubbleSize <= tileX + tileSize &&
+                bubbleY >= tileY && bubbleY + bubbleSize <= tileY + tileSize) {
+                ctx.fillRect(bubbleX, bubbleY, bubbleSize, bubbleSize);
+            }
+        }
+    }
+}
+
+// ===================================
+// SCROLLING & ZOOM EVENTS (NEU)
 // ===================================
 
 function initScrollingAndZoom() {
@@ -894,6 +1383,1176 @@ function handleTouchEnd(event) {
 }
 
 // ===================================
+// DINO-KLASSE (unverändert)
+// ===================================
+
+class Dino {
+    constructor(tileX, tileY, species, isAdult, isEnemy = false) {
+        this.tileX = tileX;
+        this.tileY = tileY;
+        this.species = species;
+        this.isAdult = isAdult;
+        this.isEnemy = isEnemy;
+        this.health = isAdult ? 100 : 60;
+        this.energy = 100;
+        
+        this.baseScale = isAdult ? 0.2496 : 0.14976;
+        this.scale = this.baseScale;
+        this.speed = (species.properties.hinterbeine_länge || 50) / 2667;
+        this.targetTileX = tileX;
+        this.targetTileY = tileY;
+        this.selected = false;
+        this.dinoType = dinoRenderer.getDinoType(species.properties);
+        this.color = dinoRenderer.getDinoColor(species.properties, isEnemy);
+        this.facingRight = !isEnemy;
+        this.hasMovedSideways = false;  // Für Umweg-Pfadfindung
+        this.preferredSide = null;      // Welche Seite für Umweg
+        this.spiralDirection = null;
+        this.lastTileX = tileX;
+
+        this.baseSpeed = this.speed; // Normalisiert auf 0-1
+        this.currentSpeedMultiplier = 1.0
+        
+        // NEU: Cross-Movement System
+        this.initializeCrossMovement();
+        
+        this.initializeMovementBehavior();
+        this.isMovingForward = true;
+        this.animationPhase = 'idle';
+        this.phaseStartTime = Date.now();
+
+        this.avoidanceMode = {
+            active: false,
+            blockedPosition: null,       // {x, y} wo blockiert wurde
+            originalDirection: null,     // {x, y} normalisierter Richtungsvektor
+            currentStep: 1,              // Aktueller Schritt (1-4)
+            attemptCount: 0,             // Wie oft wurde bei Schritt 1 neu gestartet
+            useRightSide: Math.random() < 0.5,          // true = rechts umgehen, false = links
+            stepStartTime: 0,            // Für Timing der Schritte
+            stepDuration: 0,             // Aktuelle Schrittdauer
+            currentStepTarget: null,     // Zielposition für aktuellen Schritt
+            originalBehaviorState: null, // Ursprünglicher Zustand speichern
+            originalTarget: null         // Ursprüngliches Ziel {x, y}
+        };
+    }
+
+    getMovementSpeed() {
+        let multiplier = 1.0;
+        
+        // Geschwindigkeits-Multiplikator basierend auf aktuellem Zustand
+        if (this.overallState === 'seeking') {
+            multiplier = 1.3; // 30% schneller bei Verfolgung/Nahrungssuche
+        }
+        
+        return this.baseSpeed * multiplier * gameSpeed;
+    }
+
+    // Neue Methode in der Dino-Klasse
+    updateAvoidanceMode() {
+        if (!this.avoidanceMode.active) return;
+        
+        // Prüfe Erfolg
+        if (this.checkAvoidanceSuccess()) {
+            this.exitAvoidanceMode('success');
+            return;
+        }
+        
+        const currentTime = Date.now();
+        const elapsed = (currentTime - this.avoidanceMode.stepStartTime) / 1000;
+        
+        // Bewegungs-/Pausen-Timing wie normale Bewegung
+        const isMoving = this.avoidanceMode.currentStep % 2 === 1; // Ungerade = Bewegung
+        const duration = isMoving ? 
+            this.getRandomMoveDuration() : 
+            this.getRandomRestDuration() * 0.5; // Kürzere Pausen
+        
+        if (elapsed >= duration) {
+            // Nächster Schritt
+            this.nextAvoidanceStep();
+        } else if (isMoving) {
+            // Bewegung ausführen
+            this.executeAvoidanceMovement();
+        }
+    }
+
+    // Berechnet nächsten Schritt
+    nextAvoidanceStep() {
+        this.avoidanceMode.currentStep++;
+        if(debugMode && this.selected) console.log(`🔄 Umgehung Schritt ${this.avoidanceMode.currentStep}`);
+        if (this.avoidanceMode.currentStep > 8) { // 4 Bewegungen + 4 Pausen
+            if(debugMode && this.selected) console.log(`✅ Umgehung erfolgreich abgeschlossen`);
+            // Zyklus abgeschlossen, von vorne beginnen
+            this.avoidanceMode.currentStep = 1;
+            this.avoidanceMode.attemptCount++;
+            
+            // Nach 5 Versuchen Seite wechseln
+            if (this.avoidanceMode.attemptCount >= 12) {
+                this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
+                this.avoidanceMode.attemptCount = 0;
+                // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
+            }
+        }
+        
+        this.avoidanceMode.stepStartTime = Date.now();
+        
+        // Berechne Ziel für Bewegungsschritte
+        if (this.avoidanceMode.currentStep % 2 === 1) {
+            this.calculateAvoidanceTarget();
+        }
+    }
+
+    // Berechnet Zielposition für aktuellen Schritt
+    calculateAvoidanceTarget() {
+        const stepNumber = Math.ceil(this.avoidanceMode.currentStep / 2); // 1, 2, 3, oder 4
+        const moveDistance = this.minMoveDistance + Math.random() * (this.maxMoveDistance - this.minMoveDistance);
+        
+        let targetAngle;
+        const randomVariation = (Math.random() - 0.5) * 0.3; // ±15° in Radiant
+        
+        switch(stepNumber) {
+            case 1: // Zurück (~180° von Original-Richtung)
+                targetAngle = Math.atan2(
+                    -this.avoidanceMode.originalDirection.y,
+                    -this.avoidanceMode.originalDirection.x
+                ) + randomVariation;
+                break;
+                
+            case 2: // Seitlich (90° vom Rückwärts)
+                const backAngle = Math.atan2(
+                    -this.avoidanceMode.originalDirection.y,
+                    -this.avoidanceMode.originalDirection.x
+                );
+                const sideOffset = this.avoidanceMode.useRightSide ? -Math.PI/2 : Math.PI/2;
+                targetAngle = backAngle + sideOffset + randomVariation;
+                break;
+                
+            case 3: // Vorwärts (Original-Richtung)
+            case 4: // Nochmal vorwärts
+                targetAngle = Math.atan2(
+                    this.avoidanceMode.originalDirection.y,
+                    this.avoidanceMode.originalDirection.x
+                ) + randomVariation;
+                break;
+        }
+        
+        this.avoidanceMode.currentStepTarget = {
+            x: this.tileX + Math.cos(targetAngle) * moveDistance,
+            y: this.tileY + Math.sin(targetAngle) * moveDistance
+        };
+    }
+
+    // Führt Bewegung aus
+    executeAvoidanceMovement() {
+        if (!this.avoidanceMode.currentStepTarget) return;
+        
+        const dx = this.avoidanceMode.currentStepTarget.x - this.tileX;
+        const dy = this.avoidanceMode.currentStepTarget.y - this.tileY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0.1) {
+            const moveSpeed = this.getMovementSpeed();
+            const moveX = (dx / distance) * moveSpeed;
+            const moveY = (dy / distance) * moveSpeed;
+            
+            const newX = this.tileX + moveX;
+            const newY = this.tileY + moveY;
+            
+            // Prüfe ob neue Position blockiert ist
+            const pathCheck = this.checkPathBlocked(this, this.tileX, this.tileY, newX, newY);
+            
+            if (pathCheck.blocked) {
+                // Neues Hindernis! Von hier neu starten
+                //console.log(`🚫 ${this.species.name} trifft auf neues Hindernis während Umgehung`);
+                this.avoidanceMode.blockedPosition = pathCheck.position;
+                this.avoidanceMode.currentStep = 1;
+                this.avoidanceMode.attemptCount++;
+                if (this.avoidanceMode.attemptCount >= 12) {
+                    this.avoidanceMode.useRightSide = !this.avoidanceMode.useRightSide;
+                    this.avoidanceMode.attemptCount = 0;
+                    // console.log(`🔄 ${this.species.name} wechselt Umgehungsseite`);
+                }
+                this.calculateAvoidanceTarget();
+            } else {
+                // Bewegung ausführen
+                this.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
+                this.tileY = Math.max(5, Math.min(mapHeight - 1, newY));
+                
+                // Blickrichtung anpassen
+                if (Math.abs(dx) > 0.1) {
+                    this.facingRight = dx < 0;
+                }
+            }
+        }
+    }
+
+    // Prüft ob ein Pfad blockiert ist
+    checkPathBlocked(checkDino, fromX, fromY, toX, toY, stepSize = 0.1) {
+        const dx = toX - fromX;
+        const dy = toY - fromY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const steps = Math.ceil(distance / stepSize);
+        
+        for (let i = 1; i <= steps; i++) {
+            const progress = i / steps;
+            const checkX = fromX + dx * progress;
+            const checkY = fromY + dy * progress;
+            // console.log("dieser dino? checkPathBlocked ", checkDino);
+            if (!isPositionValidForMovement(checkDino, checkX, checkY)) {
+                // Blockierung gefunden, gebe Position zurück
+                return {
+                    blocked: true,
+                    position: { x: checkX, y: checkY }
+                };
+            }
+        }
+        
+        return { blocked: false };
+    }
+
+    // Berechnet Fortschritt hinter der Blockierungslinie
+    getProgressBeyondLine(currentPos, lineOrigin, lineDirection) {
+        const toPoint = {
+            x: currentPos.x - lineOrigin.x,
+            y: currentPos.y - lineOrigin.y
+        };
+        
+        // Skalarprodukt für Projektion auf Richtungsvektor
+        return toPoint.x * lineDirection.x + toPoint.y * lineDirection.y;
+    }
+
+    // Prüft ob Umgehung erfolgreich war
+    checkAvoidanceSuccess() {
+        if (!this.avoidanceMode.active) return false;
+        
+        const progress = this.getProgressBeyondLine(
+            { x: this.tileX, y: this.tileY },
+            this.avoidanceMode.blockedPosition,
+            this.avoidanceMode.originalDirection
+        );
+                    
+        return progress >= 2;
+    }
+
+    // Aktiviert den Umgehungs-Modus
+    activateAvoidanceMode(targetX, targetY, blockedAt) {
+        // NEU: Prüfe ob Hindernis wirklich im Weg liegt
+        if (!this.isObstacleInMovementPath(targetX, targetY, blockedAt)) {
+            // Hindernis liegt nicht in Bewegungsrichtung - ignorieren
+            if (debugMode && this.selected) {
+                console.log(`🚫 ${this.species.name}: Hindernis nicht im Weg, ignoriere Umgehung`);
+            }
+            
+            // Einfach Ziel anpassen und weitermachen
+            this.chooseNewMovementTarget();
+            return;
+        }
+        
+        // Speichere aktuellen Zustand
+        this.avoidanceMode.originalBehaviorState = this.behaviorState;
+        this.avoidanceMode.originalTarget = { x: targetX, y: targetY };
+        
+        // Berechne Richtung
+        const dx = targetX - this.tileX;
+        const dy = targetY - this.tileY;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        
+        this.avoidanceMode.active = true;
+        this.overallState === 'avoiding'
+        this.avoidanceMode.blockedPosition = blockedAt;
+        this.avoidanceMode.originalDirection = {
+            x: dx / length,
+            y: dy / length
+        };
+        this.avoidanceMode.currentStep = 1;
+        this.avoidanceMode.attemptCount = 0;
+        this.avoidanceMode.useRightSide = Math.random() < 0.5;
+        this.avoidanceMode.stepStartTime = Date.now();
+        
+        // Setze Verhalten auf speziellen Modus
+        this.behaviorState = 'avoiding';
+        
+        if (debugMode && this.selected) {
+            console.log(`🚧 ${this.species.name} aktiviert Umgehungs-Modus bei (${blockedAt.x.toFixed(1)}, ${blockedAt.y.toFixed(1)})`);
+        }
+    }
+    
+    isObstacleInMovementPath(targetX, targetY, obstaclePos) {
+        // EINFACHE LOGIK: Prüfe nur X-Koordinate basierend auf Cross-Movement Ziel
+        
+        if (!this.currentGoal) {
+            // Kein Cross-Movement Ziel definiert - immer umgehen
+            return true;
+        }
+        
+        const dinoX = this.tileX;
+        const obstacleX = obstaclePos.x;
+        
+        let isInPath = false;
+        
+        if (this.currentGoal === 'right') {
+            // Dino wandert nach rechts → nur Hindernisse rechts vom Dino sind "im Weg"
+            isInPath = obstacleX > dinoX;
+        } else if (this.currentGoal === 'left') {
+            // Dino wandert nach links → nur Hindernisse links vom Dino sind "im Weg"  
+            isInPath = obstacleX < dinoX;
+        }
+        
+        if (debugMode && this.selected) {
+            console.log(`🎯 ${this.species.name} Ziel: ${this.currentGoal} | Dino X: ${dinoX.toFixed(1)} | Hindernis X: ${obstacleX.toFixed(1)} -> ${isInPath ? 'IM WEG' : 'NICHT IM WEG'}`);
+        }
+        
+        return isInPath;
+    }
+
+
+    // Beendet den Umgehungs-Modus
+    exitAvoidanceMode(reason = 'success') {
+        this.avoidanceMode.active = false;
+        this.overallState === 'neutral';
+        
+        // Stelle ursprünglichen Zustand wieder her
+        if (this.avoidanceMode.originalBehaviorState) {
+            this.behaviorState = this.avoidanceMode.originalBehaviorState;
+        }
+        
+        // console.log(`✅ ${this.species.name} beendet Umgehungs-Modus: ${reason}`);
+    }
+
+    getCollisionBox(checkTileX, checkTileY) {
+        // Kollisionsbox basierend auf Dino-Größe
+        const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8;
+        const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6;
+        
+        // Box sollte beim Körper/Beinen sein, nicht beim Kopf
+        // Verschiebung nach unten um etwa 25% der Körperhöhe
+        const verticalOffset = boxHeight * 0.5 ;
+
+        let pixel = tileToPixel(checkTileX, checkTileY)
+        
+        return {
+            left: pixel.x - boxWidth / 2,
+            right: pixel.x + boxWidth / 2,
+            top: pixel.y + boxHeight / 2 + verticalOffset,
+            bottom: pixel.y - boxHeight / 2 + verticalOffset
+        };
+    }
+
+    renderDebugInfo(pixelX, pixelY) {
+        ctx.save();
+        
+        // Kollisionsbox visualisieren
+        const box = this.getCollisionBox(this.tileX, this.tileY);
+        if(this.selected){
+            console.log('Kollisionsbox-Check 1:', box);
+        }
+        ctx.strokeStyle = this.canSwim() ? '#00FFFF' : '#FF00FF'; // Cyan für Schwimmer, Magenta für Nicht-Schwimmer
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(
+            box.left,
+            box.top,
+            box.right - box.left,
+            box.bottom - box.top
+        );
+        
+        // Mittelpunkt markieren
+        ctx.fillStyle = '#FFFF00';
+        ctx.beginPath();
+        ctx.arc(pixelX, pixelY, 3, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Schwimm-Status anzeigen
+        if (this.canSwim()) {
+            ctx.fillStyle = '#00FFFF';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('🏊', pixelX, pixelY - 40 * this.scale);
+        }
+        
+        ctx.restore();
+        if(debugMode && this.selected) {
+            ctx.save(); 
+            ctx.fillStyle = '#FFFF00';
+            ctx.font = '12px Arial';
+
+            if (this.avoidanceMode.active) {
+                                        
+                // Blockierungslinie visualisieren
+
+                const blockPixel = tileToPixel(this.avoidanceMode.blockedPosition.x, this.avoidanceMode.blockedPosition.y);
+                const blockX = blockPixel.x;
+                const blockY = blockPixel.y;                       
+                // Linie perpendikular zur Original-Richtung
+                const perpX = -this.avoidanceMode.originalDirection.y * 50;
+                const perpY = this.avoidanceMode.originalDirection.x * 50;
+                
+                ctx.strokeStyle = '#FF0000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(blockX - perpX, blockY - perpY);
+                ctx.lineTo(blockX + perpX, blockY + perpY);
+                ctx.stroke();
+                
+                // Fortschritts-Info
+                const progress = this.getProgressBeyondLine(
+                    {x: this.tileX, y: this.tileY},
+                    this.avoidanceMode.blockedPosition,
+                    this.avoidanceMode.originalDirection
+                );
+                
+
+                ctx.fillText(`Step: ${this.avoidanceMode.currentStep} | Round: ${this.avoidanceMode.attemptCount} | Progress: ${progress.toFixed(1)}`, pixelX, pixelY + 60);
+
+                // NEU: Kachel-Typ anzeigen
+                const currentTileType = getTileTypeAtPosition(Math.floor(this.tileX), Math.floor(this.tileY));
+                const tileTypeName = currentTileType === TILE_TYPES.GRASS ? 'GRASS' : 
+                                currentTileType === TILE_TYPES.DIRT ? 'DIRT' : 
+                                currentTileType === TILE_TYPES.WATER ? 'WATER' : 'UNKNOWN';        
+                ctx.fillText(`Tile: ${tileTypeName} (${Math.floor(this.tileX)}, ${Math.floor(this.tileY)})`, pixelX, pixelY + 75);         
+                                        
+            }
+                                                        
+            ctx.fillText(`Geschwindgkeit: ${this.getMovementSpeed()}) | overallState: ${this.overallState}`, pixelX, pixelY + 90);                       
+            ctx.restore();
+        }
+    }
+
+    canSwim() {
+        // Prüft ob der Dino schwimmen kann
+        return this.abilities && this.abilities['Schwimmen'] && this.abilities['Schwimmen'] > 0;
+    }
+
+    initializeCrossMovement() {
+        // Spawn-Bereiche definieren
+        this.spawnSide = this.isEnemy ? 'right' : 'left';
+        
+        // Ziel-Bereiche definieren (die "letzten vier Kacheln" jeder Seite)
+        this.targetZones = {
+            left: { min: 0, max: 4 },           // Linke Seite: erste 4 Kacheln
+            right: { min: mapWidth - 4, max: mapWidth }  // Rechte Seite: letzte 4 Kacheln
+        };
+        
+        // Home-Bereiche (ursprüngliche Spawn-Bereiche)
+        this.homeZones = {
+            left: { min: mapWidth * 0.05, max: mapWidth * 0.45 },
+            right: { min: mapWidth * 0.55, max: mapWidth * 0.95 }
+        };
+        
+        // Initial alle Dinos wollen zur anderen Seite
+        this.currentGoal = this.spawnSide === 'left' ? 'right' : 'left';
+        
+        // Wahrscheinlichkeits-Modifikatoren
+        this.crossMovementTendency = 0.7; // 70% Wahrscheinlichkeit in Richtung Ziel
+        this.randomMovementChance = 0.3;   // 30% für zufällige Bewegung
+        
+        // console.log(`🎯 Dino ${this.species.name} (${this.spawnSide}): Ziel -> ${this.currentGoal}`);
+    }
+
+    checkGoalReached() {
+        const currentZone = this.targetZones[this.currentGoal];
+        
+        if (this.tileX >= currentZone.min && this.tileX <= currentZone.max) {
+            // Ziel erreicht! Wechsle zum anderen Ziel
+            this.currentGoal = this.currentGoal === 'left' ? 'right' : 'left';
+            
+            // console.log(`🎯 Dino ${this.species.name}: Ziel erreicht! Neues Ziel -> ${this.currentGoal}`);
+            
+            // Kurze Pause nach Ziel-Erreichung
+            this.behaviorState = 'resting';
+            this.currentBehaviorDuration = this.getRandomRestDuration() * 1.5; // Etwas länger ausruhen
+            this.behaviorTimer = 0;
+            this.animationPhase = 'idle';
+            this.phaseStartTime = Date.now();
+            
+            return true;
+        }
+        
+        return false;
+    }
+
+    chooseNewMovementTarget() {
+        this.checkGoalReached();
+        
+        let baseMinTileX = mapWidth * 0.05;
+        let baseMaxTileX = mapWidth * 0.95;
+        // Ziel-Zone bestimmen
+        const targetZone = this.targetZones[this.currentGoal];
+        const targetCenterX = (targetZone.min + targetZone.max) / 2;
+        
+        // Richtung zum Ziel berechnen
+        const directionToTarget = targetCenterX > this.tileX ? 1 : -1;
+        
+        // Entscheidung: Cross-Movement oder Random Movement
+        const useCrossMovement = Math.random() < this.crossMovementTendency;
+        
+        let moveDistance, angle;
+        
+        if (useCrossMovement) {
+            // Cross-Movement: Tendenz zum Ziel
+            moveDistance = this.minMoveDistance + Math.random() * (this.maxMoveDistance - this.minMoveDistance);
+            
+            // Hauptrichtung zum Ziel mit etwas Streuung
+            const baseAngle = directionToTarget > 0 ? 0 : Math.PI; // 0° = rechts, 180° = links
+            const angleVariation = (Math.random() - 0.5) * Math.PI * 0.6; // ±54° Streuung
+            angle = baseAngle + angleVariation;
+            
+            // console.log(`🎯 Cross-Movement: ${this.species.name} -> Ziel ${this.currentGoal}, Winkel: ${(angle * 180 / Math.PI).toFixed(1)}°`);
+        } else {
+            // Random Movement: Normale zufällige Bewegung
+            const shouldChangeDirection = Math.random() < 0.3;
+            if (shouldChangeDirection) {
+                this.isMovingForward = !this.isMovingForward;
+            }
+            
+            let preferredDirectionX = this.isMovingForward ? (this.facingRight ? 1 : -1) : (this.facingRight ? -1 : 1);
+            preferredDirectionX += this.personality.direction_preference * 0.5;
+            
+            const styleInfluence = (this.personality.movement_style + 1) / 2;
+            moveDistance = this.minMoveDistance + styleInfluence * (this.maxMoveDistance - this.minMoveDistance);
+            const distanceVariance = moveDistance * (0.7 + Math.random() * 0.6);
+            
+            angle = Math.random() < 0.7 ? 
+                (Math.random() - 0.5) * Math.PI * 0.8 + (preferredDirectionX < 0 ? Math.PI : 0) :
+                Math.random() * 2 * Math.PI;
+            
+            moveDistance = distanceVariance;
+        }
+        
+        // Neue Position berechnen
+        this.targetTileX = this.tileX + Math.cos(angle) * moveDistance;
+        this.targetTileY = this.tileY + Math.sin(angle) * moveDistance;
+        
+        // Grenzen einhalten
+        this.targetTileX = Math.max(baseMinTileX, Math.min(baseMaxTileX, this.targetTileX));
+        this.targetTileY = Math.max(5, Math.min(mapHeight - 2, this.targetTileY));
+        
+        // Debug-Info
+        if (useCrossMovement) {
+            const distanceToTarget = Math.abs(this.tileX - targetCenterX);
+            // console.log(`📍 ${this.species.name}: Pos ${this.tileX.toFixed(1)} -> Target ${this.targetTileX.toFixed(1)}, Entfernung zum Ziel: ${distanceToTarget.toFixed(1)}`);
+        }
+    }
+
+    // REST DER KLASSE BLEIBT UNVERÄNDERT...
+    updateScale() {
+        const scaleFactor = tileSize / baseTileSize;
+        this.scale = this.baseScale * scaleFactor;
+    }
+
+    initializeMovementBehavior() {
+        const personalitySeed = this.tileX * 127 + this.tileY * 313 + (this.isEnemy ? 1000 : 0);
+        
+        this.personality = {
+            restfulness: 0.3 + (Math.sin(personalitySeed * 0.01) + 1) * 0.35,
+            exploration: 0.2 + (Math.sin(personalitySeed * 0.013) + 1) * 0.4,
+            direction_preference: Math.sin(personalitySeed * 0.017),
+            movement_style: Math.sin(personalitySeed * 0.019)
+        };
+        
+        this.restDurationMin = 0.8 + this.personality.restfulness * 1.2;
+        this.restDurationMax = 1.5 + this.personality.restfulness * 2.5;
+        this.moveDurationMin = 0.6 + (1 - this.personality.restfulness) * 1.0;
+        this.moveDurationMax = 1.2 + (1 - this.personality.restfulness) * 2.0;
+        this.minMoveDistance = 1.5 + this.personality.exploration * 1.5;
+        this.maxMoveDistance = 3.0 + this.personality.exploration * 5.0;
+        
+        const startMoving = Math.random() < (1 - this.personality.restfulness * 0.7);
+        
+        this.behaviorState = startMoving ? 'moving' : 'resting';
+        this.behaviorTimer = Math.random() * 2;
+        
+        if (this.behaviorState === 'resting') {
+            this.currentBehaviorDuration = this.getRandomRestDuration();
+            this.animationPhase = 'idle';
+            this.targetTileX = this.tileX;
+            this.targetTileY = this.tileY;
+        } else {
+            this.currentBehaviorDuration = this.getRandomMoveDuration();
+            this.animationPhase = 'walking';
+            this.chooseNewMovementTarget();
+        }
+    }
+
+    getRandomRestDuration() {
+        const baseVariation = 0.8 + Math.random() * 0.4;
+        return (this.restDurationMin + Math.random() * (this.restDurationMax - this.restDurationMin)) * baseVariation;
+    }
+    
+    getRandomMoveDuration() {
+        const baseVariation = 0.8 + Math.random() * 0.4;
+        return (this.moveDurationMin + Math.random() * (this.moveDurationMax - this.moveDurationMin)) * baseVariation;
+    }
+
+    update() {
+        if (isPaused) return;
+       
+        const frameTime = 1/60;
+        this.behaviorTimer += frameTime * gameSpeed;
+        
+        if (this.avoidanceMode.active) {
+            this.updateAvoidanceMode();
+            this.syncAnimation();
+            return;
+        }
+        
+        if (this.overallState === 'fighting') {
+            this.syncAnimation();
+            return;
+        }
+        
+        if (this.behaviorTimer >= this.currentBehaviorDuration) {
+            this.switchBehaviorState();
+        }
+        
+        if (this.behaviorState === 'moving') {
+            this.handleMovement();
+        }
+        
+        // GEÄNDERTE GRENZEN: Dinos können jetzt ab Reihe 5 (statt 14)
+        this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+        this.tileY = Math.max(1, Math.min(mapHeight - 1, this.tileY));                
+        
+        this.syncAnimation();
+    }
+
+    switchBehaviorState() {
+        if (this.behaviorState === 'resting') {
+            this.behaviorState = 'moving';
+            this.animationPhase = 'walking';
+            this.currentBehaviorDuration = this.getRandomMoveDuration();
+            this.chooseNewMovementTarget();
+        } else {
+            this.behaviorState = 'resting';
+            this.animationPhase = 'idle';
+            this.currentBehaviorDuration = this.getRandomRestDuration();
+            this.targetTileX = this.tileX;
+            this.targetTileY = this.tileY;
+        }
+        
+        this.behaviorTimer = 0;
+        this.phaseStartTime = Date.now();
+    }
+
+    handleMovement() {
+        if (this.avoidanceMode.active) {
+            this.updateAvoidanceMode();
+            return;
+        }
+
+        const dx = this.targetTileX - this.tileX;
+        const dy = this.targetTileY - this.tileY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0.3) {
+            const pathCheck = this.checkPathBlocked(
+                this,
+                this.tileX, 
+                this.tileY, 
+                this.targetTileX, 
+                this.targetTileY
+            );
+            
+            if (pathCheck.blocked) {
+                this.activateAvoidanceMode(this.targetTileX, this.targetTileY, pathCheck.position);
+                return;
+            }
+
+            const moveSpeed = this.getMovementSpeed();
+            const moveTileX = (dx / distance) * moveSpeed;
+            const moveTileY = (dy / distance) * moveSpeed;
+        
+            const newTileX = this.tileX + moveTileX;
+            const newTileY = this.tileY + moveTileY;
+            
+            if (isPositionValidForMovement(this, newTileX, newTileY)) {
+                this.tileX = newTileX;
+                this.tileY = newTileY;
+                this.updateFacingDirection(moveTileX, moveTileY);
+            } else {
+                this.activateAvoidanceMode(this.targetTileX, this.targetTileY, {x: newTileX, y: newTileY});
+            }
+        } else {
+            if (this.behaviorTimer < this.currentBehaviorDuration * 0.8) {
+                this.chooseNewMovementTarget();
+            } else {
+                this.targetTileX = this.tileX;
+                this.targetTileY = this.tileY;
+            }
+        }
+    }
+
+    updateFacingDirection(moveTileX, moveTileY) {
+        if (this.feedingRotationLocked) {
+            return;
+        }
+        
+        if (moveTileX > 0.001) {
+            this.facingRight = false;
+        } else if (moveTileX < -0.001) {
+            this.facingRight = true;
+        }
+    }
+
+    syncAnimation() {
+        const expectedAnimation = this.behaviorState === 'moving' ? 'walking' : 'idle';
+        if (this.animationPhase !== expectedAnimation) {
+            this.animationPhase = expectedAnimation;
+            this.phaseStartTime = Date.now();
+        }
+    }
+
+    render() {
+        let pixel = tileToPixel(this.tileX , this.tileY);
+
+        if (this.isAttacking || this.isConsuming) {
+            const elapsed = this.isAttacking ? 
+                (Date.now() - this.attackAnimationStart) : 
+                (Date.now() - this.consumptionDashStart);
+            const progress = elapsed / 300;
+            
+            if (progress < 0.5) {
+                const dashDistance = 15 * this.scale * (progress * 2);
+                pixel.x += this.facingRight ? -dashDistance : dashDistance;
+            } else if (progress < 1.0) {
+                const returnProgress = (progress - 0.5) * 2;
+                const dashDistance = 15 * this.scale * (1 - returnProgress);
+                pixel.x += this.facingRight ? -dashDistance : dashDistance;
+            }
+        }
+        
+        this.renderShadow(pixel.x, pixel.y);
+        
+        const currentTime = Date.now();
+        const phaseDuration = (currentTime - this.phaseStartTime) / 1000;
+        
+        if (phaseDuration >= 4) {
+            this.animationPhase = this.animationPhase === 'idle' ? 'walking' : 'idle';
+            this.phaseStartTime = currentTime;
+        }
+        
+        const animationTime = currentTime / 1000;
+        const walkSpeed = 4;
+        
+        let animationData = {
+            bodyAnimationY: 0,
+            headAnimationX: 0,
+            headAnimationY: 0,
+            tailAnimationY: 0,
+            frontLegAnimationX: 0,
+            backLegAnimationX: 0
+        };
+        
+        if (this.overallState === 'fighting') {
+            // Kampf-Idle: Nur leichte Atmung
+            animationData.bodyAnimationY = Math.sin(animationTime * 2) * 1; // Weniger Bewegung
+            animationData.headAnimationX = Math.sin(animationTime * 0.5) * 2; // Langsamere Kopfbewegung
+            animationData.tailAnimationY = Math.sin(animationTime * 1) * 2; // Weniger Schwanzwedeln
+        } else if (this.animationPhase === 'idle') {
+            animationData.bodyAnimationY = Math.sin(animationTime * 2) * 2;
+            animationData.headAnimationX = Math.sin(animationTime * 0.8) * 3;
+            animationData.headAnimationY = Math.sin(animationTime * 1.2) * 1.5;
+            animationData.tailAnimationY = Math.sin(animationTime * 1.5) * 4;
+        } else {
+            animationData.frontLegAnimationX = Math.sin(animationTime * walkSpeed) * 6;
+            animationData.backLegAnimationX = Math.sin(animationTime * walkSpeed + Math.PI) * 6;
+            animationData.bodyAnimationY = Math.sin(animationTime * walkSpeed * 2) * 1;
+            animationData.tailAnimationY = Math.sin(animationTime * walkSpeed * 0.75) * 4;
+        }
+        
+        dinoRenderer.renderDino(ctx, pixel.x, pixel.y, this.species.properties, this.dinoType, this.scale, this.isEnemy, animationData, this.facingRight);
+        
+        if (this.selected) {
+            ctx.strokeStyle = '#32cd32';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(pixel.x, pixel.y, 14.4 * this.scale, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+        
+        if (this.health < 100) {
+            const barWidth = 19.2 * this.scale;
+            const barHeight = 3;
+            const barX = pixel.x - barWidth/2;
+            const barY = pixel.y - 19.2 * this.scale;
+            
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(barX, barY, barWidth * (this.health/100), barHeight);
+        }
+        renderCombatUI(this);
+
+        if (debugMode) {
+            this.renderDebugInfo(pixel.x, pixel.y);
+        }
+
+    }
+
+    renderShadow(pixelX, pixelY) {
+        const shadowWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.768;
+        const shadowHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.384;
+        
+        const shadowOffsetX = 2.88 * this.scale;
+        const shadowOffsetY = 7.68 * this.scale;
+        const shadowX = pixelX + shadowOffsetX - shadowWidth / 2;
+        const shadowY = pixelY + shadowOffsetY - shadowHeight / 2;
+        
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#000000';       
+        ctx.beginPath();
+        ctx.ellipse(shadowX + shadowWidth/2, shadowY + shadowHeight/2, 
+                shadowWidth/2, shadowHeight/2, 0, 0, 2 * Math.PI);
+        ctx.fill();     
+        ctx.restore();
+    }
+
+    isClickedBy(mouseX, mouseY) {
+        const pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+        const pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;       
+        const distance = Math.sqrt((mouseX - pixelX)**2 + (mouseY - pixelY)**2);
+        return distance < Math.max(14.4, 19.2 * this.scale);
+    }
+
+    initializeFoodBehavior() {
+        this.foodState = 'neutral';        // 'neutral', 'seeking', 'consuming'
+        this.foodTarget = null;
+        this.consumptionStartTime = 0;
+        this.foodCooldownUntil = 0;        // Timestamp bis wann Cooldown aktiv
+        this.postCombatCooldownUntil = 0;  // Timestamp für Post-Combat Cooldown
+        this.feedingRotationLocked = false; 
+
+        // Nahrungsvorlieben berechnen
+        const props = this.species.properties;
+        this.foodPreferences = {
+            plants: props.pflanzen || 0,
+            meat: props.fleisch || 0,
+            carrion: props.aas || 0
+        };
+        
+        // Kann verschiedene Nahrungstypen konsumieren?
+        this.canConsumePlants = this.foodPreferences.plants >= FOOD_CONFIG.MIN_REQUIREMENTS.PLANTS;
+        this.canConsumeMeat = this.foodPreferences.meat >= FOOD_CONFIG.MIN_REQUIREMENTS.MEAT;
+        this.canConsumeCarrion = this.foodPreferences.carrion >= FOOD_CONFIG.MIN_REQUIREMENTS.CARRION;
+    }
+}
+
+// ===================================
+// UMGEBUNGSOBJEKTE (gekürzt, alle Funktionen unverändert)
+// ===================================
+
+class EnvironmentObject {
+    constructor(tileX, tileY, type, options = {}) {
+        this.tileX = tileX;
+        this.tileY = tileY;
+        this.type = type;
+        this.options = options;
+        
+        if (type === 'tree') {
+            this.baseSize = (Math.random() * 30 + 15) * 0.448;
+            this.size = this.baseSize;
+            
+            this.baseTrunkHeight = this.baseSize * (0.8 + Math.random() * 0.6);
+            this.baseTrunkWidth = Math.max(2, this.baseSize * 0.2);
+            this.baseCrownWidth = this.baseSize * (1.2 + Math.random() * 0.6);
+            this.baseCrownHeight = this.baseSize * (0.8 + Math.random() * 0.4);
+            
+            this.trunkHeight = this.baseTrunkHeight;
+            this.trunkWidth = this.baseTrunkWidth;
+            this.crownWidth = this.baseCrownWidth;
+            this.crownHeight = this.baseCrownHeight;
+            
+            this.treeSeed = Math.floor(tileX * 123 + tileY * 456);
+        } else if (type === 'rock') {
+            this.rockType = options.rockType || 'medium';
+            this.isGroupLeader = options.isGroupLeader || false;
+            this.groupIndex = options.groupIndex || 0;
+            
+            switch (this.rockType) {
+                case 'small':
+                    this.baseSize = (Math.random() * 8 + 6) * 0.512;
+                    break;
+                case 'medium':
+                    this.baseSize = (Math.random() * 15 + 12) * 0.512;
+                    break;
+                case 'large':
+                    this.baseSize = (Math.random() * 25 + 20) * 0.512;
+                    break;
+                default:
+                    this.baseSize = (Math.random() * 15 + 10) * 0.512;
+            }
+            this.size = this.baseSize;
+            
+            this.rockSeed = Math.floor(tileX * 177 + tileY * 239);
+            this.baseWidth = this.baseSize * (0.8 + ((this.rockSeed % 100) / 100) * 0.4);
+            this.baseHeight = this.baseSize * (0.8 + (((this.rockSeed + 50) % 100) / 100) * 0.4);
+            
+            this.width = this.baseWidth;
+            this.height = this.baseHeight;
+            
+            this.colorVariation = (this.rockSeed % 40) - 20;
+        } else if (type === 'rodent') {
+            this.baseSize = (Math.random() * 20 + 10) * 0.32;
+            this.size = this.baseSize;
+            this.moveSpeed = 0.08; // Erhöht von 0.02 auf 0.08
+            this.moveTimer = Math.random() * 3; // NEU: Timer für regelmäßige Bewegung
+            this.moveDirection = Math.random() * Math.PI * 2; // NEU: Bewegungsrichtung
+            this.moveDelay = 0.5 + Math.random(); // NEU: Bewegungsintervall
+        } else {
+            this.baseSize = (Math.random() * 20 + 10) * 0.32;
+            this.size = this.baseSize;
+        }
+    }
+
+    updateScale() {
+        const scaleFactor = tileSize / baseTileSize;
+        
+        this.size = this.baseSize * scaleFactor;
+        
+        if (this.type === 'tree') {
+            this.trunkHeight = this.baseTrunkHeight * scaleFactor;
+            this.trunkWidth = this.baseTrunkWidth * scaleFactor;
+            this.crownWidth = this.baseCrownWidth * scaleFactor;
+            this.crownHeight = this.baseCrownHeight * scaleFactor;
+        } else if (this.type === 'rock') {
+            this.width = this.baseWidth * scaleFactor;
+            this.height = this.baseHeight * scaleFactor;
+        }
+    }
+
+    render() {
+        const pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
+        const pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;
+        
+        ctx.save();
+        ctx.translate(pixelX, pixelY);
+        
+        switch(this.type) {
+            case 'tree':
+                this.renderDetailedTree();
+                break;
+                
+            case 'rock':
+                this.renderDetailedRock();
+                break;
+            case 'rodent':
+                const rodentScale = this.size * 0.8;
+                
+                const bodyWidth = rodentScale * 1.2;
+                const bodyHeight = rodentScale * 0.8;
+                const headSize = rodentScale * 0.6;
+                const tailWidth = rodentScale * 0.3;
+                const tailLength = rodentScale * 1.0;
+                
+                const isBeingHunted = gameObjects.some(obj => 
+                    obj instanceof Dino && 
+                    obj.overallState !== 'dead' &&
+                    obj.foodState === 'consuming' &&
+                    obj.foodTarget && 
+                    obj.foodTarget.object === this
+                );
+                
+                if (isBeingHunted) {
+                    ctx.fillStyle = '#654321'; // Dunkleres Braun = Angst
+                    
+//kann weg
+                    const fearShake = Math.sin(Date.now() * 0.01) * 0.5;
+                    ctx.translate(fearShake, 0);                  
+                } else {
+                    ctx.fillStyle = '#8B4513'; // Normal braun
+                    this.moveTimer += gameSpeed / 60;
+                    
+                    if (this.moveTimer >= this.moveDelay) {
+                        this.moveDirection += (Math.random() - 0.5) * 0.8;
+                        
+                        this.tileX += Math.cos(this.moveDirection) * this.moveSpeed;
+                        this.tileY += Math.sin(this.moveDirection) * this.moveSpeed;
+                        
+                        this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+                        this.tileY = Math.max(mapHeight * 0.6, Math.min(mapHeight - 1, this.tileY));
+                        
+                        this.moveTimer = 0;
+                        this.moveDelay = 0.3 + Math.random() * 0.7;
+                    }
+                }
+                
+                ctx.fillRect(-bodyWidth/2, -bodyHeight/2, bodyWidth, bodyHeight);
+                ctx.fillRect(-bodyWidth/2 - headSize * 0.8, -headSize/2, headSize, headSize);
+                ctx.fillRect(bodyWidth/2, -tailWidth/2, tailLength, tailWidth);
+                
+                break;
+
+        }
+        
+        ctx.restore();
+    }
+
+    renderDetailedTree() {
+        this.renderTrunk();
+        this.renderCrown();
+        this.renderBranches();
+    }
+
+    renderTrunk() {
+        const scale = tileSize / baseTileSize;
+        const trunkX = -this.trunkWidth / 2;
+        const trunkY = 0;
+        
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(trunkX, trunkY, this.trunkWidth, this.trunkHeight);
+        
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(trunkX + this.trunkWidth - 2 * scale, trunkY, 2 * scale, this.trunkHeight);
+        ctx.fillRect(trunkX, trunkY + this.trunkHeight - 2 * scale, this.trunkWidth, 2 * scale);
+        
+        ctx.fillStyle = '#CD853F';
+        ctx.fillRect(trunkX, trunkY, 2 * scale, this.trunkHeight);
+        ctx.fillRect(trunkX, trunkY, this.trunkWidth, 2 * scale);
+        
+        ctx.fillStyle = '#654321';
+        const barkLines = Math.floor(this.trunkHeight / (8 * scale));
+        for (let i = 0; i < barkLines; i++) {
+            const lineY = trunkY + 4 * scale + i * 8 * scale;
+            const lineVariation = ((this.treeSeed + i * 67) % 100) / 100;
+            const lineLength = this.trunkWidth * (0.6 + lineVariation * 0.3);
+            const lineX = trunkX + (this.trunkWidth - lineLength) / 2;
+            
+            ctx.fillRect(lineX, lineY, lineLength, 1 * scale);
+            
+            if (i % 3 === 0) {
+                ctx.fillRect(trunkX + this.trunkWidth * 0.3, lineY - 2 * scale, 1 * scale, 4 * scale);
+            }
+        }
+    }
+
+    renderCrown() {
+        if (this.hasBeenEaten) {
+            return;
+        }
+        const scale = tileSize / baseTileSize;
+        const crownX = -this.crownWidth / 2;
+        const crownY = -this.crownHeight;
+        
+        ctx.fillStyle = '#31AB31';
+        ctx.fillRect(crownX, crownY, this.crownWidth, this.crownHeight);
+        
+        const shadowSize = Math.max(1, Math.floor(this.size / 32));
+        
+        ctx.fillStyle = '#006400';
+        ctx.fillRect(crownX + this.crownWidth - shadowSize, crownY, shadowSize, this.crownHeight);
+        ctx.fillRect(crownX, crownY + this.crownHeight - shadowSize, this.crownWidth, shadowSize);
+        
+        ctx.fillStyle = '#32CD32';
+        ctx.fillRect(crownX, crownY, shadowSize, this.crownHeight);
+        ctx.fillRect(crownX, crownY, this.crownWidth, shadowSize);
+        
+        ctx.fillStyle = '#228B22';
+        const leafClusters = Math.floor(this.crownWidth / (6 * scale));
+        for (let i = 0; i < leafClusters; i++) {
+            const leafX = crownX + 3 * scale + ((this.treeSeed + i * 37) % 100) / 100 * (this.crownWidth - 6 * scale);
+            const leafY = crownY + 3 * scale + ((this.treeSeed + i * 71) % 100) / 100 * (this.crownHeight - 6 * scale);
+            
+            ctx.fillRect(leafX, leafY, 2 * scale, 2 * scale);
+            ctx.fillRect(leafX + 1 * scale, leafY - 1 * scale, 1 * scale, 1 * scale);
+            ctx.fillRect(leafX - 1 * scale, leafY + 1 * scale, 1 * scale, 1 * scale);
+        }
+    }
+
+    renderBranches() {
+        const scale = tileSize / baseTileSize;
+        ctx.fillStyle = '#8B4513';
+        const branches = Math.floor(this.trunkHeight / (15 * scale));
+        
+        for (let i = 0; i < branches; i++) {
+            const branchY = this.trunkHeight * 0.3 + i * (this.trunkHeight * 0.5 / branches);
+            const branchSide = ((this.treeSeed + i * 43) % 2) === 0 ? -1 : 1;
+            const branchLength = (4 + ((this.treeSeed + i * 53) % 100) / 100 * 6) * scale;
+            
+            const branchStartX = branchSide * this.trunkWidth / 2;
+            const branchEndX = branchStartX + branchSide * branchLength;
+            
+            ctx.fillRect(
+                Math.min(branchStartX, branchEndX), 
+                branchY - 1 * scale, 
+                Math.abs(branchEndX - branchStartX), 
+                2 * scale
+            );
+            
+            ctx.fillStyle = '#228B22';
+            ctx.fillRect(branchEndX - 1 * scale, branchY - 2 * scale, 3 * scale, 3 * scale);
+            ctx.fillStyle = '#8B4513';
+        }
+    }
+
+    renderDetailedRock() {
+        const baseColor = this.getRockColor();
+        const shadowColor = this.darkenRockColor(baseColor, 0.6);
+        const highlightColor = this.lightenRockColor(baseColor, 1.4);
+        
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+        
+        const shadowSize = Math.max(1, Math.floor(this.size / 8));
+        
+        ctx.fillStyle = shadowColor;
+        ctx.fillRect(-this.width/2 + this.width - shadowSize, -this.height/2, shadowSize, this.height);
+        ctx.fillRect(-this.width/2, -this.height/2 + this.height - shadowSize, this.width, shadowSize);
+        
+        ctx.fillStyle = highlightColor;
+        ctx.fillRect(-this.width/2, -this.height/2, shadowSize, this.height);
+        ctx.fillRect(-this.width/2, -this.height/2, this.width, shadowSize);
+        
+        this.addRockTexture(baseColor, shadowColor);
+    }
+
+    getRockColor() {
+        const baseGray = 128;
+        const variation = this.colorVariation;
+        const finalGray = Math.max(80, Math.min(180, baseGray + variation));
+        
+        if (this.rockType === 'large') {
+            const r = Math.floor(finalGray * 0.9);
+            const g = Math.floor(finalGray * 0.85);
+            const b = Math.floor(finalGray * 0.8);
+            return `rgb(${r}, ${g}, ${b})`;
+        } else if (this.rockType === 'small') {
+            const factor = 1.1;
+            const r = Math.min(255, Math.floor(finalGray * factor));
+            const g = Math.min(255, Math.floor(finalGray * factor));
+            const b = Math.min(255, Math.floor(finalGray * factor));
+            return `rgb(${r}, ${g}, ${b})`;
+        } else {
+            return `rgb(${finalGray}, ${finalGray}, ${finalGray})`;
+        }
+    }
+
+    darkenRockColor(color, factor) {
+        const matches = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+        if (matches) {
+            const r = Math.floor(parseInt(matches[1]) * factor);
+            const g = Math.floor(parseInt(matches[2]) * factor);
+            const b = Math.floor(parseInt(matches[3]) * factor);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        return '#444444';
+    }
+
+    lightenRockColor(color, factor) {
+        const matches = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+        if (matches) {
+            const r = Math.min(255, Math.floor(parseInt(matches[1]) * factor));
+            const g = Math.min(255, Math.floor(parseInt(matches[2]) * factor));
+            const b = Math.min(255, Math.floor(parseInt(matches[3]) * factor));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        return '#CCCCCC';
+    }
+
+    addRockTexture(baseColor, shadowColor) {
+    }
+}
+
+// ===================================
 // BEWGUNGs-FUNKTIONEN
 // ===================================
 
@@ -952,7 +2611,260 @@ function pixelToTile(pixelX, pixelY) {
     };
 }
 
+// ===================================
+// LEVEL GENERATION
+// ===================================
 
+function generateLevel() {
+    if (!levelData) {
+        console.error('❌ Keine Level-Daten verfügbar');
+        return;
+    } 
+    calculateRandomLevelResources();
+    calculateRandomMapWidth();
+
+    setLoadingText('Generiere Terrain...');
+    generateTileMap();
+    
+    gameObjects = [];
+    let objectCounts = { trees: 0, rocks: 0, rodents: 0, ownDinos: 0, enemyDinos: 0 };
+    
+    setLoadingText('Platziere Umgebung...');
+    generateEnvironment(objectCounts);
+    
+    setLoadingText('Erwecke Dinosaurier...');
+    generateOwnDinosFromData(objectCounts);
+    generateEnemyDinosFromData(objectCounts);    
+    updateAllObjectScales();
+    updateHUD();
+    
+    setLoadingText('Level wird geladen...');
+}
+
+function generateOwnDinosFromData(objectCounts) {
+    levelData.populationData.forEach((species, speciesIndex) => {
+        if (!species.population.isExtinct) {
+            const spawnWidth = mapWidth * 0.25;
+            const centerTileX = 5 + Math.random() * spawnWidth;
+            const centerTileY = 2 + Math.random() * (mapHeight * 0.8); // Von Zeile 2 bis 80% der Karte
+
+            
+            for (let i = 0; i < species.population.adults; i++) {
+                let dinoPlaced = false;
+                while (!dinoPlaced) {                               
+                    const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                    const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
+                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                               
+                    const newDino = new Dino(finalTileX, finalTileY, species, true, false);
+                    
+                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                        gameObjects.push(newDino);
+                        objectCounts.ownDinos++;
+                        dinoPlaced = true;
+                    }                            
+                }
+            }
+            
+            for (let i = 0; i < species.population.juveniles; i++) {
+                let dinoPlaced = false;
+                while (!dinoPlaced) {     
+                    const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                    const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
+                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                              
+                    const newDino = new Dino(finalTileX, finalTileY, species, true, false);
+                    
+                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                        gameObjects.push(newDino);
+                        objectCounts.ownDinos++;
+                        dinoPlaced = true;                                
+                    }
+                }
+            }
+        }
+    });
+}
+
+function generateEnemyDinosFromData(objectCounts) {   
+    if (!levelData.enemyData || levelData.enemyData.length === 0) {
+        return;
+    }
+    
+    levelData.enemyData.forEach((species, speciesIndex) => {
+        if (!species.population.isExtinct) {           
+            const centerTileX = 5 + mapWidth * 0.65 + Math.random() * (mapWidth * 0.25);
+            const centerTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
+            for (let i = 0; i < species.population.adults; i++) {
+                let dinoPlaced = false;
+                while (!dinoPlaced) {                               
+                    const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                    const minEnemyX = mapWidth * 0.55;
+                    const finalTileX = Math.max(minEnemyX, Math.min(mapWidth - 2, position.tileX));
+                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY)); // ← GEÄNDERT                             
+                    const newDino = new Dino(finalTileX, finalTileY, species, true, true);
+                    
+                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                        gameObjects.push(newDino);
+                        objectCounts.enemyDinos++;
+                        dinoPlaced = true;
+                    }                            
+                }
+            }          
+            for (let i = 0; i < species.population.juveniles; i++) {
+                let dinoPlaced = false;
+                while (!dinoPlaced) {     
+                    const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                    const finalTileX = Math.max(mapWidth * 0.55, Math.min(mapWidth - 2, position.tileX));
+                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                             
+                    const newDino = new Dino(finalTileX, finalTileY, species, true, true);
+                    
+                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                        gameObjects.push(newDino);
+                        objectCounts.enemyDinos++;
+                        dinoPlaced = true;                                
+                    }
+                }
+            }
+        }
+    });
+}
+
+function generateEnvironment(objectCounts) {
+    generateTreeGroups(objectCounts);
+    generateRockGroups(objectCounts);
+    generateRodentGroups(objectCounts);
+}
+
+function generateTreeGroups(objectCounts) {
+    const abundanceFactor = levelBiome.plantAbundance;
+    
+    // Basis-Werte
+    const baseGroups = 4;
+    const baseSingleTrees = 3;
+    
+    let groupCount, singleTrees, treesPerGroup;
+    
+    if (abundanceFactor < 0.5) {
+        // Wenig Pflanzen: Spärliche Vegetation
+        groupCount = Math.max(1, Math.floor(baseGroups * abundanceFactor));
+        singleTrees = Math.max(1, Math.floor(baseSingleTrees * abundanceFactor));
+        treesPerGroup = 2 + Math.floor(Math.random() * 3); // 2-4 Bäume pro Gruppe
+    } else if (abundanceFactor > 2.0) {
+        // Viele Pflanzen: Dichte Wälder
+        const extraGroups = Math.floor((abundanceFactor - 1.0) * 4);
+        const extraSingles = Math.floor((abundanceFactor - 1.0) * 6);
+        
+        groupCount = baseGroups + extraGroups + Math.floor(Math.random() * 6);
+        singleTrees = baseSingleTrees + extraSingles + Math.floor(Math.random() * 10);
+        treesPerGroup = 4 + Math.floor(Math.random() * 8); // 4-11 Bäume pro Gruppe
+    } else {
+        // Normal: Standard mit Variation
+        const extraGroups = Math.floor((mapWidth - baseMapWidth) / 10);
+        const extraSingles = Math.floor((mapWidth - baseMapWidth) / 15);
+        
+        groupCount = Math.floor((baseGroups + extraGroups) * abundanceFactor) + Math.floor(Math.random() * 4);
+        singleTrees = Math.floor((baseSingleTrees + extraSingles) * abundanceFactor) + Math.floor(Math.random() * 5);
+        treesPerGroup = 3 + Math.floor(Math.random() * 5); // 3-7 Bäume pro Gruppe
+    }
+    
+    for (let group = 0; group < groupCount; group++) {
+        let groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
+        let groupCenterTileY = mapHeight * 0.4 + Math.random() * (mapHeight * 0.4);
+        
+        // Variable Bäume pro Gruppe
+        const actualTreesInGroup = Math.floor(treesPerGroup * (0.7 + Math.random() * 0.6)); // ±30% Variation
+        
+        for (let i = 0; i < actualTreesInGroup; i++) {
+            const position = findValidLandPosition(groupCenterTileX, groupCenterTileY, 4);
+            
+            if (position.valid) {
+                gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'tree'));
+                objectCounts.trees++;
+            }
+        }
+    }
+    
+    // Einzelne Bäume
+    for (let i = 0; i < singleTrees; i++) {
+        const position = findValidLandPosition(
+            Math.random() * mapWidth, 
+            mapHeight * 0.3 + Math.random() * (mapHeight * 0.5), 
+            0
+        );
+        
+        if (position.valid) {
+            gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'tree'));
+            objectCounts.trees++;
+        }
+    }
+}
+
+function generateRockGroups(objectCounts) {
+    const rockGroups = 8;
+    
+    for (let group = 0; group < rockGroups; group++) {
+        const groupCenterTileX = 5 + Math.random() * (mapWidth - 10);
+        const groupCenterTileY = mapHeight * 0.5 + Math.random() * (mapHeight * 0.4);
+        
+        const rocksInGroup = 3 + Math.floor(Math.random() * 4);
+        
+        for (let i = 0; i < rocksInGroup; i++) {
+            const rockType = i === 0 ? 'large' : (Math.random() < 0.5 ? 'medium' : 'small');
+            const maxDistance = i === 0 ? 0.5 : 2.0;
+            
+            const position = findValidLandPosition(groupCenterTileX, groupCenterTileY, maxDistance);
+            
+            if (position.valid) {
+                gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'rock', {
+                    rockType: rockType,
+                    isGroupLeader: i === 0,
+                    groupIndex: group
+                }));
+                objectCounts.rocks++;
+            }
+        }
+    }
+}
+
+function generateRodentGroups(objectCounts) {
+    const abundanceFactor = levelBiome.rodentAbundance;
+    
+    const baseRodentGroups = 8;
+    const extraRodentGroups = Math.floor((mapWidth - baseMapWidth) / 12);
+    
+    let rodentGroups, rodentsPerGroup;
+    
+    if (abundanceFactor < 0.4) {
+        // Wenig Nagetiere: Seltene Beute
+        rodentGroups = Math.max(2, Math.floor((baseRodentGroups + extraRodentGroups) * abundanceFactor));
+        rodentsPerGroup = 1 + Math.floor(Math.random() * 2); // 1-2 pro Gruppe
+    } else if (abundanceFactor > 1.5) {
+        // Viele Nagetiere: Reichhaltige Jagdgründe
+        const extraGroups = Math.floor((abundanceFactor - 1.0) * 8);
+        rodentGroups = baseRodentGroups + extraRodentGroups + extraGroups;
+        rodentsPerGroup = 2 + Math.floor(Math.random() * 5); // 2-6 pro Gruppe
+    } else {
+        // Normal: Standard-Verteilung
+        rodentGroups = Math.floor((baseRodentGroups + extraRodentGroups) * abundanceFactor);
+        rodentsPerGroup = 1 + Math.floor(Math.random() * 3); // 1-3 pro Gruppe
+    }
+  
+    for (let i = 0; i < rodentGroups; i++) {
+        const centerTileX = 5 + Math.random() * (mapWidth - 10);
+        const centerTileY = mapHeight * 0.6 + Math.random() * (mapHeight * 0.3);
+        
+        // Variable Nagetiere pro Gruppe
+        const actualRodentsInGroup = Math.floor(rodentsPerGroup * (0.6 + Math.random() * 0.8)); // ±40% Variation
+        
+        for (let j = 0; j < actualRodentsInGroup; j++) {
+            const position = findValidLandPosition(centerTileX, centerTileY, 2.0);
+            
+            if (position.valid) {
+                gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'rodent'));
+                objectCounts.rodents++;
+            }
+        }
+    }
+}
 
 // ===================================
 // RESIZE & SKALIERUNG (ÜBERARBEITET)
@@ -1132,7 +3044,83 @@ function speedUp() {
         levelStartTime = Date.now();
     }
 }
+// ===================================
+// INITIALISIERUNG (ÜBERARBEITET)
+// ===================================
 
+async function initGame() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    
+    // Canvas nimmt immer volle Fenstergröße ein
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Basis-Zoom setzen
+    const canvasTileSizeByWidth = canvas.width / mapWidth;
+    const canvasTileSizeByHeight = canvas.height / mapHeight;
+    baseZoomLevel = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight) / 32; // 32 = gewünschte Standard-Kachelgröße
+    currentZoom = baseZoomLevel;
+    
+    calculateTerrainOffsets();
+    
+    window.addEventListener('resize', resizeCanvas);
+
+    initScrollingAndZoom();
+    
+    const loadSuccess = await loadLevelData();
+    
+    if (loadSuccess) {
+        setLoadingText('Generiere Level...');
+        
+        setTimeout(() => {
+            generateLevel();
+            initializeCombatForAllDinos()
+            hideLoadingShowGame();
+            startGameLoop();
+        }, 1000);
+    }
+}
+
+function addCombatPropertiesToDino(dino) {
+    if (!window.DinoAbilities || !window.DinoAbilities.calculateDinoAbilities) {
+        console.error('❌ DinoAbilities nicht verfügbar! Script nicht geladen?');
+        return;
+    }
+    
+    // Fähigkeiten berechnen
+    dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
+    dino.baseSpeed = 0.00 + dino.abilities['Geschwindigkeit'] / 2000;
+
+    // Kampfwerte
+    dino.maxHP = dino.abilities['Lebenspunkte'];
+    dino.currentHP = dino.maxHP;
+    dino.maxStamina = dino.abilities['Kondition'];
+    dino.currentStamina = dino.maxStamina;
+    
+    // Kampfzustand
+    dino.overallState = 'neutral';
+    dino.combatTarget = null;
+    dino.lastAttackTime = 0; // NEU: Cooldown-Timer
+    dino.combatTurn = false;
+    dino.isAttacking = false;
+    dino.attackAnimationStart = 0;
+    dino.wasMovingLastFrame = false;
+
+    dino.killCount = 0;
+    dino.hasMuscleBoost = false;
+    dino.hasMuscleBoostMax = false; // Stufe 2
+
+    dino.totalFoodConsumed = 0;
+    dino.hasSatiatedBoost = false;
+    dino.hasSatiatedBoostMax = false;
+                
+    // Erkennungsradius berechnen
+    dino.detectionRadius = window.DinoAbilities.COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
+    
+    // Verfügbare Angriffe ermitteln
+    dino.availableAttacks = getAvailableAttacks(dino);
+}
 
 function trackKill(killer, victim) {
     killer.killCount++;
@@ -2291,6 +4279,7 @@ function interruptFoodConsumption(dino, reason = 'unknown') {
     if (dino.foodTarget && dino.foodTarget.sourceId) {
         if (occupiedFoodSources.get(dino.foodTarget.sourceId) === dino) {
             occupiedFoodSources.delete(dino.foodTarget.sourceId);
+            // console.log(`🔓 Nahrungsquelle durch Unterbrechung freigegeben: ${dino.foodTarget.sourceId}`);
         }
     }
     
@@ -2355,6 +4344,7 @@ function updateFoodNeutralState(dino) {
         const bestFood = selectBestFoodSource(dino);
         
         if (bestFood) {
+            // console.log(`updateFoodNeutralState ${bestFood.sourceId}`);
             // Double-Check ob noch verfügbar
             const occupiedBy = occupiedFoodSources.get(bestFood.sourceId);
             if (occupiedBy && occupiedBy !== dino) {
@@ -2396,6 +4386,7 @@ function updateFoodSeekingState(dino) {
     // Timeout
     const seekingTime = (Date.now() - dino.seekingStartTime) / 1000;
     if (seekingTime > 8) { // Etwas mehr Zeit für komplexere Wege
+        // console.log(`⏰ ${dino.species.name} seeking timeout - gibt auf`);
         releaseFoodReservation(dino);
         return;
     }
@@ -2403,12 +4394,14 @@ function updateFoodSeekingState(dino) {
     // Feinde in der Nähe? Abbrechen!
     const enemies = findEnemiesInRange(dino);
     if (enemies.length > 0) {
+        // console.log(`⚠️ ${dino.species.name} bricht Nahrungssuche ab - Feinde entdeckt`);
         releaseFoodReservation(dino);
         return;
     }
- 
+
+    
     const targetObj = dino.foodTarget.object;
-    const targetX = dino.feedingPosition.x;
+    const targetX = dino.feedingPosition.x;  // Verwende berechnete Position
     const targetY = dino.feedingPosition.y;
 
     const pathCheck = dino.checkPathBlocked(
@@ -2423,12 +4416,19 @@ function updateFoodSeekingState(dino) {
         dino.activateAvoidanceMode(targetX, targetY, pathCheck.position);
         return;
     }
-   
+    
     const distance = Math.sqrt((dino.tileX - targetX) ** 2 + (dino.tileY - targetY) ** 2);
-    let requiredDistance = 0.1;
+    
+    // Erforderliche Distanz
+    let requiredDistance;
+    if (targetObj.type === 'tree') requiredDistance = 0.1;        // Vorher: 1.0
+    else if (targetObj.type === 'rodent') requiredDistance = 0.1;  // Vorher: 0.4  
+    else if (targetObj.deathTime) requiredDistance = 0.1;         // Vorher: 0.6
+    else requiredDistance = 0.1;                                  // Vorher: 0.8
 
     // Nah genug zum Fressen?
     if (distance <= requiredDistance) {
+        // console.log(`🎯 ${dino.species.name} ist nah genug an Feeding-Position für ${targetObj.type || 'corpse'}`);
         startFoodConsumption(dino, dino.foodTarget);
         return;
     }
@@ -2443,7 +4443,51 @@ function updateFoodSeekingState(dino) {
     let moveTargetX = targetX;
     let moveTargetY = targetY;
     let movementReason = "direct";
+    
+    // 1. PRIORITÄT: Kollisionsvermeidung (wichtigster Punkt)
+    const nearbyDinos = gameObjects.filter(obj => 
+        obj instanceof Dino && 
+        obj !== dino && 
+        obj.overallState !== 'dead' &&
+        calculateDistance(dino, obj) < 1.8
+    );
+    
 
+        // Prüfen ob andere Dinos das GLEICHE Ziel haben
+    const sameTargetDinos = nearbyDinos.filter(otherDino => 
+        otherDino.foodState === 'seeking' && 
+        otherDino.foodTarget && 
+        otherDino.foodTarget.object === targetObj
+    );
+    
+    if (sameTargetDinos.length > 0) {
+        // console.log(`🔄 ${dino.species.name}: Andere Dinos zielen auf gleiche Nahrung - gibt auf`);
+        releaseFoodReservation(dino);
+        dino.foodCooldownUntil = Date.now() + 2000;
+        return;
+    }
+    
+    // Sanfte Kollisionsvermeidung
+    let avoidanceX = 0;
+    let avoidanceY = 0;
+    
+    nearbyDinos.forEach(otherDino => {
+        const dx = dino.tileX - otherDino.tileX;
+        const dy = dino.tileY - otherDino.tileY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > 0 && dist < 1.8) {
+            const repulsionStrength = (1.8 - dist) / 1.8;
+            avoidanceX += (dx / dist) * repulsionStrength;
+            avoidanceY += (dy / dist) * repulsionStrength;
+        }
+    });
+    
+    // Nur KLEINE Ausweichbewegung, nicht übertreiben
+    moveTargetX = targetX + avoidanceX * 0.8;
+    moveTargetY = targetY + avoidanceY * 0.8;
+    movementReason = "collision_avoidance";
+        
     const finalDx = moveTargetX - dino.tileX;
     const finalDy = moveTargetY - dino.tileY;
     const moveDistance = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
@@ -2471,6 +4515,32 @@ function updateFoodSeekingState(dino) {
 
             return;
         }
+    }
+    
+    if (!dino.lastPosition) {
+        dino.lastPosition = { x: dino.tileX, y: dino.tileY, time: Date.now() };
+    }
+    
+    const positionDiff = Math.sqrt(
+        (dino.tileX - dino.lastPosition.x) ** 2 + 
+        (dino.tileY - dino.lastPosition.y) ** 2
+    );
+    
+    const timeDiff = (Date.now() - dino.lastPosition.time) / 1000;
+    
+    if (timeDiff > 3.0 && positionDiff < 0.2) {
+        // console.log(`🚫 ${dino.species.name} steckt fest - bricht ab`);
+        releaseFoodReservation(dino);
+        
+        // Reset alle Flags
+        dino.lastPosition = null;
+        dino.hasMovedSideways = false;
+        dino.preferredSide = null;
+        return;
+    }
+    
+    if (timeDiff > 1.5) {
+        dino.lastPosition = { x: dino.tileX, y: dino.tileY, time: Date.now() };
     }
 }
 
@@ -2577,6 +4647,7 @@ function updateFoodConsumingState(dino) {
     const currentTime = Date.now();
     const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
     
+    // WICHTIG: Dino bleibt ABSOLUT STILL während des Konsums!
     // Alle Bewegung komplett stoppen
     dino.behaviorState = 'resting';
     dino.targetTileX = dino.tileX;  // Position fixieren
