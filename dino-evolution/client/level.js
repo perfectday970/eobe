@@ -833,7 +833,6 @@ function generateTileMap() {
 
     generateLakesWithAbundance();
     generateGrassAroundWater();
-    ensurePassages();
     smoothTerrain();
 }
 
