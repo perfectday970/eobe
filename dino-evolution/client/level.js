@@ -2,6 +2,8 @@
 // ===================================
 // GLOBALE VARIABLEN
 // ===================================
+let frame = 0;
+let firstselector = false;
 
 let canvas, ctx;
 let sessionId = null;
@@ -194,6 +196,108 @@ const TILE_COLORS = {
         highlight: '#87CEEB',
         shadow: '#2F4F4F'
     }
+};
+
+
+// ===================================
+// VEREINHEITLICHTES STATE-SYSTEM
+// ===================================
+
+// Alle möglichen Zustände
+const DINO_STATES = {
+    // Basis-Zustände
+    IDLE: 'idle',                    // Stillstehend, nichts tuend
+    WANDERING: 'wandering',          // Zufällig umherwandernd
+    
+    // Kampf-Zustände
+    SEEKING_ENEMY: 'seeking_enemy',  // Feind verfolgen
+    FIGHTING: 'fighting',            // Im aktiven Kampf
+    
+    // Nahrungs-Zustände
+    SEEKING_FOOD: 'seeking_food',    // Nahrung suchen/ansteuern
+    CONSUMING: 'consuming',          // Nahrung konsumieren
+    
+    // Spezial-Zustände
+    AVOIDING: 'avoiding',            // Hindernis umgehen
+    FLEEING: 'fleeing',             // Vor Gefahr fliehen
+    DEAD: 'dead'                    // Tot
+};
+
+// State-Prioritäten (höhere Zahl = höhere Priorität)
+const STATE_PRIORITIES = {
+    [DINO_STATES.DEAD]: 100,
+    [DINO_STATES.FIGHTING]: 90,
+    [DINO_STATES.FLEEING]: 80,
+    [DINO_STATES.SEEKING_ENEMY]: 70,
+    [DINO_STATES.AVOIDING]: 60,
+    [DINO_STATES.CONSUMING]: 50,
+    [DINO_STATES.SEEKING_FOOD]: 40,
+    [DINO_STATES.WANDERING]: 20,
+    [DINO_STATES.IDLE]: 10
+};
+
+// Erlaubte State-Übergänge
+const ALLOWED_TRANSITIONS = {
+    [DINO_STATES.IDLE]: [
+        DINO_STATES.WANDERING,
+        DINO_STATES.SEEKING_ENEMY,
+        DINO_STATES.SEEKING_FOOD,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD,
+        DINO_STATES.IDLE
+    ],
+    [DINO_STATES.WANDERING]: [
+        DINO_STATES.IDLE,
+        DINO_STATES.SEEKING_ENEMY,
+        DINO_STATES.SEEKING_FOOD,
+        DINO_STATES.AVOIDING,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD,
+        DINO_STATES.FIGHTING
+    ],
+    [DINO_STATES.SEEKING_ENEMY]: [
+        DINO_STATES.FIGHTING,
+        DINO_STATES.IDLE,
+        DINO_STATES.AVOIDING,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD,
+        DINO_STATES.SEEKING_ENEMY
+    ],
+    [DINO_STATES.FIGHTING]: [
+        DINO_STATES.IDLE,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD
+    ],
+    [DINO_STATES.SEEKING_FOOD]: [
+        DINO_STATES.CONSUMING,
+        DINO_STATES.IDLE,
+        DINO_STATES.SEEKING_ENEMY,
+        DINO_STATES.AVOIDING,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD
+    ],
+    [DINO_STATES.CONSUMING]: [
+        DINO_STATES.IDLE,
+        DINO_STATES.SEEKING_ENEMY,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD
+    ],
+    [DINO_STATES.AVOIDING]: [
+        DINO_STATES.IDLE,
+        DINO_STATES.WANDERING,
+        DINO_STATES.SEEKING_ENEMY,
+        DINO_STATES.SEEKING_FOOD,
+        DINO_STATES.FLEEING,
+        DINO_STATES.DEAD,
+        DINO_STATES.AVOIDING,
+        DINO_STATES.FIGHTING
+    ],
+    [DINO_STATES.FLEEING]: [
+        DINO_STATES.IDLE,
+        DINO_STATES.WANDERING,
+        DINO_STATES.DEAD
+    ],
+    [DINO_STATES.DEAD]: []  // Keine Übergänge von tot
 };
 
 // ===================================
@@ -414,8 +518,8 @@ function updateTimerDisplay(remaining) {
 function checkVictoryConditions() {
     if (gameEnded || isLoading) return;
     
-    const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.overallState !== 'dead');
-    const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.overallState !== 'dead');
+    const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.state !== DINO_STATES.DEAD);
+    const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.state !== DINO_STATES.DEAD);
     
     if (ownDinos.length === 0) {
         endLevelByDefeat();
@@ -433,8 +537,8 @@ function endLevelByTime() {
     gameEnded = true;
     levelEndTime = Date.now();
     
-    const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.overallState !== 'dead');
-    const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.overallState !== 'dead');
+    const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.state !== DINO_STATES.DEAD);
+    const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy && obj.state !== DINO_STATES.DEAD);
     
     const ownWeight = calculateTotalWeight(ownDinos);
     const enemyWeight = calculateTotalWeight(enemyDinos);
@@ -456,7 +560,7 @@ function endLevelByEnemiesEliminated() {
     gameEnded = true;
     levelEndTime = Date.now();
     
-    const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.overallState !== 'dead');
+    const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy && obj.state !== DINO_STATES.DEAD);
     
     showLevelEndScreen({
         victory: true,
@@ -1411,14 +1515,6 @@ class Dino {
 
         this.baseSpeed = this.speed; // Normalisiert auf 0-1
         this.currentSpeedMultiplier = 1.0
-        
-        // NEU: Cross-Movement System
-        this.initializeCrossMovement();
-        
-        this.initializeMovementBehavior();
-        this.isMovingForward = true;
-        this.animationPhase = 'idle';
-        this.phaseStartTime = Date.now();
 
         this.avoidanceMode = {
             active: false,
@@ -1433,13 +1529,44 @@ class Dino {
             originalBehaviorState: null, // Ursprünglicher Zustand speichern
             originalTarget: null         // Ursprüngliches Ziel {x, y}
         };
+
+                // VEREINFACHTES STATE-SYSTEM
+        this.state = DINO_STATES.IDLE; // Aktueller Zustand
+        this.stateData = {
+            target: null,           // Ziel (Dino, Nahrung, Position)
+            startTime: Date.now(),  // Wann State begonnen hat
+            previousState: null,    // Vorheriger State
+            customData: {}          // State-spezifische Daten
+        };
+        
+        // Timer für State-Dauer
+        this.stateTimer = 0;
+        this.stateDuration = 0;
+        
+        // Cooldowns
+        this.cooldowns = {
+            combat: 0,
+            food: 0,
+            general: 0
+        };
+        
+        // Animation wird vom State abgeleitet
+        this.animationPhase = this.getAnimationForState();
+
+                // NEU: Cross-Movement System
+        this.initializeCrossMovement();
+        
+        this.initializeMovementBehavior();
+        this.isMovingForward = true;
+        this.animationPhase = 'idle';
+        this.phaseStartTime = Date.now();
     }
 
     getMovementSpeed() {
         let multiplier = 1.0;
         
         // Geschwindigkeits-Multiplikator basierend auf aktuellem Zustand
-        if (this.overallState === 'seeking') {
+        if (this.state === DINO_STATES.SEEKING_ENEMY) {
             multiplier = 1.3; // 30% schneller bei Verfolgung/Nahrungssuche
         }
         
@@ -1477,7 +1604,7 @@ class Dino {
     // Berechnet nächsten Schritt
     nextAvoidanceStep() {
         this.avoidanceMode.currentStep++;
-        if(debugMode && this.selected) console.log(`🔄 Umgehung Schritt ${this.avoidanceMode.currentStep}`);
+      //  if(debugMode && this.selected) console.log(`🔄 Umgehung Schritt ${this.avoidanceMode.currentStep}`);
         if (this.avoidanceMode.currentStep > 8) { // 4 Bewegungen + 4 Pausen
             if(debugMode && this.selected) console.log(`✅ Umgehung erfolgreich abgeschlossen`);
             // Zyklus abgeschlossen, von vorne beginnen
@@ -1647,7 +1774,7 @@ class Dino {
         }
         
         // Speichere aktuellen Zustand
-        this.avoidanceMode.originalBehaviorState = this.behaviorState;
+        this.avoidanceMode.originalBehaviorState = this.state;
         this.avoidanceMode.originalTarget = { x: targetX, y: targetY };
         
         // Berechne Richtung
@@ -1656,7 +1783,7 @@ class Dino {
         const length = Math.sqrt(dx * dx + dy * dy);
         
         this.avoidanceMode.active = true;
-        this.overallState === 'avoiding'
+        this.changeState(DINO_STATES.AVOIDING);
         this.avoidanceMode.blockedPosition = blockedAt;
         this.avoidanceMode.originalDirection = {
             x: dx / length,
@@ -1668,7 +1795,7 @@ class Dino {
         this.avoidanceMode.stepStartTime = Date.now();
         
         // Setze Verhalten auf speziellen Modus
-        this.behaviorState = 'avoiding';
+        this.changeState(DINO_STATES.AVOIDING);
         
         if (debugMode && this.selected) {
             console.log(`🚧 ${this.species.name} aktiviert Umgehungs-Modus bei (${blockedAt.x.toFixed(1)}, ${blockedAt.y.toFixed(1)})`);
@@ -1707,11 +1834,11 @@ class Dino {
     // Beendet den Umgehungs-Modus
     exitAvoidanceMode(reason = 'success') {
         this.avoidanceMode.active = false;
-        this.overallState === 'neutral';
+        this.state === DINO_STATES.IDLE;
         
         // Stelle ursprünglichen Zustand wieder her
         if (this.avoidanceMode.originalBehaviorState) {
-            this.behaviorState = this.avoidanceMode.originalBehaviorState;
+            this.state = this.avoidanceMode.originalBehaviorState;
         }
         
         // console.log(`✅ ${this.species.name} beendet Umgehungs-Modus: ${reason}`);
@@ -1741,9 +1868,9 @@ class Dino {
         
         // Kollisionsbox visualisieren
         const box = this.getCollisionBox(this.tileX, this.tileY);
-        if(this.selected){
-            console.log('Kollisionsbox-Check 1:', box);
-        }
+       // if(this.selected){
+            //console.log('Kollisionsbox-Check 1:', box);
+      //  }
         ctx.strokeStyle = this.canSwim() ? '#00FFFF' : '#FF00FF'; // Cyan für Schwimmer, Magenta für Nicht-Schwimmer
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
@@ -1811,7 +1938,7 @@ class Dino {
                                         
             }
                                                         
-            ctx.fillText(`Geschwindgkeit: ${this.getMovementSpeed()}) | overallState: ${this.overallState}`, pixelX, pixelY + 90);                       
+            ctx.fillText(`Geschwindgkeit: ${this.getMovementSpeed()}) | state: ${this.state}`, pixelX, pixelY + 90);                       
             ctx.restore();
         }
     }
@@ -1857,7 +1984,7 @@ class Dino {
             // console.log(`🎯 Dino ${this.species.name}: Ziel erreicht! Neues Ziel -> ${this.currentGoal}`);
             
             // Kurze Pause nach Ziel-Erreichung
-            this.behaviorState = 'resting';
+            this.changeState(DINO_STATES.IDLE);
             this.currentBehaviorDuration = this.getRandomRestDuration() * 1.5; // Etwas länger ausruhen
             this.behaviorTimer = 0;
             this.animationPhase = 'idle';
@@ -1957,10 +2084,10 @@ class Dino {
         
         const startMoving = Math.random() < (1 - this.personality.restfulness * 0.7);
         
-        this.behaviorState = startMoving ? 'moving' : 'resting';
+        this.changeState(startMoving ? DINO_STATES.WANDERING : DINO_STATES.IDLE);
         this.behaviorTimer = Math.random() * 2;
         
-        if (this.behaviorState === 'resting') {
+        if (this.state === DINO_STATES.IDLE) {
             this.currentBehaviorDuration = this.getRandomRestDuration();
             this.animationPhase = 'idle';
             this.targetTileX = this.tileX;
@@ -1982,46 +2109,234 @@ class Dino {
         return (this.moveDurationMin + Math.random() * (this.moveDurationMax - this.moveDurationMin)) * baseVariation;
     }
 
-    update() {
-        if (isPaused) return;
-       
-        const frameTime = 1/60;
-        this.behaviorTimer += frameTime * gameSpeed;
-        
-        if (this.avoidanceMode.active) {
-            this.updateAvoidanceMode();
-            this.syncAnimation();
-            return;
+    // State-Wechsel mit Validierung
+    changeState(newState, targetData = null) {
+        // Prüfe ob Übergang erlaubt ist
+        if (!this.canTransitionTo(newState)) {
+            console.warn(`🚫 ${this.species.name}: Ungültiger State-Übergang ${this.state} -> ${newState}`);
+            return false;
         }
         
-        if (this.overallState === 'fighting') {
-            this.syncAnimation();
-            return;
+        // State-Exit-Logik
+        this.onStateExit(this.state);
+        
+        // State wechseln
+        this.stateData.previousState = this.state;
+        this.state = newState;
+        this.stateData.startTime = Date.now();
+        this.stateTimer = 0;
+        
+        // Target setzen
+        if (targetData) {
+            this.stateData.target = targetData;
+        } else {
+            this.stateData.target = null;
         }
         
-        if (this.behaviorTimer >= this.currentBehaviorDuration) {
-            this.switchBehaviorState();
+        // State-Enter-Logik
+        this.onStateEnter(newState);
+        
+        // Animation anpassen
+        this.animationPhase = this.getAnimationForState();
+        
+        if (debugMode && this.selected) {
+         //   console.log(`🔄 ${this.species.name}: ${this.stateData.previousState} -> ${this.state}`);
         }
         
-        if (this.behaviorState === 'moving') {
-            this.handleMovement();
-        }
-        
-        // GEÄNDERTE GRENZEN: Dinos können jetzt ab Reihe 5 (statt 14)
-        this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
-        this.tileY = Math.max(1, Math.min(mapHeight - 1, this.tileY));                
-        
-        this.syncAnimation();
+        return true;
     }
-
+    
+    // Prüft ob State-Übergang erlaubt ist
+    canTransitionTo(newState) {
+        if (this.state === DINO_STATES.DEAD) return false;
+        
+        const allowedTransitions = ALLOWED_TRANSITIONS[this.state];
+        return allowedTransitions && allowedTransitions.includes(newState);
+    }
+    
+    // State-Exit Logik
+    onStateExit(state) {
+        switch (state) {
+            case DINO_STATES.CONSUMING:
+                // Nahrungsquelle freigeben
+                if (this.stateData.target && this.stateData.target.sourceId) {
+                    occupiedFoodSources.delete(this.stateData.target.sourceId);
+                }
+                this.feedingRotationLocked = false;
+                break;
+                
+            case DINO_STATES.FIGHTING:
+                // Kampf beenden
+                this.isAttacking = false;
+                break;
+                
+            case DINO_STATES.AVOIDING:
+                // Avoidance-Daten zurücksetzen
+                this.avoidanceMode.active = false;
+                break;
+        }
+    }
+    
+    // State-Enter Logik
+    onStateEnter(state) {
+        switch (state) {
+            case DINO_STATES.IDLE:
+                this.stateDuration = this.getRandomRestDuration();
+                this.targetTileX = this.tileX;
+                this.targetTileY = this.tileY;
+                break;
+                
+            case DINO_STATES.WANDERING:
+                this.stateDuration = this.getRandomMoveDuration();
+                this.chooseNewMovementTarget();
+                break;
+                
+            case DINO_STATES.SEEKING_ENEMY:
+                // Target sollte bereits gesetzt sein
+                break;
+                
+            case DINO_STATES.FIGHTING:
+                // Beide Dinos fixieren
+                this.targetTileX = this.tileX;
+                this.targetTileY = this.tileY;
+                break;
+                
+            case DINO_STATES.SEEKING_FOOD:
+                // Target sollte bereits gesetzt sein
+                break;
+                
+            case DINO_STATES.CONSUMING:
+                //this.consumptionStartTime = Date.now();
+                this.targetTileX = this.tileX;
+                this.targetTileY = this.tileY;
+                this.feedingRotationLocked = true;
+                break;
+                
+            case DINO_STATES.AVOIDING:
+                this.avoidanceMode.active = true;
+                this.state = DINO_STATES.AVOIDING;
+                this.avoidanceMode.stepStartTime = Date.now();
+                break;
+                
+            case DINO_STATES.DEAD:
+                this.health = 0;
+                this.currentHP = 0;
+                break;
+        }
+    }
+    
+    // Animation basierend auf State
+    getAnimationForState() {
+        switch (this.state) {
+            case DINO_STATES.IDLE:
+            case DINO_STATES.FIGHTING:
+            case DINO_STATES.CONSUMING:
+                return 'idle';
+                
+            case DINO_STATES.WANDERING:
+            case DINO_STATES.SEEKING_ENEMY:
+            case DINO_STATES.SEEKING_FOOD:
+            case DINO_STATES.AVOIDING:
+            case DINO_STATES.FLEEING:
+                return 'walking';
+                
+            case DINO_STATES.DEAD:
+                return 'dead';
+                
+            default:
+                return 'idle';
+        }
+    }
+    
+    
+    // State-spezifische Update-Logik
+    updateCurrentState() {
+       // if(this.selected){ console.log(`updateCurrentState() ${frame} -- ${this.state}`);}   
+        switch (this.state) {
+            case DINO_STATES.IDLE:
+                if (this.stateTimer >= this.stateDuration) {
+                    this.changeState(DINO_STATES.WANDERING);
+                }
+                break;
+                
+            case DINO_STATES.WANDERING:
+                this.handleMovement();
+                if (this.stateTimer >= this.stateDuration) {
+                    this.changeState(DINO_STATES.IDLE);
+                }
+                break;
+                
+            case DINO_STATES.SEEKING_ENEMY:
+            //    this.handleEnemySeeking();
+                break;
+                
+            case DINO_STATES.FIGHTING:
+             //   this.handleCombat();
+                this.syncAnimation();
+                break;
+                
+            case DINO_STATES.SEEKING_FOOD:
+               // this.handleFoodSeeking();
+                //updateFoodSeekingState(this)
+                break;
+                
+            case DINO_STATES.CONSUMING:
+               // this.handleFoodConsumption();
+                //updateFoodConsumingState(this)
+                break;
+                
+            case DINO_STATES.AVOIDING:
+                this.updateAvoidanceMode();
+                this.syncAnimation();
+                break;
+                
+            case DINO_STATES.FLEEING:
+             //   this.handleFleeing();
+                break;
+        }
+    }
+    
+    // Prüft auf mögliche State-Änderungen (Prioritäts-basiert)
+    checkForStateChanges() {
+        updateCombat(this);
+        // Kampf hat höchste Priorität
+        /*
+        if (this.state !== DINO_STATES.FIGHTING && this.cooldowns.combat <= 0) {
+            const target = findBestTarget(this);
+            if (target) {
+                this.changeState(DINO_STATES.SEEKING_ENEMY, { enemy: target });
+                return;
+            }
+        }*/
+        //updateFoodSeekingState(this);
+        //updateFood(this);
+        /*
+        // Nahrung hat mittlere Priorität
+        if ((this.state === DINO_STATES.IDLE || this.state === DINO_STATES.WANDERING) && 
+            this.cooldowns.food <= 0) {
+            const foodSource = selectBestFoodSource(this);
+            if (foodSource) {
+                this.changeState(DINO_STATES.SEEKING_FOOD, foodSource);
+                return;
+            }
+        }*/
+    }
+    
+    // Cooldowns updaten
+    updateCooldowns(deltaTime) {
+        this.cooldowns.combat = Math.max(0, this.cooldowns.combat - deltaTime);
+        this.cooldowns.food = Math.max(0, this.cooldowns.food - deltaTime);
+        this.cooldowns.general = Math.max(0, this.cooldowns.general - deltaTime);
+    }
+    
     switchBehaviorState() {
-        if (this.behaviorState === 'resting') {
-            this.behaviorState = 'moving';
+        if (this.state === DINO_STATES.IDLE) {
+            this.dino.changeState(DINO_STATES.WANDERING);
             this.animationPhase = 'walking';
             this.currentBehaviorDuration = this.getRandomMoveDuration();
             this.chooseNewMovementTarget();
         } else {
-            this.behaviorState = 'resting';
+            this.changeState(DINO_STATES.IDLE);
             this.animationPhase = 'idle';
             this.currentBehaviorDuration = this.getRandomRestDuration();
             this.targetTileX = this.tileX;
@@ -2093,7 +2408,7 @@ class Dino {
     }
 
     syncAnimation() {
-        const expectedAnimation = this.behaviorState === 'moving' ? 'walking' : 'idle';
+        const expectedAnimation = this.getAnimationForState();
         if (this.animationPhase !== expectedAnimation) {
             this.animationPhase = expectedAnimation;
             this.phaseStartTime = Date.now();
@@ -2125,7 +2440,7 @@ class Dino {
         const phaseDuration = (currentTime - this.phaseStartTime) / 1000;
         
         if (phaseDuration >= 4) {
-            this.animationPhase = this.animationPhase === 'idle' ? 'walking' : 'idle';
+            this.animationPhase = this.getAnimationForState();
             this.phaseStartTime = currentTime;
         }
         
@@ -2141,7 +2456,7 @@ class Dino {
             backLegAnimationX: 0
         };
         
-        if (this.overallState === 'fighting') {
+        if (this.state === DINO_STATES.FIGHTING) {
             // Kampf-Idle: Nur leichte Atmung
             animationData.bodyAnimationY = Math.sin(animationTime * 2) * 1; // Weniger Bewegung
             animationData.headAnimationX = Math.sin(animationTime * 0.5) * 2; // Langsamere Kopfbewegung
@@ -2214,7 +2529,7 @@ class Dino {
     }
 
     initializeFoodBehavior() {
-        this.foodState = 'neutral';        // 'neutral', 'seeking', 'consuming'
+        this.changeState(DINO_STATES.IDLE);       
         this.foodTarget = null;
         this.consumptionStartTime = 0;
         this.foodCooldownUntil = 0;        // Timestamp bis wann Cooldown aktiv
@@ -2233,6 +2548,32 @@ class Dino {
         this.canConsumePlants = this.foodPreferences.plants >= FOOD_CONFIG.MIN_REQUIREMENTS.PLANTS;
         this.canConsumeMeat = this.foodPreferences.meat >= FOOD_CONFIG.MIN_REQUIREMENTS.MEAT;
         this.canConsumeCarrion = this.foodPreferences.carrion >= FOOD_CONFIG.MIN_REQUIREMENTS.CARRION;
+    }
+
+        // Haupt-Update-Funktion
+    update() {
+        if (isPaused) return;
+        if (this.state === DINO_STATES.DEAD) return;
+        
+       // if(this.selected){frame++; console.log(`update() ${frame} -- ${this.state}`); }        // Cooldowns updaten
+        const deltaTime = gameSpeed / 60;
+        //this.updateCooldowns(deltaTime);
+        
+        // State-Timer
+        this.stateTimer += deltaTime;
+        
+        // State-spezifische Updates
+        this.updateCurrentState();
+        
+        // Prioritäts-basierte State-Checks
+        this.checkForStateChanges();
+        
+        // Position-Grenzen
+        this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+        this.tileY = Math.max(1, Math.min(mapHeight - 1, this.tileY));
+        
+        // Animation synchronisieren
+        this.animationPhase = this.getAnimationForState();
     }
 }
 
@@ -2345,8 +2686,8 @@ class EnvironmentObject {
                 
                 const isBeingHunted = gameObjects.some(obj => 
                     obj instanceof Dino && 
-                    obj.overallState !== 'dead' &&
-                    obj.foodState === 'consuming' &&
+                    obj.state !== DINO_STATES.DEAD &&
+                    obj.state === DINO_STATES.CONSUMING &&
                     obj.foodTarget && 
                     obj.foodTarget.object === this
                 );
@@ -3043,94 +3384,7 @@ function speedUp() {
         levelStartTime = Date.now();
     }
 }
-// ===================================
-// INITIALISIERUNG (ÜBERARBEITET)
-// ===================================
 
-async function initGame() {
-    canvas = document.getElementById('gameCanvas');
-    ctx = canvas.getContext('2d');
-    
-    // Canvas nimmt immer volle Fenstergröße ein
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    
-    // Basis-Zoom setzen
-    const canvasTileSizeByWidth = canvas.width / mapWidth;
-    const canvasTileSizeByHeight = canvas.height / mapHeight;
-    baseZoomLevel = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight) / 32; // 32 = gewünschte Standard-Kachelgröße
-    currentZoom = baseZoomLevel;
-    
-    calculateTerrainOffsets();
-    
-    window.addEventListener('resize', resizeCanvas);
-
-    initScrollingAndZoom();
-    
-    const loadSuccess = await loadLevelData();
-    
-    if (loadSuccess) {
-        setLoadingText('Generiere Level...');
-        
-        setTimeout(() => {
-            generateLevel();
-            initializeCombatForAllDinos()
-            hideLoadingShowGame();
-            startGameLoop();
-        }, 1000);
-    }
-}
-
-function addCombatPropertiesToDino(dino) {
-    if (!window.DinoAbilities || !window.DinoAbilities.calculateDinoAbilities) {
-        console.error('❌ DinoAbilities nicht verfügbar! Script nicht geladen?');
-        return;
-    }
-    
-    // Fähigkeiten berechnen
-    dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
-    dino.baseSpeed = 0.00 + dino.abilities['Geschwindigkeit'] / 2000;
-
-    // Kampfwerte
-    dino.maxHP = dino.abilities['Lebenspunkte'];
-    dino.currentHP = dino.maxHP;
-    dino.maxStamina = dino.abilities['Kondition'];
-    dino.currentStamina = dino.maxStamina;
-    
-    // Kampfzustand
-    dino.overallState = 'neutral';
-    dino.combatTarget = null;
-    dino.lastAttackTime = 0; // NEU: Cooldown-Timer
-    dino.combatTurn = false;
-    dino.isAttacking = false;
-    dino.attackAnimationStart = 0;
-    dino.wasMovingLastFrame = false;
-
-    dino.killCount = 0;
-    dino.hasMuscleBoost = false;
-    dino.hasMuscleBoostMax = false; // Stufe 2
-
-    dino.totalFoodConsumed = 0;
-    dino.hasSatiatedBoost = false;
-    dino.hasSatiatedBoostMax = false;
-                
-    // Erkennungsradius berechnen
-    dino.detectionRadius = window.DinoAbilities.COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
-    
-    // Verfügbare Angriffe ermitteln
-    dino.availableAttacks = getAvailableAttacks(dino);
-}
-
-function trackKill(killer, victim) {
-    killer.killCount++;
-   
-    if (killer.killCount >= 2 && !killer.hasMuscleBoost) {
-        killer.hasMuscleBoost = true;
-    }else if (killer.killCount >= 4 && !killer.hasMuscleBoostMax) {
-        killer.hasMuscleBoostMax = true;
-        console.log(`⚡ ${killer.species.name} erreicht MAXIMUM Muskel-Boost! (+30% Angriffskraft)`);
-    }
-}
 
 // Verfügbare Angriffe basierend auf Fähigkeiten
 function getAvailableAttacks(dino) {
@@ -3192,11 +3446,11 @@ function getAvailableAttacks(dino) {
 // ===================================
 
 function findEnemiesInRange(dino) {
-    if (dino.overallState === 'dead') return [];
+    if (dino.state === DINO_STATES.DEAD) return [];
     
     const enemies = gameObjects.filter(obj => 
         obj instanceof Dino && 
-        obj.overallState !== 'dead' &&
+        obj.state !== DINO_STATES.DEAD &&
         obj.isEnemy !== dino.isEnemy && // Unterschiedliche Fraktionen
         calculateDistance(dino, obj) <= dino.detectionRadius
     );
@@ -3213,16 +3467,17 @@ function calculateDistance(dino1, dino2) {
 
 // Kampf-Update für jeden Dino
 function updateCombat(dino) {
-    if (dino.overallState === 'dead') return;
+  //  if(this.selected){ console.log(`updateCombat(dino) ${frame} -- ${this.state}`);}   
+    if (dino.state === DINO_STATES.DEAD) return;
     
-    if (dino.overallState === 'fighting' && dino.avoidanceMode.active) {
+    if (dino.state === DINO_STATES.FIGHTING && dino.avoidanceMode.active) {
         dino.exitAvoidanceMode('interrupted by combat');
     }
 
      dino.currentStamina = Math.min(dino.maxStamina, dino.currentStamina + COMBAT_CONFIG.STAMINA_RECOVERY * gameSpeed / 60);
  
     // Stamina-Verbrauch bei Bewegung (nur wenn NICHT kämpfend)
-    if (dino.behaviorState === 'moving' && dino.overallState !== 'fighting') {
+    if (dino.state === DINO_STATES.WANDERING && dino.state !== DINO_STATES.FIGHTING) {
         dino.currentStamina = Math.max(0, dino.currentStamina - COMBAT_CONFIG.MOVEMENT_STAMINA_COST * gameSpeed / 60);
         dino.wasMovingLastFrame = true;
     } else {
@@ -3230,14 +3485,14 @@ function updateCombat(dino) {
     }
     
     // Zustandsmaschine
-    switch (dino.overallState) {
-        case 'neutral':
+    switch (dino.state) {
+        case DINO_STATES.IDLE:
             updateNeutralState(dino);
             break;
-        case 'seeking':
+        case DINO_STATES.SEEKING_ENEMY:
             updateSeekingState(dino);
             break;
-        case 'fighting':
+        case DINO_STATES.FIGHTING:
             updateFightingState(dino);
             // WICHTIG: Keine weitere Bewegung im fighting-State!
             break;
@@ -3268,15 +3523,16 @@ function updateNeutralState(dino) {
             dino.combatTarget = availableEnemies.reduce((nearest, enemy) => 
                 calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
             );
-            dino.overallState = 'seeking';
+            dino.state = DINO_STATES.SEEKING_ENEMY;
         }
     }
 }
 
 function updateSeekingState(dino) {
-    if (!dino.combatTarget || dino.combatTarget.overallState === 'dead') {
+  //  if(this.selected){ console.log(`updateSeekingState(dino) ${frame} -- ${this.state}`);} 
+    if (!dino.combatTarget || dino.combatTarget.state === DINO_STATES.DEAD) {
         dino.combatTarget = null;
-        dino.overallState = 'neutral';
+        dino.changeState(DINO_STATES.IDLE);
         return;
     }
     
@@ -3284,7 +3540,7 @@ function updateSeekingState(dino) {
     const targetAlreadyFighting = combats.some(c => c.participants.includes(dino.combatTarget));
     if (targetAlreadyFighting) {
         dino.combatTarget = null;
-        dino.overallState = 'neutral';
+        dino.changeState(DINO_STATES.IDLE);
         return;
     }
     
@@ -3293,7 +3549,7 @@ function updateSeekingState(dino) {
     // Zu weit weg? Aufgeben
     if (distance > dino.detectionRadius * 1.5) {
         dino.combatTarget = null;
-        dino.overallState = 'neutral';
+        dino.changeState(DINO_STATES.IDLE);
         return;
     }   
     // Nah genug für Angriff?
@@ -3302,7 +3558,7 @@ function updateSeekingState(dino) {
         return;
     }    
     // WICHTIG: seekEnemy() nur wenn NICHT bereits im Kampf
-    if (dino.overallState !== 'fighting') {
+    if (dino.state !== DINO_STATES.FIGHTING) {
         seekEnemy(dino);
     }
 }
@@ -3323,27 +3579,12 @@ function findBestTarget(dino) {
         );
     }
     
-    // 2. Priorität: Feinde in Unterzahl (2+ vs 1)
-    const outnumberedEnemies = enemies.filter(enemy => {
-        const combat = combats.find(c => c.participants.includes(enemy));
-        if (!combat) return false;
-        
-        const ownDinosInCombat = combat.participants.filter(p => !p.isEnemy).length;
-        const enemyDinosInCombat = combat.participants.filter(p => p.isEnemy).length;
-        
-        return enemyDinosInCombat > ownDinosInCombat; // Feind ist in Überzahl
-    });
-    
-    if (outnumberedEnemies.length > 0) {
-        return outnumberedEnemies[0]; // Unterstütze Verbündete
-    }
-    
     return null; // Kein geeignetes Ziel
 }
 
 function updateFightingState(dino) {
-    if (!dino.combatTarget || dino.combatTarget.overallState === 'dead') {
-        dino.overallState = 'neutral';
+    if (!dino.combatTarget || dino.combatTarget.state === DINO_STATES.DEAD) {
+        dino.changeState(DINO_STATES.IDLE);
         dino.combatTarget = null;
         return;
     }   
@@ -3417,7 +3658,7 @@ function seekEnemy(dino) {
         } else {
             // Kann Feind nicht verfolgen wegen Wasser
             dino.combatTarget = null;
-            dino.overallState = 'neutral';
+            dino.changeState(DINO_STATES.IDLE);
             
             if (debugMode) {
                 console.log(`🚫 ${dino.species.name} bricht Verfolgung ab: Wasser blockiert Weg`);
@@ -3427,10 +3668,13 @@ function seekEnemy(dino) {
 }
 // Kampf starten
 function startCombat(attacker, defender) {
-    if (attacker.foodState === 'consuming') {
+    if(!firstselector){firstselector = true; attacker.selected = true;}
+    if(attacker.selected){ console.log(`startCombat(dino) ${attacker.species.name} -- ${frame} -- ${attacker.state}`);} 
+    //console.log(`startCombat(dino) ${frame} -- ${this.state}`);
+    if (attacker.state === DINO_STATES.CONSUMING) {
         interruptFoodConsumption(attacker, 'combat started');
     }
-    if (defender.foodState === 'consuming') {
+    if (defender.state === DINO_STATES.CONSUMING) {
         interruptFoodConsumption(defender, 'under attack');
     }
                 
@@ -3443,8 +3687,8 @@ function startCombat(attacker, defender) {
     }
         
     // Beide Dinos in Kampfmodus
-    attacker.overallState = 'fighting';
-    defender.overallState = 'fighting';
+    attacker.changeState(DINO_STATES.FIGHTING, { enemy: defender });;
+    defender.changeState(DINO_STATES.FIGHTING, { enemy: attacker });;
     attacker.combatTarget = defender;
     defender.combatTarget = attacker;
     
@@ -3453,8 +3697,8 @@ function startCombat(attacker, defender) {
     defender.targetTileX = defender.tileX;
     defender.targetTileY = defender.tileY;
     
-    attacker.behaviorState = 'resting';
-    defender.behaviorState = 'resting';
+    attacker.changeState(DINO_STATES.FIGHTING);
+    defender.changeState(DINO_STATES.FIGHTING);
     
     // Optimal ausrichten für den Kampf
     const dx = defender.tileX - attacker.tileX;
@@ -3676,7 +3920,7 @@ function createBloodEffect(defender) {
 
 // Tod handhaben
 function handleDeath(dino) {    
-    dino.overallState = 'dead';
+    dino.changeState(DINO_STATES.DEAD);
     dino.combatTarget = null;
     
     // Leiche erstellen
@@ -3710,12 +3954,12 @@ function endCombat(winner, loser) {
         
         // Alle Teilnehmer zurück zu neutral setzen
         combat.participants.forEach(participant => {
-            if (participant !== loser && participant.overallState !== 'dead') {
-                participant.overallState = 'neutral';
+            if (participant !== loser && participant.state !== DINO_STATES.DEAD) {
+                participant.changeState(DINO_STATES.IDLE);
                 participant.combatTarget = null;
                 
                 // NEU: Bewegung wieder aktivieren
-                participant.behaviorState = 'resting';
+                participant.changeState(DINO_STATES.IDLE);
                 participant.behaviorTimer = 0;
                 participant.currentBehaviorDuration = participant.getRandomRestDuration();
                 // console.log(`🔓 ${participant.species.name} kann sich wieder bewegen`);
@@ -3726,13 +3970,13 @@ function endCombat(winner, loser) {
     }
     
     // Gewinner spezifisch zurück zu neutral
-    if (winner.overallState !== 'dead') {
-        winner.overallState = 'neutral'
+    if (winner.state !== DINO_STATES.DEAD) {
+        winner.changeState(DINO_STATES.IDLE);
         winner.postCombatCooldownUntil = Date.now() + (FOOD_CONFIG.POST_COMBAT_COOLDOWN * 1000);
         winner.combatTarget = null;
         
         // Bewegung für Gewinner auch aktivieren
-        winner.behaviorState = 'resting';
+        winner.changeState(DINO_STATES.IDLE);
         winner.behaviorTimer = 0;
         winner.currentBehaviorDuration = winner.getRandomRestDuration();
     }
@@ -3749,7 +3993,7 @@ function updateCombatSystem() {
     // Alle Dinos updaten
     gameObjects.forEach(obj => {
         if (obj instanceof Dino) {
-            updateCombat(obj);
+            obj.update();
         }
     });
     
@@ -3780,7 +4024,7 @@ function updateCombatSystem() {
     });
     gameObjects.forEach(obj => {
         if (obj instanceof Dino) {
-            updateFood(obj);
+            obj.update();
         }
     });
 
@@ -3887,7 +4131,7 @@ function renderCombatEffects() {
 
 // HP/Stamina Balken zur bestehenden Dino.render() hinzufügen
 function renderCombatUI(dino) {
-    if (dino.overallState === 'dead') return;
+    if (dino.state === DINO_STATES.DEAD) return;
     
     const pixelX = dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
     const pixelY = dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
@@ -3914,7 +4158,7 @@ function renderCombatUI(dino) {
     ctx.fillRect(pixelX - barWidth/2, staminaY, barWidth * (dino.currentStamina/dino.maxStamina), barHeight);
     
     // Cooldown-Balken
-    if (dino.overallState === 'fighting') {
+    if (dino.state === DINO_STATES.FIGHTING) {
         const timeSinceLastAttack = (Date.now() - dino.lastAttackTime) / 1000;
         const cooldownProgress = Math.min(1, timeSinceLastAttack / COMBAT_CONFIG.ATTACK_COOLDOWN);
         
@@ -3930,7 +4174,7 @@ function renderCombatUI(dino) {
     let symbolX = 0;
     const symbolY = startY - 12; 
     // Kampf-Symbol
-    if (dino.overallState === 'fighting') {
+    if (dino.state === DINO_STATES.FIGHTING) {
         ctx.fillStyle = '#FF6B35';
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
@@ -3987,7 +4231,7 @@ function renderCombatUI(dino) {
 
 // Nahrungsquellen in der Nähe finden
 function findFoodSourcesInRange(dino) {
-    if (dino.overallState === 'dead' || dino.foodState === 'consuming') return [];
+    if (dino.state === DINO_STATES.DEAD || dino.state === DINO_STATES.CONSUMING) return [];
     
     const sources = [];
     const detectionRadius = dino.detectionRadius;
@@ -4096,8 +4340,8 @@ function countCompetitorsForFood(foodObject, excludeDino) {
     gameObjects.forEach(obj => {
         if (obj instanceof Dino && 
             obj !== excludeDino && 
-            obj.overallState !== 'dead' && 
-            obj.foodState === 'seeking' && 
+            obj.state !== DINO_STATES.DEAD && 
+            obj.state === DINO_STATES.SEEKING_FOOD && 
             obj.foodTarget && 
             obj.foodTarget.object === foodObject) {
             count++;
@@ -4126,10 +4370,11 @@ function selectBestFoodSource(dino) {
 }
 
 function startFoodConsumption(dino, foodSource) {
+    //if(dino.selected){ console.log(`startFoodConsumption(dino) ${frame} -- ${dino.state}`);} 
     // Prüfe nochmals ob Nahrungsquelle frei ist (Race Condition vermeiden)
     if (occupiedFoodSources.has(foodSource.sourceId)) {
         // console.log(`🚫 ${dino.species.name}: Nahrungsquelle bereits belegt, suche neue`);
-        dino.foodState = 'neutral';
+        dino.changeState(DINO_STATES.IDLE);
         dino.foodTarget = null;
         return;
     }
@@ -4137,11 +4382,13 @@ function startFoodConsumption(dino, foodSource) {
     // Nahrungsquelle als belegt markieren
     occupiedFoodSources.set(foodSource.sourceId, dino);
    
-    dino.foodState = 'consuming';
+    dino.changeState(DINO_STATES.CONSUMING);
     dino.foodTarget = foodSource;
     dino.consumptionStartTime = Date.now();
 
-    dino.behaviorState = 'resting';
+    if(dino.selected) console.log(`🍽️ ${dino.species.name} beginnt Nahrung zu konsumieren: ${foodSource.type} (${dino.state})`);
+ 
+    //dino.changeState(DINO_STATES.IDLE);
     dino.targetTileX = dino.tileX;  // Aktuelle Position beibehalten
     dino.targetTileY = dino.tileY;  // Aktuelle Position beibehalten
     dino.animationPhase = 'idle';
@@ -4172,6 +4419,7 @@ function startConsumptionDash(dino) {
 
 // Nahrungsaufnahme abschließen
 function completeFoodConsumption(dino) {
+    if(dino.selected) console.log(`🍽️ ${dino.species.name} beendet Nahrungsaufnahme`);
     const foodSource = dino.foodTarget;
     if (!foodSource) return;
     
@@ -4207,8 +4455,7 @@ function completeFoodConsumption(dino) {
     // Gesättigt-Boost MAX bei 40 Nahrungspunkten aktivieren
     if (dino.totalFoodConsumed >= 24 && !dino.hasSatiatedBoostMax) {
         dino.hasSatiatedBoostMax = true;
-        // console.log(`🏰 ${dino.species.name} ist MAXIMAL gesättigt! (+70% Verteidigung)`);
-    }
+   }
 
     if (dino.currentHP < dino.maxHP) {
         const healingAmount = Math.round(finalValue * 2); // 2 HP pro Nahrungspunkt
@@ -4217,7 +4464,6 @@ function completeFoodConsumption(dino) {
         const actualHealing = dino.currentHP - oldHP;
         
         if (actualHealing > 0) {
-            // console.log(`💚 ${dino.species.name} regeneriert ${actualHealing} HP durch Nahrung (${oldHP}→${dino.currentHP})`);
             //  showHealingIcon(dino, actualHealing);
         }
     }
@@ -4236,7 +4482,6 @@ function completeFoodConsumption(dino) {
         setTimeout(() => {
             consumedFoodSources.delete(foodSource.sourceId);
             foodSource.object.hasBeenEaten = false;
-            // console.log(`🌳 Baum regeneriert: ${foodSource.sourceId}`);
         }, FOOD_CONFIG.TREE_REGENERATION * 1000);
     }
     
@@ -4261,7 +4506,7 @@ function completeFoodConsumption(dino) {
     
     // Zustand zurücksetzen
     dino.feedingRotationLocked = false;
-    dino.foodState = 'neutral';
+    dino.changeState(DINO_STATES.IDLE);
     dino.foodTarget = null;
     
     updateHUD(); // HUD mit neuen Nahrungspunkten aktualisieren
@@ -4283,7 +4528,7 @@ function interruptFoodConsumption(dino, reason = 'unknown') {
     }
     
     dino.feedingRotationLocked = false;
-    dino.foodState = 'neutral';
+    dino.changeState(DINO_STATES.IDLE);
     dino.foodTarget = null;
     dino.consumptionStartTime = 0;
 }
@@ -4312,7 +4557,8 @@ function showFoodIcon(dino, foodType, value) {
 }
 
 function updateFood(dino) {
-    if (dino.overallState === 'dead') return;
+    //if(this.selected){ console.log(`updateCombat(dino) ${frame} -- ${this.state}`);}   
+    if (dino.state === DINO_STATES.DEAD) return;
     
     const currentTime = Date.now();
     
@@ -4321,16 +4567,16 @@ function updateFood(dino) {
     const inFoodCooldown = currentTime < dino.foodCooldownUntil;
     
     // Nahrungsverhalten nur wenn nicht im Cooldown und nicht kämpfend
-    if (!inPostCombatCooldown && !inFoodCooldown && dino.overallState !== 'fighting') {
+    if (!inPostCombatCooldown && !inFoodCooldown && dino.state !== DINO_STATES.FIGHTING) {
         
-        switch (dino.foodState) {
-            case 'neutral':
+        switch (dino.state) {
+            case DINO_STATES.IDLE:
                 updateFoodNeutralState(dino);
                 break;
-            case 'seeking':
+            case DINO_STATES.SEEKING_FOOD:
                 updateFoodSeekingState(dino);
                 break;
-            case 'consuming':
+            case DINO_STATES.CONSUMING:
                 updateFoodConsumingState(dino);
                 break;
         }
@@ -4338,7 +4584,7 @@ function updateFood(dino) {
 }
 
 function updateFoodNeutralState(dino) {
-    if (dino.overallState === 'neutral') {
+    if (dino.state === DINO_STATES.IDLE) {
     
         const bestFood = selectBestFoodSource(dino);
         
@@ -4359,7 +4605,7 @@ function updateFoodNeutralState(dino) {
             // SOFORT reservieren
             occupiedFoodSources.set(bestFood.sourceId, dino);
             
-            dino.foodState = 'seeking';
+            dino.state = DINO_STATES.SEEKING_FOOD;
             dino.foodTarget = bestFood;
             dino.feedingPosition = feedingPosition; // NEU: Zielposition speichern
             dino.seekingStartTime = Date.now();
@@ -4372,20 +4618,20 @@ function updateFoodNeutralState(dino) {
 }
 
 function updateFoodSeekingState(dino) {
+    //if(dino.selected){ console.log(`updateFoodSeekingState(dino) ${frame} -- ${dino.state}`);}  
     if (dino.avoidanceMode.active) {
         dino.updateAvoidanceMode();
         return;
     }
 
     if (!dino.foodTarget) {
-        dino.foodState = 'neutral';
+        dino.changeState(DINO_STATES.IDLE);
         return;
     }
     
     // Timeout
     const seekingTime = (Date.now() - dino.seekingStartTime) / 1000;
-    if (seekingTime > 8) { // Etwas mehr Zeit für komplexere Wege
-        // console.log(`⏰ ${dino.species.name} seeking timeout - gibt auf`);
+    if (seekingTime > 8) {
         releaseFoodReservation(dino);
         return;
     }
@@ -4447,14 +4693,14 @@ function updateFoodSeekingState(dino) {
     const nearbyDinos = gameObjects.filter(obj => 
         obj instanceof Dino && 
         obj !== dino && 
-        obj.overallState !== 'dead' &&
+        obj.state !== DINO_STATES.DEAD &&
         calculateDistance(dino, obj) < 1.8
     );
     
 
         // Prüfen ob andere Dinos das GLEICHE Ziel haben
     const sameTargetDinos = nearbyDinos.filter(otherDino => 
-        otherDino.foodState === 'seeking' && 
+        otherDino.state === DINO_STATES.SEEKING_FOOD && 
         otherDino.foodTarget && 
         otherDino.foodTarget.object === targetObj
     );
@@ -4580,7 +4826,7 @@ function releaseFoodReservation(dino) {
         }
     }
     
-    dino.foodState = 'neutral';
+    dino.changeState(DINO_STATES.IDLE);
     dino.foodTarget = null;
     dino.lastPosition = null;
 }
@@ -4643,12 +4889,15 @@ function calculateOptimalFeedingPositions(foodSource, dinoPosition) {
 }
 
 function updateFoodConsumingState(dino) {
+    //if(dino.selected){ console.log(`updateFoodConsumingState(dino) ${frame} -- ${dino.state}`);}  
     const currentTime = Date.now();
     const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
+    if(dino.selected) console.log(`🦷 ${dino.species.name} konsumiert Nahrung... ${elapsed}`);
+ 
     
     // WICHTIG: Dino bleibt ABSOLUT STILL während des Konsums!
     // Alle Bewegung komplett stoppen
-    dino.behaviorState = 'resting';
+    //dino.changeState(DINO_STATES.IDLE);
     dino.targetTileX = dino.tileX;  // Position fixieren
     dino.targetTileY = dino.tileY;  // Position fixieren
     dino.animationPhase = 'idle';   // Nur Idle-Animation
@@ -4710,7 +4959,7 @@ function cleanupOrphanedFoodReservations() {
     for (const [sourceId, dino] of occupiedFoodSources.entries()) {
         // Prüfe ob der Dino noch existiert und die Nahrungsquelle noch konsumiert
         const dinoExists = gameObjects.includes(dino);
-        const stillConsuming = dino.foodState === 'consuming';
+        const stillConsuming = dino.state === DINO_STATES.CONSUMING;
         
         if (!dinoExists || !stillConsuming) {
             //// console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
@@ -4726,6 +4975,91 @@ function cleanupOrphanedFoodReservations() {
 // ===================================
 // INITIALISIERUNG
 // ===================================
+
+async function initGame() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    
+    // Canvas nimmt immer volle Fenstergröße ein
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Basis-Zoom setzen
+    const canvasTileSizeByWidth = canvas.width / mapWidth;
+    const canvasTileSizeByHeight = canvas.height / mapHeight;
+    baseZoomLevel = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight) / 32; // 32 = gewünschte Standard-Kachelgröße
+    currentZoom = baseZoomLevel;
+    
+    calculateTerrainOffsets();
+    
+    window.addEventListener('resize', resizeCanvas);
+
+    initScrollingAndZoom();
+    
+    const loadSuccess = await loadLevelData();
+    
+    if (loadSuccess) {
+        setLoadingText('Generiere Level...');
+        
+        setTimeout(() => {
+            generateLevel();
+            initializeCombatForAllDinos()
+            hideLoadingShowGame();
+            startGameLoop();
+        }, 1000);
+    }
+}
+
+function addCombatPropertiesToDino(dino) {
+    if (!window.DinoAbilities || !window.DinoAbilities.calculateDinoAbilities) {
+        console.error('❌ DinoAbilities nicht verfügbar! Script nicht geladen?');
+        return;
+    }
+    
+    // Fähigkeiten berechnen
+    dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
+    dino.baseSpeed = 0.00 + dino.abilities['Geschwindigkeit'] / 2000;
+
+    // Kampfwerte
+    dino.maxHP = dino.abilities['Lebenspunkte'];
+    dino.currentHP = dino.maxHP;
+    dino.maxStamina = dino.abilities['Kondition'];
+    dino.currentStamina = dino.maxStamina;
+    
+    // Kampfzustand
+    dino.changeState(DINO_STATES.IDLE);
+    dino.combatTarget = null;
+    dino.lastAttackTime = 0; // NEU: Cooldown-Timer
+    dino.combatTurn = false;
+    dino.isAttacking = false;
+    dino.attackAnimationStart = 0;
+    dino.wasMovingLastFrame = false;
+
+    dino.killCount = 0;
+    dino.hasMuscleBoost = false;
+    dino.hasMuscleBoostMax = false; // Stufe 2
+
+    dino.totalFoodConsumed = 0;
+    dino.hasSatiatedBoost = false;
+    dino.hasSatiatedBoostMax = false;
+                
+    // Erkennungsradius berechnen
+    dino.detectionRadius = window.DinoAbilities.COMBAT_CONFIG.DETECTION_BASE + (dino.abilities['Feinderkennung'] / 100) * 5;
+    
+    // Verfügbare Angriffe ermitteln
+    dino.availableAttacks = getAvailableAttacks(dino);
+}
+
+function trackKill(killer, victim) {
+    killer.killCount++;
+   
+    if (killer.killCount >= 2 && !killer.hasMuscleBoost) {
+        killer.hasMuscleBoost = true;
+    }else if (killer.killCount >= 4 && !killer.hasMuscleBoostMax) {
+        killer.hasMuscleBoostMax = true;
+        console.log(`⚡ ${killer.species.name} erreicht MAXIMUM Muskel-Boost! (+30% Angriffskraft)`);
+    }
+}
 
 // Kampfsystem für alle Dinos initialisieren (nach Level-Generation)
 function initializeCombatForAllDinos() {
