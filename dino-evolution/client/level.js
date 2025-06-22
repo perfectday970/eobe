@@ -1818,9 +1818,9 @@ class Dino {
         
         // Ziel-Bereiche definieren (die "letzten vier Kacheln" jeder Seite)
         this.targetZones = {
-            left: { min: 0, max: 4 },           // Linke Seite: erste 4 Kacheln
-            right: { min: mapWidth - 4, max: mapWidth }  // Rechte Seite: letzte 4 Kacheln
-        };
+            left: { min: 0, max: 4 },                      // Linke Seite: Kacheln 0-4
+            right: { min: mapWidth - 5, max: mapWidth - 1 }  // Rechte Seite: letzte 5 Kacheln
+        };       
         
         // Home-Bereiche (ursprüngliche Spawn-Bereiche)
         this.homeZones = {
@@ -1834,8 +1834,6 @@ class Dino {
         // Wahrscheinlichkeits-Modifikatoren
         this.crossMovementTendency = 0.7; // 70% Wahrscheinlichkeit in Richtung Ziel
         this.randomMovementChance = 0.3;   // 30% für zufällige Bewegung
-        
-        // console.log(`🎯 Dino ${this.species.name} (${this.spawnSide}): Ziel -> ${this.currentGoal}`);
     }
 
     checkGoalReached() {
@@ -1863,8 +1861,23 @@ class Dino {
     chooseNewMovementTarget() {
         this.checkGoalReached();
         
-        let baseMinTileX = mapWidth * 0.05;
-        let baseMaxTileX = mapWidth * 0.95;
+        // FIX: Dynamische Bewegungsgrenzen basierend auf aktuellem Ziel
+        let baseMinTileX, baseMaxTileX;
+        
+        if (this.currentGoal === 'left') {
+            // Wenn Ziel links ist, erweitere linke Grenze um die Ziel-Zone zu erreichen
+            baseMinTileX = 0.5; // Bis fast zur linken Kante (Kachel 0)
+            baseMaxTileX = mapWidth * 0.95; // Normale rechte Grenze
+        } else if (this.currentGoal === 'right') {
+            // Wenn Ziel rechts ist, erweitere rechte Grenze um die Ziel-Zone zu erreichen
+            baseMinTileX = mapWidth * 0.05; // Normale linke Grenze
+            baseMaxTileX = mapWidth - 0.5; // Bis fast zur rechten Kante
+        } else {
+            // Fallback: normale Grenzen
+            baseMinTileX = mapWidth * 0.05;
+            baseMaxTileX = mapWidth * 0.95;
+        }
+        
         // Ziel-Zone bestimmen
         const targetZone = this.targetZones[this.currentGoal];
         const targetCenterX = (targetZone.min + targetZone.max) / 2;
@@ -1915,12 +1928,12 @@ class Dino {
         // Grenzen einhalten
         this.targetTileX = Math.max(baseMinTileX, Math.min(baseMaxTileX, this.targetTileX));
         this.targetTileY = Math.max(5, Math.min(mapHeight - 2, this.targetTileY));
-        
+        /*
         // Debug-Info
         if (useCrossMovement) {
             const distanceToTarget = Math.abs(this.tileX - targetCenterX);
             // console.log(`📍 ${this.species.name}: Pos ${this.tileX.toFixed(1)} -> Target ${this.targetTileX.toFixed(1)}, Entfernung zum Ziel: ${distanceToTarget.toFixed(1)}`);
-        }
+        }*/
     }
 
     // REST DER KLASSE BLEIBT UNVERÄNDERT...
@@ -2424,9 +2437,19 @@ class Dino {
         this.handleState();
 
         // Position-Grenzen
-        this.tileX = Math.max(1, Math.min(mapWidth - 1, this.tileX));
+        let minX = 1;
+        let maxX = mapWidth - 1;
+
+        // Erweiterte Grenzen wenn Dino sich einem Ziel nähert
+        if (this.currentGoal === 'left' && this.tileX < mapWidth * 0.3) {
+            minX = 0.5; // Näher zur linken Kante (ermöglicht Kachel 0)
+        } else if (this.currentGoal === 'right' && this.tileX > mapWidth * 0.7) {
+            maxX = mapWidth - 0.5; // Näher zur rechten Kante
+        }
+
+        this.tileX = Math.max(minX, Math.min(maxX, this.tileX));
         this.tileY = Math.max(1, Math.min(mapHeight - 1, this.tileY));
-        
+    
         // Animation synchronisieren
         this.animationPhase = this.getAnimationForState();
     }
