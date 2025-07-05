@@ -156,9 +156,14 @@ class EnvironmentObject {
     }
 
     render() {
+        /*
         const pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
         const pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;
-        
+        */
+        const pixel = PositionUtils.tileToPixel(this.tileX, this.tileY, tileSize, terrainOffsetX, terrainOffsetY);
+        const pixelX = pixel.x;
+        const pixelY = pixel.y;
+
         ctx.save();
         ctx.translate(pixelX, pixelY);
         

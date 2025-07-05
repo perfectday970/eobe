@@ -1218,7 +1218,7 @@ class Dino {
         // Verschiebung nach unten um etwa 25% der Körperhöhe
         const verticalOffset = boxHeight * 0.5 ;
 
-        let pixel = tileToPixel(checkTileX, checkTileY)
+        let pixel = PositionUtils.tileToPixel(checkTileX, checkTileY, tileSize, terrainOffsetX, terrainOffsetY)
         
         return {
             left: pixel.x - boxWidth / 2,
@@ -1270,7 +1270,7 @@ class Dino {
                                         
                 // Blockierungslinie visualisieren
 
-                const blockPixel = tileToPixel(this.avoidanceMode.blockedPosition.x, this.avoidanceMode.blockedPosition.y);
+                const blockPixel = PositionUtils.tileToPixel(this.avoidanceMode.blockedPosition.x, this.avoidanceMode.blockedPosition.y, tileSize, terrainOffsetX, terrainOffsetY);
                 const blockX = blockPixel.x;
                 const blockY = blockPixel.y;                       
                 // Linie perpendikular zur Original-Richtung
@@ -1508,14 +1508,19 @@ class Dino {
     }
 
     isClickedBy(mouseX, mouseY) {
+        /*
         const pixelX = this.tileX * tileSize + tileSize / 2 + terrainOffsetX;
         const pixelY = this.tileY * tileSize + tileSize / 2 + terrainOffsetY;       
+        */
+        const pixel = PositionUtils.tileToPixel(this.tileX, this.tileY, tileSize, terrainOffsetX, terrainOffsetY);
+        const pixelX = pixel.x;
+        const pixelY = pixel.y;
         const distance = Math.sqrt((mouseX - pixelX)**2 + (mouseY - pixelY)**2);
         return distance < Math.max(14.4, 19.2 * this.scale);
     }
 
     render() {
-        let pixel = tileToPixel(this.tileX , this.tileY);
+        let pixel = PositionUtils.tileToPixel(this.tileX , this.tileY, tileSize, terrainOffsetX, terrainOffsetY);
 
         if (this.isAttacking || this.isConsuming) {
             const elapsed = this.isAttacking ? 
@@ -1814,7 +1819,7 @@ class Dino {
             if (availableEnemies.length > 0) {
                 // Nächsten verfügbaren Feind als Ziel wählen
                 this.combatTarget = availableEnemies.reduce((nearest, enemy) => 
-                    calculateDistance(this, enemy) < calculateDistance(this, nearest) ? enemy : nearest
+                    PositionUtils.calculateDistance(this, enemy) < PositionUtils.calculateDistance(this, nearest) ? enemy : nearest
                 );
                 this.state = DINO_STATES.SEEKING_ENEMY;
             }
@@ -1995,20 +2000,6 @@ function isPositionValidForMovement(checkDino, newTileX, newTileY) {
 // CALCULATIONS UND HELPER-FUNKTIONEN
 // ===================================
 
-function tileToPixel(tileX, tileY) {
-    return {
-        x: tileX * tileSize + tileSize / 2 + terrainOffsetX,
-        y: tileY * tileSize + tileSize / 2 + terrainOffsetY
-    };
-}
-
-function pixelToTile(pixelX, pixelY) {
-    return {
-        tileX: (pixelX - terrainOffsetX) / tileSize,
-        tileY: (pixelY - terrainOffsetY) / tileSize
-    };
-}
-
 function isPathClear(fromX, fromY, toX, toY) {
     // Einfacher Terrain-Check: Prüfe einige Punkte auf dem Weg
     const steps = 5;
@@ -2038,14 +2029,6 @@ function isPathClear(fromX, fromY, toX, toY) {
     
     return true; // Weg ist frei
 }
-
-// Entfernung zwischen zwei Dinos berechnen
-function calculateDistance(dino1, dino2) {
-    const dx = dino1.tileX - dino2.tileX;
-    const dy = dino1.tileY - dino2.tileY;
-    return Math.sqrt(dx * dx + dy * dy);
-}
-
 
 // ===================================
 // RESIZE & SKALIERUNG (ÜBERARBEITET)
@@ -2221,7 +2204,7 @@ function findEnemiesInRange(dino) {
         obj instanceof Dino && 
         obj.state !== DINO_STATES.DEAD &&
         obj.isEnemy !== dino.isEnemy && // Unterschiedliche Fraktionen
-        calculateDistance(dino, obj) <= dino.detectionRadius
+        PositionUtils.calculateDistance(dino, obj) <= dino.detectionRadius
     );
     
     return enemies;
@@ -2243,7 +2226,7 @@ function updateSeekingState(dino) {
         return;
     }
     
-    const distance = calculateDistance(dino, dino.combatTarget);
+    const distance = PositionUtils.calculateDistance(dino, dino.combatTarget);
     
     // Zu weit weg? Aufgeben
     if (distance > dino.detectionRadius * 1.5) {
@@ -2274,7 +2257,7 @@ function findBestTarget(dino) {
     if (freeEnemies.length > 0) {
         // Nächsten freien Feind wählen
         return freeEnemies.reduce((nearest, enemy) => 
-            calculateDistance(dino, enemy) < calculateDistance(dino, nearest) ? enemy : nearest
+            PositionUtils.calculateDistance(dino, enemy) < PositionUtils.calculateDistance(dino, nearest) ? enemy : nearest
         );
     }
     
@@ -2758,9 +2741,14 @@ function renderCombatEffects() {
 function renderCombatUI(dino) {
     if (dino.state === DINO_STATES.DEAD) return;
     
+    /*
     const pixelX = dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
     const pixelY = dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
-    
+    */
+    const pixel = PositionUtils.tileToPixel(dino.tileX, dino.tileY, tileSize, terrainOffsetX, terrainOffsetY);
+    const pixelX = pixel.x;
+    const pixelY = pixel.y;
+
     // SEHR KOMPAKTE WERTE
     const barWidth = 70 * dino.scale;  // Noch länger
     const barHeight = 3;               // Dünner (3 statt 4)
@@ -2877,7 +2865,7 @@ function findFoodSourcesInRange(dino) {
     const detectionRadius = dino.detectionRadius;
     
     gameObjects.forEach(obj => {
-        const distance = calculateDistance(dino, obj);
+        const distance = PositionUtils.calculateDistance(dino, obj);
         if (distance > detectionRadius) return;
         
         // Bäume (Pflanzen)
@@ -3268,7 +3256,7 @@ function updateFoodSeekingState(dino) {
         obj instanceof Dino && 
         obj !== dino && 
         obj.state !== DINO_STATES.DEAD &&
-        calculateDistance(dino, obj) < 1.8
+        PositionUtils.calculateDistance(dino, obj) < 1.8
     );
     
 
