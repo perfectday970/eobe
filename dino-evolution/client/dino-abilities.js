@@ -531,6 +531,75 @@ const COMBAT_CONFIG = {
     }
 };
 
+// ===================================
+// ATTACK FUNKTIONEN
+// ===================================
+
+
+// Gewichtete Angriffs-Auswahl
+function selectWeightedAttack(attacks) {
+    // Top 3 Angriffe nach Wahrscheinlichkeit
+    const topAttacks = attacks.slice(0, 3);
+    
+    const weights = topAttacks.map((attack, index) => {
+        if (index === 0) return 0.6; // Höchster: 60%
+        if (index === 1) return 0.3; // Zweiter: 30%
+        return 0.1; // Dritter: 10%
+    });
+    
+    const random = Math.random();
+    let weightSum = 0;
+    
+    for (let i = 0; i < topAttacks.length; i++) {
+        weightSum += weights[i];
+        if (random <= weightSum) {
+            return topAttacks[i];
+        }
+    }
+    
+    return topAttacks[0]; // Fallback
+}
+
+// Schaden berechnen mit Verteidigung
+function calculateDamage(attack, attacker, defender) {
+    let damage = attack.damage;
+    const defenseAbilities = defender.abilities;
+    
+    // Verteidigungsmodifikatoren anwenden
+    let damageReduction = 0;
+    
+    if (attack.type === 'Sprung' && defenseAbilities['Gewicht'] >= 50) {
+        damageReduction += 0.2; // -20%
+    }
+
+    if ((attack.type === 'Gift Speien' || attack.type === 'Tödlicher Biss') && defenseAbilities['Tarnung'] >= 50) {
+        damageReduction += 0.2; // -20%
+    }
+
+    if (defenseAbilities['Ausweichen'] >= 50) {
+        damageReduction += 0.3; // -30%
+    }
+    
+    if (attack.type !== 'Gift Speien' && defenseAbilities['Panzerung'] >= 50) {
+        damageReduction += 0.35; // -35%
+    }
+
+    if (attack.type === 'Tödlicher Biss' && defenseAbilities['Panzerung vor tödlichem Biss'] >= 50) {
+        damageReduction += 0.45; // -45%
+    }
+    
+    // Schaden reduzieren (mindestens 1)
+    damage = Math.max(1, Math.round(damage * (1 - Math.min(0.9, damageReduction))));
+
+    if (defender.hasSatiatedBoostMax) {
+        damage = Math.max(1, Math.round(damage * 0.3)); // 70% Schadensreduktion bei Stufe 2
+    } else if (defender.hasSatiatedBoost) {
+        damage = Math.max(1, Math.round(damage * 0.7)); // 30% Schadensreduktion bei Stufe 1
+    }
+
+    return damage;
+}
+
 
 // ===================================
 // EXPORT (Browser & Node.js kompatibel)

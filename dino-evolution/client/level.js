@@ -724,505 +724,6 @@ function goBackToGenerator() {
 }
 
 // ===================================
-// TERRAIN-GENERATION
-// ===================================
-
-function simpleNoise(x, y, seed = 1000) {
-    let n = Math.sin((x * 127.1 + y * 311.7) * 43758.5453 + seed);
-    return (n - Math.floor(n));
-}
-
-function getTileTypeAtPosition(tileX, tileY) {
-    if (tileY < 0 || tileY >= mapHeight || tileX < 0 || tileX >= mapWidth) {
-        return TILE_TYPES.GRASS;
-    }
-    
-    if (tileMap[tileY] && tileMap[tileY][tileX] !== undefined) {
-        return tileMap[tileY][tileX];
-    }
-    
-    return TILE_TYPES.GRASS;
-}
-
-function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, attempts = 50) { 
-    for (let attempt = 0; attempt < attempts; attempt++) {
-        let testTileX, testTileY;
-        
-        if (maxDistanceInTiles === 0) {
-            testTileX = centerTileX;
-            testTileY = centerTileY;
-        } else {
-            const angle = Math.random() * 2 * Math.PI;
-            const distance = Math.random() * maxDistanceInTiles;
-            testTileX = centerTileX + Math.cos(angle) * distance;
-            testTileY = centerTileY + Math.sin(angle) * distance;
-        }
-        
-        const boundedTileX = Math.max(1, Math.min(mapWidth - 2, testTileX));
-        const boundedTileY = Math.max(6, Math.min(mapHeight - 2, testTileY));
-        
-        const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
-        
-        if (tileType !== TILE_TYPES.WATER) {
-            // console.log(`  ✓ Gültige Position gefunden: (${boundedTileX.toFixed(1)}, ${boundedTileY.toFixed(1)})`);
-            return { tileX: boundedTileX, tileY: boundedTileY, valid: true };
-        }
-    }
-
-    for (let y = Math.floor(mapHeight * 0.3); y < mapHeight - 2; y++) {
-        for (let x = 1; x < mapWidth - 2; x++) {
-            const tileType = getTileTypeAtPosition(x, y);
-            if (tileType !== TILE_TYPES.WATER) {
-                // console.log(`  ✓ Fallback Position: (${x}, ${y})`);
-                return { tileX: x, tileY: y, valid: true };
-            }
-        }
-    }
-    
-    // console.log(`  ❌ Auch Fallback fehlgeschlagen!`);
-    return { tileX: centerTileX, tileY: centerTileY, valid: false };
-}
-
-function generateTileMap() {
-    const canvasTileSizeByWidth = canvas.width / mapWidth;
-    const canvasTileSizeByHeight = canvas.height / mapHeight;
-    const canvasTileSize = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight);
-    
-    tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));  
-    tileMap = [];
-
-    for (let y = 0; y < mapHeight; y++) {
-        tileMap[y] = [];
-        for (let x = 0; x < mapWidth; x++) {
-            // Alle Zeilen bekommen normales Terrain
-            tileMap[y][x] = TILE_TYPES.DIRT;
-        }
-    }
-
-    generateLakesWithAbundance();
-    generateGrassAroundWater();
-    smoothTerrain();
-}
-
-
-function generateLakesWithAbundance() {
-    // Basis-Seen-Anzahl basierend auf Biom
-    const baseLakeCount = 2;
-    const abundanceFactor = levelBiome.waterAbundance;
-    
-    let lakeCount, avgLakeSize;
-    
-    if (abundanceFactor < 0.5) {
-        // Wenig Wasser: Wenige, kleine Seen
-        lakeCount = Math.max(1, Math.floor(baseLakeCount * abundanceFactor));
-        avgLakeSize = 30 + Math.random() * 40; // 30-70
-    } else if (abundanceFactor > 1.5) {
-        // Viel Wasser: Viele oder große Seen
-        const extraLakes = Math.floor((abundanceFactor - 1.0) * 3);
-        lakeCount = baseLakeCount + extraLakes + Math.floor(Math.random() * 3);
-        avgLakeSize = 50 + Math.random() * 80; // 50-130
-    } else {
-        // Normal: Standard mit leichter Variation
-        lakeCount = baseLakeCount + Math.floor(Math.random() * 2);
-        avgLakeSize = 40 + Math.random() * 60; // 40-100
-    }
-
-    for (let i = 0; i < lakeCount; i++) {
-        const seedX = 10 + Math.floor(Math.random() * (mapWidth - 20));
-        const seedY = 10 + Math.floor(Math.random() * (mapHeight - 20));
-        
-        // Größenvariation ±30%
-        const sizeVariation = 0.7 + Math.random() * 0.6; // 0.7 bis 1.3
-        const targetSize = Math.floor(avgLakeSize * sizeVariation);
-        
-        growLake(seedX, seedY, targetSize);
-    }
-}
-
-function growLake(startX, startY, targetSize) {
-    const waterTiles = [{x: startX, y: startY}];
-    
-    if (isValidPosition(startX, startY)) {
-        tileMap[startY][startX] = TILE_TYPES.WATER;
-    }
-    
-    while (waterTiles.length < targetSize) {
-        const expansion = [];
-        
-        for (const waterTile of waterTiles) {
-            const directions = [[-1,0], [1,0], [0,-1], [0,1]];
-            
-            for (const [dx, dy] of directions) {
-                const newX = waterTile.x + dx;
-                const newY = waterTile.y + dy;
-                
-                if (isValidPosition(newX, newY) && 
-                    tileMap[newY][newX] !== TILE_TYPES.WATER) {
-                    
-                    if (!expansion.some(e => e.x === newX && e.y === newY)) {
-                        expansion.push({x: newX, y: newY});
-                    }
-                }
-            }
-        }
-        
-        if (expansion.length === 0) {
-            break;
-        }
-        
-        const expansionsThisRound = Math.min(
-            expansion.length, 
-            targetSize - waterTiles.length,
-            1 + Math.floor(Math.random() * 4)
-        );
-        
-        for (let i = 0; i < expansionsThisRound; i++) {
-            const randomIndex = Math.floor(Math.random() * expansion.length);
-            const candidate = expansion.splice(randomIndex, 1)[0];
-            
-            tileMap[candidate.y][candidate.x] = TILE_TYPES.WATER;
-            waterTiles.push(candidate);
-            
-            if (waterTiles.length >= targetSize) {
-                break;
-            }
-        }
-    }
-}
-
-function generateGrassAroundWater() {
-
-    const newMap = JSON.parse(JSON.stringify(tileMap));
-    
-    for (let y = 0; y < mapHeight; y++) {
-        for (let x = 0; x < mapWidth; x++) {
-            if (tileMap[y][x] !== TILE_TYPES.WATER) {
-                const waterDistance = getDistanceToWater(x, y);
-                
-                let grassProbability = 0;
-                if (waterDistance === 1) {
-                    grassProbability = 0.9;
-                } else if (waterDistance === 2) {
-                    grassProbability = 0.7;
-                } else if (waterDistance === 3) {
-                    grassProbability = 0.4;
-                } else if (waterDistance <= 5) {
-                    grassProbability = 0.2;
-                } else {
-                    grassProbability = 0.1;
-                }
-                
-                if (Math.random() < grassProbability) {
-                    newMap[y][x] = TILE_TYPES.GRASS;
-                }
-            }
-        }
-    }   
-    tileMap = newMap;
-}
-
-function getDistanceToWater(x, y) {
-    let minDistance = Infinity;
-    
-    for (let dy = -8; dy <= 8; dy++) {
-        for (let dx = -8; dx <= 8; dx++) {
-            const checkX = x + dx;
-            const checkY = y + dy;
-            
-            if (isValidPosition(checkX, checkY) && 
-                tileMap[checkY][checkX] === TILE_TYPES.WATER) {
-                const distance = Math.abs(dx) + Math.abs(dy);
-                minDistance = Math.min(minDistance, distance);
-            }
-        }
-    }
-    
-    return minDistance === Infinity ? 999 : minDistance;
-}
-
-function hasPath(start, end) {
-    if (!isValidPosition(start.x, start.y) || !isValidPosition(end.x, end.y)) {
-        return false;
-    }
-    
-    const visited = new Set();
-    const queue = [start];
-    visited.add(`${start.x},${start.y}`);
-    
-    const directions = [[-1,0], [1,0], [0,-1], [0,1]];
-    
-    while (queue.length > 0) {
-        const current = queue.shift();
-        
-        if (current.x === end.x && current.y === end.y) {
-            return true;
-        }
-        
-        for (const [dx, dy] of directions) {
-            const newX = current.x + dx;
-            const newY = current.y + dy;
-            const key = `${newX},${newY}`;
-            
-            if (isValidPosition(newX, newY) && 
-                !visited.has(key) &&
-                tileMap[newY][newX] !== TILE_TYPES.WATER) {
-                
-                visited.add(key);
-                queue.push({ x: newX, y: newY });
-            }
-        }
-    }
-    
-    return false;
-}
-
-function smoothTerrain() {
-    const iterations = 1;
-    
-    for (let iter = 0; iter < iterations; iter++) {
-        const newMap = JSON.parse(JSON.stringify(tileMap));
-        
-        for (let y = 1; y < mapHeight - 1; y++) {
-            for (let x = 1; x < mapWidth - 1; x++) {
-                if (tileMap[y][x] === TILE_TYPES.DIRT) {
-                    const nearbyGrass = countNearbyType(x, y, TILE_TYPES.GRASS);
-                    if (nearbyGrass >= 6) {
-                        newMap[y][x] = TILE_TYPES.GRASS;
-                    }
-                }
-            }
-        }
-        
-        tileMap = newMap;
-    }
-}
-
-function countNearbyType(x, y, tileType) {
-    let count = 0;
-    for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const checkX = x + dx;
-            const checkY = y + dy;
-            
-            if (isValidPosition(checkX, checkY) && 
-                tileMap[checkY][checkX] === tileType) {
-                count++;
-            }
-        }
-    }
-    return count;
-}
-
-function isValidPosition(x, y) {
-    return x >= 0 && x < mapWidth && y >= 0 && y < mapHeight;
-}
-
-// ===================================
-// TERRAIN-RENDERING (ANGEPASST FÜR SCROLLING)
-// ===================================
-
-function calculateTerrainOffsets() {
-    const terrainPixelWidth = mapWidth * tileSize;
-    const terrainPixelHeight = mapHeight * tileSize;
-    
-    // NEU: Zentrieren nur wenn Terrain kleiner als Canvas
-    if (terrainPixelWidth < canvas.width) {
-        terrainOffsetX = (canvas.width - terrainPixelWidth) / 2 - scrollX;
-    } else {
-        terrainOffsetX = -scrollX; // Scrolling wenn größer
-    }
-    
-    if (terrainPixelHeight < canvas.height) {
-        terrainOffsetY = (canvas.height - terrainPixelHeight) / 2 - scrollY;
-    } else {
-        terrainOffsetY = -scrollY; // Scrolling wenn größer
-    }
-}
-
-function renderTerrain() {
-    ctx.fillStyle = '#1a3a1a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    for (let y = 0; y < mapHeight; y++) {
-        for (let x = 0; x < mapWidth; x++) {
-            if (tileMap[y] && tileMap[y][x] !== undefined) {
-                renderTile(x, y, tileMap[y][x], animationTime);
-            }
-        }
-    }
-}
-
-function renderTile(x, y, tileType, time = 0) {
-    const tileX = x * tileSize + terrainOffsetX;
-    const tileY = y * tileSize + terrainOffsetY;
-    const colors = TILE_COLORS[tileType];
-    
-    ctx.fillStyle = colors.base;
-    ctx.fillRect(tileX, tileY, tileSize, tileSize);
-    
-    const shadowSize = Math.max(1, Math.floor(tileSize / 32));
-    
-    ctx.fillStyle = colors.highlight;
-    ctx.fillRect(tileX, tileY, tileSize, shadowSize);
-    ctx.fillRect(tileX, tileY, shadowSize, tileSize);
-    
-    ctx.fillStyle = colors.shadow;
-    ctx.fillRect(tileX, tileY + tileSize - shadowSize, tileSize, shadowSize);
-    ctx.fillRect(tileX + tileSize - shadowSize, tileY, shadowSize, tileSize);
-    
-    const noiseSeed = x * 73 + y * 149;
-    const scale = tileSize / baseTileSize;
-    
-    if (tileType === TILE_TYPES.GRASS) {
-        const grassColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.15)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.15)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.15)})`;
-        ctx.fillStyle = grassColor;
-        
-        const grassBlades = 2;
-        for (let i = 0; i < grassBlades; i++) {
-            const randomX = ((noiseSeed + i * 37) % 100) / 100;
-            const randomY = ((noiseSeed + i * 67) % 100) / 100;
-            const randomHeight = ((noiseSeed + i * 23) % 100) / 100;
-            
-            const bladeX = tileX + (2 * scale) + (randomX * (tileSize - 6 * scale));
-            const bladeY = tileY + (2 * scale) + (randomY * (tileSize - 12 * scale));
-            const bladeWidth = 2 * scale;
-            const bladeHeight = 4 * scale + randomHeight * 8 * scale;
-            
-            if (bladeX >= tileX && bladeX + bladeWidth <= tileX + tileSize &&
-                bladeY >= tileY && bladeY + bladeHeight <= tileY + tileSize) {
-                ctx.fillRect(bladeX, bladeY, bladeWidth, bladeHeight);
-            }
-        }
-        
-        const flowerColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.85)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.85)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.85)})`;
-        ctx.fillStyle = flowerColor;
-        
-        const flowers = 1;
-        for (let i = 0; i < flowers; i++) {
-            const randomX = ((noiseSeed + i * 91) % 100) / 100;
-            const randomY = ((noiseSeed + i * 113) % 100) / 100;
-            
-            const flowerSize = 3 * scale;
-            const flowerX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - flowerSize));
-            const flowerY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - flowerSize));
-            
-            if (flowerX >= tileX && flowerX + flowerSize <= tileX + tileSize &&
-                flowerY >= tileY && flowerY + flowerSize <= tileY + tileSize) {
-                ctx.fillRect(flowerX, flowerY, flowerSize, flowerSize);
-            }
-        }
-    }
-    
-    if (tileType === TILE_TYPES.DIRT) {
-        const rockColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
-                                ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
-                                ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`;
-        ctx.fillStyle = rockColor;
-        
-        const rocks = 2;
-        for (let i = 0; i < rocks; i++) {
-            const randomX = ((noiseSeed + i * 41) % 100) / 100;
-            const randomY = ((noiseSeed + i * 83) % 100) / 100;
-            const randomSize = ((noiseSeed + i * 29) % 100) / 100;
-            
-            const rockSize = (4 + randomSize * 6) * scale;
-            const rockX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - rockSize));
-            const rockY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - rockSize));
-            
-            if (rockX >= tileX && rockX + rockSize <= tileX + tileSize &&
-                rockY >= tileY && rockY + rockSize <= tileY + tileSize) {
-                ctx.fillRect(rockX, rockY, rockSize, rockSize);
-            }
-        }
-        
-        const crumbColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.1)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.1)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.1)})`;
-        ctx.fillStyle = crumbColor;
-        
-        const crumbs = 3;
-        for (let i = 0; i < crumbs; i++) {
-            const randomX = ((noiseSeed + i * 127) % 100) / 100;
-            const randomY = ((noiseSeed + i * 179) % 100) / 100;
-            
-            const crumbSize = 2 * scale;
-            const crumbX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - crumbSize));
-            const crumbY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - crumbSize));
-            
-            if (crumbX >= tileX && crumbX + crumbSize <= tileX + tileSize &&
-                crumbY >= tileY && crumbY + crumbSize <= tileY + tileSize) {
-                ctx.fillRect(crumbX, crumbY, crumbSize, crumbSize);
-            }
-        }
-    }
-    
-    if (tileType === TILE_TYPES.WATER) {
-        for (let layer = 0; layer < 2; layer++) {
-            const waveSpeed = 1.0 + layer * 0.5;
-            const waveFreq = 0.15 + layer * 0.08;
-            const waveAmplitude = (4 - layer * 1) * scale;
-            
-            const waveColors = [
-                `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 1.1)}, 
-                        ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 1.1)}, 
-                        ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 1.1)})`,
-                `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
-                        ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
-                        ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`
-            ];
-            ctx.fillStyle = waveColors[layer];
-            
-            for (let i = 0; i < 2; i++) {
-                const baseY = tileY + (8 + i * 12) * scale;
-                const waveY = baseY + Math.sin((x * waveFreq + time * waveSpeed + layer * 0.8)) * waveAmplitude;
-                
-                if (waveY >= tileY + 2 * scale && waveY <= tileY + tileSize - 4 * scale) {
-                    const segments = 3;
-                    for (let seg = 0; seg < segments; seg++) {
-                        const segWidth = tileSize / segments;
-                        const segX = tileX + seg * segWidth;
-                        const segWaveY = waveY + Math.sin((segX * 0.08 + time * waveSpeed)) * (waveAmplitude * 0.6);
-                        
-                        if (segX >= tileX && segX + segWidth <= tileX + tileSize &&
-                            segWaveY >= tileY && segWaveY + 3 * scale <= tileY + tileSize) {
-                            
-                            if (((noiseSeed + seg + layer * 10) % 2) === 0) {
-                                ctx.fillRect(segX, segWaveY, segWidth * 0.8, 3 * scale);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        const bubbleColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.85)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.85)}, 
-                                    ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.85)})`;
-        ctx.fillStyle = bubbleColor;
-        
-        const bubbles = 1;
-        for (let i = 0; i < bubbles; i++) {
-            const randomX = ((noiseSeed + i * 157) % 100) / 100;
-            const randomY = ((noiseSeed + i * 193) % 100) / 100;
-            
-            const bubbleSize = 4 * scale;
-            const bubbleX = tileX + (2 * scale) + (randomX * (tileSize - 4 * scale - bubbleSize));
-            const bubbleY = tileY + (2 * scale) + (randomY * (tileSize - 4 * scale - bubbleSize));
-            
-            if (bubbleX >= tileX && bubbleX + bubbleSize <= tileX + tileSize &&
-                bubbleY >= tileY && bubbleY + bubbleSize <= tileY + tileSize) {
-                ctx.fillRect(bubbleX, bubbleY, bubbleSize, bubbleSize);
-            }
-        }
-    }
-}
-
-// ===================================
 // SCROLLING & ZOOM EVENTS (NEU)
 // ===================================
 
@@ -2225,12 +1726,6 @@ class Dino {
     // State-spezifische Update-Logik
     handleState() {
 
-        /* const now = Date.now();
-        if (now - this.lastStateCheck < 100) {
-            return;
-        }
-        this.lastStateCheck = now;*/
-
         switch (this.state) {
             case DINO_STATES.IDLE:
                 if (this.stateTimer >= this.stateDuration) {
@@ -2251,7 +1746,7 @@ class Dino {
                 break;
         }
 
-            if (this.state === DINO_STATES.FIGHTING && this.avoidanceMode.active) {
+        if (this.state === DINO_STATES.FIGHTING && this.avoidanceMode.active) {
             this.exitAvoidanceMode('interrupted by combat');
         }
 
@@ -2265,7 +1760,6 @@ class Dino {
             this.wasMovingLastFrame = false;
         }
         
-        // Zustandsmaschine
         switch (this.state) {
             case DINO_STATES.IDLE:
                 this.updateNeutralState();
@@ -2986,78 +2480,6 @@ function performAttack(attacker, defender) {
     }
 }
 
-// Gewichtete Angriffs-Auswahl
-function selectWeightedAttack(attacks) {
-    // Top 3 Angriffe nach Wahrscheinlichkeit
-    const topAttacks = attacks.slice(0, 3);
-    
-    const weights = topAttacks.map((attack, index) => {
-        if (index === 0) return 0.6; // Höchster: 60%
-        if (index === 1) return 0.3; // Zweiter: 30%
-        return 0.1; // Dritter: 10%
-    });
-    
-    const random = Math.random();
-    let weightSum = 0;
-    
-    for (let i = 0; i < topAttacks.length; i++) {
-        weightSum += weights[i];
-        if (random <= weightSum) {
-            return topAttacks[i];
-        }
-    }
-    
-    return topAttacks[0]; // Fallback
-}
-
-// Schaden berechnen mit Verteidigung
-function calculateDamage(attack, attacker, defender) {
-    let damage = attack.damage;
-    const defenseAbilities = defender.abilities;
-    
-    // Verteidigungsmodifikatoren anwenden
-    let damageReduction = 0;
-    
-    // Gewicht (Sprung-Schutz)
-    if (attack.type === 'Sprung' && defenseAbilities['Gewicht'] >= 50) {
-        damageReduction += 0.2; // -20%
-    }
-    
-    // Tarnung (Gift Speien & Tödlicher Biss)
-    if ((attack.type === 'Gift Speien' || attack.type === 'Tödlicher Biss') && defenseAbilities['Tarnung'] >= 50) {
-        damageReduction += 0.2; // -20%
-    }
-    
-    // Ausweichen (alles)
-    if (defenseAbilities['Ausweichen'] >= 50) {
-        damageReduction += 0.3; // -30%
-    }
-    
-    // Panzerung (alles außer Gift Speien)
-    if (attack.type !== 'Gift Speien' && defenseAbilities['Panzerung'] >= 50) {
-        damageReduction += 0.35; // -35%
-    }
-    
-    // Panzerung vor tödlichem Biss
-    if (attack.type === 'Tödlicher Biss' && defenseAbilities['Panzerung vor tödlichem Biss'] >= 50) {
-        damageReduction += 0.45; // -45%
-    }
-    
-    // Schaden reduzieren (mindestens 1)
-    damage = Math.max(1, Math.round(damage * (1 - Math.min(0.9, damageReduction))));
-
-    // NEU: Gesättigt-Boost anwenden (30% weniger Schaden)
-    if (defender.hasSatiatedBoostMax) {
-        damage = Math.max(1, Math.round(damage * 0.3)); // 70% Schadensreduktion bei Stufe 2
-        // console.log(`🏰 ${defender.species.name} MAX Gesättigt-Boost: -70% Schaden (${damage})`);
-    } else if (defender.hasSatiatedBoost) {
-        damage = Math.max(1, Math.round(damage * 0.7)); // 30% Schadensreduktion bei Stufe 1
-        // console.log(`🛡️ ${defender.species.name} Gesättigt-Boost: -30% Schaden (${damage})`);
-    }
-
-    return damage;
-}
-
 // ===================================
 // VISUELLE EFFEKTE
 // ===================================
@@ -3147,8 +2569,6 @@ function handleDeath(dino) {
 
 // Kampf beenden
 function endCombat(winner, loser) {
-    // console.log(`🏆 ${winner.species.name} gewinnt gegen ${loser.species.name}`);
-    
     // Kampf aus Liste entfernen
     const combatIndex = combats.findIndex(c => 
         c.participants.includes(winner) && c.participants.includes(loser)
@@ -3590,10 +3010,8 @@ function selectBestFoodSource(dino) {
 }
 
 function startFoodConsumption(dino, foodSource) {
-    //if(dino.selected){ console.log(`startFoodConsumption(dino) ${frame} -- ${dino.state}`);} 
     // Prüfe nochmals ob Nahrungsquelle frei ist (Race Condition vermeiden)
     if (occupiedFoodSources.has(foodSource.sourceId)) {
-        // console.log(`🚫 ${dino.species.name}: Nahrungsquelle bereits belegt, suche neue`);
         dino.changeState(DINO_STATES.IDLE);
         dino.foodTarget = null;
         return;
@@ -3734,8 +3152,7 @@ function completeFoodConsumption(dino) {
 
 // Nahrungsaufnahme unterbrechen
 function interruptFoodConsumption(dino, reason = 'unknown') {
-    // console.log(`❌ ${dino.species.name} Nahrungsaufnahme unterbrochen: ${reason}`);
-    
+   
     // Konsumptions-Animation beenden
     dino.isConsuming = false;
     
@@ -3777,7 +3194,6 @@ function showFoodIcon(dino, foodType, value) {
 }
 
 function updateFoodSeekingState(dino) {
-    //if(dino.selected){ console.log(`updateFoodSeekingState(dino) ${frame} -- ${dino.state}`);}  
     if (dino.avoidanceMode.active) {
         dino.updateAvoidanceMode();
         return;
@@ -3832,7 +3248,6 @@ function updateFoodSeekingState(dino) {
 
     // Nah genug zum Fressen?
     if (distance <= requiredDistance) {
-        // console.log(`🎯 ${dino.species.name} ist nah genug an Feeding-Position für ${targetObj.type || 'corpse'}`);
         startFoodConsumption(dino, dino.foodTarget);
         return;
     }
@@ -3963,8 +3378,7 @@ function releaseFoodReservation(dino) {
 function calculateOptimalFeedingPositions(foodSource, dinoPosition) {
     const targetObj = foodSource.object;
     let baseX, baseY;
-        // console.log(`📍${baseX}`);
-    
+
     // Basis-Position der Nahrungsquelle
     if (targetObj.tileX !== undefined) {
         baseX = targetObj.tileX;
@@ -4011,9 +3425,7 @@ function calculateOptimalFeedingPositions(foodSource, dinoPosition) {
     // Nähere Position wählen
     const chosenPosition = leftDistance <= rightDistance ? leftPosition : rightPosition;
     const chosenSide = leftDistance <= rightDistance ? 'left' : 'right';
-    
-        // console.log(`📍 ${foodSource.type} Position gewählt: ${chosenSide} (${chosenPosition.x.toFixed(1)}, ${chosenPosition.y.toFixed(1)})`);
-    
+
     return chosenPosition;
 }
 
@@ -4023,16 +3435,10 @@ function updateFoodConsumingState(dino) {
     const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
     if(dino.selected) console.log(`🦷 ${dino.species.name} konsumiert Nahrung... ${elapsed}`);
  
-    
-    // WICHTIG: Dino bleibt ABSOLUT STILL während des Konsums!
-    // Alle Bewegung komplett stoppen
-    //dino.changeState(DINO_STATES.IDLE);
-    dino.targetTileX = dino.tileX;  // Position fixieren
+        dino.targetTileX = dino.tileX;  // Position fixieren
     dino.targetTileY = dino.tileY;  // Position fixieren
     dino.animationPhase = 'idle';   // Nur Idle-Animation
-    
-    // KEINE Position-Updates! Dino bleibt genau wo er ist
-    
+       
     // Dash-Animation verwalten (alle 0,7 Sekunden)
     const dashInterval = 0.7; // 700ms zwischen Dashes
     const dashDuration = 0.3;  // 300ms pro Dash (wie bei Angriffen)
@@ -4046,9 +3452,7 @@ function updateFoodConsumingState(dino) {
             // Neuen Dash starten
             dino.isConsuming = true;
             dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
-            // console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
-            
-            // NEU: Blatteffekt bei Bäumen
+
             if (dino.foodTarget && dino.foodTarget.object.type === 'tree') {
                 createLeafEffect(dino.foodTarget.object, dino);
             }
