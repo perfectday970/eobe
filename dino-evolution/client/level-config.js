@@ -683,8 +683,13 @@ function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, att
             testTileY = centerTileY + Math.sin(angle) * distance;
         }
         
-        const boundedTileX = Math.max(1, Math.min(mapWidth - 2, testTileX));
-        const boundedTileY = Math.max(6, Math.min(mapHeight - 2, testTileY));
+        const bounded = PositionUtils.clampPosition(
+            testTileX, testTileY,
+            1, mapWidth - 2,
+            6, mapHeight - 2
+        );
+        const boundedTileX = bounded.x;
+        const boundedTileY = bounded.y;
         
         const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
         

@@ -1427,14 +1427,13 @@ class Dino {
         this.targetTileY = this.tileY + Math.sin(angle) * moveDistance;
         
         // Grenzen einhalten
-        this.targetTileX = Math.max(baseMinTileX, Math.min(baseMaxTileX, this.targetTileX));
-        this.targetTileY = Math.max(5, Math.min(mapHeight - 2, this.targetTileY));
-        /*
-        // Debug-Info
-        if (useCrossMovement) {
-            const distanceToTarget = Math.abs(this.tileX - targetCenterX);
-            // console.log(`📍 ${this.species.name}: Pos ${this.tileX.toFixed(1)} -> Target ${this.targetTileX.toFixed(1)}, Entfernung zum Ziel: ${distanceToTarget.toFixed(1)}`);
-        }*/
+        const bounded = PositionUtils.clampPosition(
+            this.targetTileX, this.targetTileY,
+            baseMinTileX, baseMaxTileX,
+            5, mapHeight - 2
+        );
+        this.targetTileX = bounded.x;
+        this.targetTileY = bounded.y;
     }
 
     // REST DER KLASSE BLEIBT UNVERÄNDERT...
@@ -1946,8 +1945,13 @@ class Dino {
             maxX = mapWidth - 0.5; // Näher zur rechten Kante
         }
 
-        this.tileX = Math.max(minX, Math.min(maxX, this.tileX));
-        this.tileY = Math.max(1, Math.min(mapHeight - 1, this.tileY));
+        const clampedPos = PositionUtils.clampPosition(
+            this.tileX, this.tileY,
+            minX, maxX,
+            1, mapHeight - 1
+        );
+        this.tileX = clampedPos.x;
+        this.tileY = clampedPos.y;
     
         // Animation synchronisieren
         this.animationPhase = this.getAnimationForState();
@@ -2295,55 +2299,29 @@ function seekEnemy(dino) {
 
     if (!dino.combatTarget) return;
     
-    const dx = dino.combatTarget.tileX - dino.tileX;
-    const dy = dino.combatTarget.tileY - dino.tileY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
+    const distance = PositionUtils.calculateDistance(dino, dino.combatTarget);
+
     if (distance > 0.1) {
-        const pathCheck = dino.checkPathBlocked(
-            dino,
-            dino.tileX,
-            dino.tileY,
-            dino.combatTarget.tileX,
-            dino.combatTarget.tileY
+        const moveSpeed = dino.getMovementSpeed();
+        const newPos = PositionUtils.moveTowards(
+            dino, 
+            dino.combatTarget.tileX, 
+            dino.combatTarget.tileY, 
+            moveSpeed
         );
         
-        if (pathCheck.blocked) {
-            dino.activateAvoidanceMode(
-                dino.combatTarget.tileX, 
-                dino.combatTarget.tileY, 
-                pathCheck.position
+        if (isPositionValidForMovement(dino, newPos.x, newPos.y)) {
+            dino.tileX = newPos.x;
+            dino.tileY = newPos.y;
+            
+            // Blickrichtung vereinfacht
+            const direction = PositionUtils.normalizeDirection(
+                dino.combatTarget.tileX - dino.tileX,
+                dino.combatTarget.tileY - dino.tileY
             );
-            return;
-        }
-
-        const moveSpeed = dino.getMovementSpeed();
-        const moveTileX = (dx / distance) * moveSpeed;
-        const moveTileY = (dy / distance) * moveSpeed;
-        
-        // Neue Position berechnen
-        const newTileX = dino.tileX + moveTileX;
-        const newTileY = dino.tileY + moveTileY;
-        
-        // Wasser-Kollision auch beim Verfolgen prüfen
-        if (isPositionValidForMovement(dino, newTileX, newTileY)) {
             
-            dino.tileX = newTileX;
-            dino.tileY = newTileY;
-            
-            // Blickrichtung anpassen
-            if (dx > 0.01) {
-                dino.facingRight = false;
-            } else if (dx < -0.01) {
-                dino.facingRight = true;
-            }
-        } else {
-            // Kann Feind nicht verfolgen wegen Wasser
-            dino.combatTarget = null;
-            dino.changeState(DINO_STATES.IDLE);
-            
-            if (debugMode) {
-                console.log(`🚫 ${dino.species.name} bricht Verfolgung ab: Wasser blockiert Weg`);
+            if (Math.abs(direction.x) > 0.01) {
+                dino.facingRight = direction.x < 0;
             }
         }
     }
@@ -3307,9 +3285,10 @@ function updateFoodSeekingState(dino) {
         
         if (isPositionValidForMovement(dino, newX, newY)) {
             // Grenzen-Check
-            dino.tileX = Math.max(1, Math.min(mapWidth - 1, newX));
-            dino.tileY = Math.max(5, Math.min(mapHeight - 1, newY));
-            
+            const boundedPos = PositionUtils.clampToMapBounds(newX, newY, mapWidth, mapHeight, 1);
+            dino.tileX = boundedPos.x;
+            dino.tileY = Math.max(5, Math.min(mapHeight - 1, boundedPos.y)); // Y hat spezielle Grenzen
+
             // Blickrichtung (nur bei deutlicher Bewegung)
             if (Math.abs(finalDx) > 0.1) {
                 if (finalDx > 0) dino.facingRight = false;
