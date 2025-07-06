@@ -434,7 +434,7 @@ function generateOwnDinosFromData(objectCounts) {
                 while (!dinoPlaced) {                               
                     const position = findValidLandPosition(centerTileX, centerTileY, 8);
                     const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
-                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                               
+                    const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));                              
                     const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                     
                     if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
@@ -450,7 +450,7 @@ function generateOwnDinosFromData(objectCounts) {
                 while (!dinoPlaced) {     
                     const position = findValidLandPosition(centerTileX, centerTileY, 8);
                     const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
-                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                              
+                    const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));                              
                     const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                     
                     if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
@@ -479,7 +479,7 @@ function generateEnemyDinosFromData(objectCounts) {
                     const position = findValidLandPosition(centerTileX, centerTileY, 8);
                     const minEnemyX = mapWidth * 0.55;
                     const finalTileX = Math.max(minEnemyX, Math.min(mapWidth - 2, position.tileX));
-                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY)); // ← GEÄNDERT                             
+                    const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));
                     const newDino = new Dino(finalTileX, finalTileY, species, true, true);
                     
                     if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
@@ -494,7 +494,7 @@ function generateEnemyDinosFromData(objectCounts) {
                 while (!dinoPlaced) {     
                     const position = findValidLandPosition(centerTileX, centerTileY, 8);
                     const finalTileX = Math.max(mapWidth * 0.55, Math.min(mapWidth - 2, position.tileX));
-                    const finalTileY = Math.max(5, Math.min(mapHeight - 2, position.tileY));                             
+                    const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));                             
                     const newDino = new Dino(finalTileX, finalTileY, species, true, true);
                     
                     if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
@@ -686,7 +686,7 @@ function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, att
         const bounded = PositionUtils.clampPosition(
             testTileX, testTileY,
             1, mapWidth - 2,
-            6, mapHeight - 2
+            1, mapHeight - 2  // ← GEÄNDERT: von 6 auf 1
         );
         const boundedTileX = bounded.x;
         const boundedTileY = bounded.y;
