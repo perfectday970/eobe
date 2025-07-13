@@ -407,6 +407,13 @@ function startPlacementPhase() {
     // UI anzeigen
     const placementUI = document.getElementById('placementPhase');
     placementUI.style.display = 'block';
+
+    document.getElementById('gameHud').style.display = 'none';
+    document.getElementById('infoPanel').style.display = 'none';
+    document.getElementById('timerDisplay').style.display = 'none';
+    document.getElementById('gameControls').style.display = 'none';
+    document.getElementById('sessionInfo').style.display = 'none';
+    
     
     // Canvas für Placement-Mode vorbereiten
     canvas.classList.add('placement-mode');
@@ -489,7 +496,7 @@ function updatePlacementTimer() {
     
     // Timer-Kreis Animation
     const timerProgress = document.getElementById('timerProgress');
-    const circumference = 2 * Math.PI * 50; // Radius = 50
+    const circumference = 2 * Math.PI * 25; // Radius = 50
     const offset = circumference * (1 - placementTimeRemaining / 15);
     timerProgress.style.strokeDashoffset = offset;
     
@@ -598,8 +605,16 @@ function endPlacementPhase() {
     
     placementPhase = false;
     
-    // UI ausblenden
+    // Placement UI ausblenden
     document.getElementById('placementPhase').style.display = 'none';
+    
+    // ANDERE UI-ELEMENTE WIEDER EINBLENDEN
+    document.getElementById('gameHud').style.display = 'block';
+    document.getElementById('infoPanel').style.display = 'block';
+    document.getElementById('timerDisplay').style.display = 'block';
+    document.getElementById('gameControls').style.display = 'block';
+    document.getElementById('sessionInfo').style.display = 'block';
+    
     canvas.classList.remove('placement-mode');
     
     // Click-Handler entfernen

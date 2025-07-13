@@ -447,12 +447,26 @@
         /* Placement Phase Styles */
         .placement-phase {
             position: fixed;
-            top: 0;
+            top: 10px;  /* Ganz oben positionieren */
             left: 0;
+            right: 0;
             width: 100%;
-            height: 100%;
+            height: auto;  /* Nicht mehr fullscreen */
             pointer-events: none;
             z-index: 50;
+            display: flex;
+            justify-content: center;
+        }
+
+        .placement-ui-compact {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #32cd32;
+            border-radius: 10px;
+            padding: 10px 20px;
+            pointer-events: auto;
         }
 
         .placement-timer {
@@ -463,45 +477,53 @@
             pointer-events: auto;
         }
 
+        .placement-timer {
+            position: relative;  /* Nicht mehr absolute */
+            transform: none;  /* Transform entfernen */
+        }
+
         .timer-circle {
-            position: relative;
-            width: 120px;
-            height: 120px;
-            background: rgba(0, 0, 0, 0.9);
-            border-radius: 50%;
-            border: 3px solid #32cd32;
-            box-shadow: 0 0 30px rgba(50, 205, 50, 0.6);
+            width: 60px;  /* von 120px auf 60px */
+            height: 60px;
+            border: 2px solid #32cd32;  /* Dünnerer Rand */
+        }
+
+        .timer-circle svg {
+            width: 60px;
+            height: 60px;
+        }
+
+        .timer-circle circle {
+            r: 25;  /* Kleinerer Radius */
+            cx: 30;
+            cy: 30;
+            stroke-width: 4;  /* Dünnerer Strich */
         }
 
         .timer-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 36px;
-            font-weight: bold;
-            color: #32cd32;
-            text-shadow: 0 0 10px rgba(50, 205, 50, 0.8);
+            font-size: 20px;  /* von 36px auf 20px */
         }
 
+        .placement-instructions-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .placement-instructions-compact h3 {
+            margin: 0;
+            font-size: 1.2em;
+            color: #ff6b35;
+        }
+
+        .placement-instructions-compact .progress {
+            font-size: 0.9em;
+            color: #e8d5c4;
+        }
+
+        /* Alte große Elemente verstecken */
         .placement-instructions {
-            position: absolute;
-            top: 160px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.9);
-            border: 3px solid #32cd32;
-            border-radius: 15px;
-            padding: 20px 40px;
-            text-align: center;
-            pointer-events: auto;
-        }
-
-        .placement-instructions h2 {
-            color: #32cd32;
-            margin-bottom: 15px;
-            font-size: 1.8em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            display: none !important;
         }
 
         .current-group {
@@ -607,24 +629,22 @@
 
         /* Responsive Design */
         @media (max-width: 768px) {
-            .timer-display {
-                top: 10px;
-                padding: 10px 15px;
+            .placement-ui-compact {
+                padding: 8px 15px;
+                gap: 15px;
             }
             
-            .level-end-content {
-                padding: 25px;
-                width: 95%;
+            .timer-circle {
+                width: 50px;
+                height: 50px;
             }
             
-            .level-end-actions {
-                flex-direction: column;
-                align-items: center;
+            .timer-text {
+                font-size: 18px;
             }
             
-            .continue-btn, .retry-btn, .menu-btn {
-                width: 100%;
-                max-width: 250px;
+            .placement-instructions-compact h3 {
+                font-size: 1em;
             }
         }
     </style>
@@ -641,29 +661,28 @@
 
         <!-- PLACEMENT PHASE UI -->
         <div class="placement-phase" id="placementPhase" style="display: none;">
-            <div class="placement-timer">
-                <div class="timer-circle">
-                    <svg width="120" height="120">
-                        <circle cx="60" cy="60" r="50" fill="none" stroke="#333" stroke-width="8"/>
-                        <circle id="timerProgress" cx="60" cy="60" r="50" fill="none" stroke="#32cd32" stroke-width="8"
-                                stroke-dasharray="314" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
-                    </svg>
-                    <div class="timer-text" id="placementTimer">15</div>
+            <div class="placement-ui-compact">
+                <!-- Timer -->
+                <div class="placement-timer">
+                    <div class="timer-circle">
+                        <svg width="60" height="60">
+                            <circle cx="30" cy="30" r="25" fill="none" stroke="#333" stroke-width="4"/>
+                            <circle id="timerProgress" cx="30" cy="30" r="25" fill="none" stroke="#32cd32" stroke-width="4"
+                                    stroke-dasharray="157" stroke-dashoffset="0" transform="rotate(-90 30 30)"/>
+                        </svg>
+                        <div class="timer-text" id="placementTimer">15</div>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="placement-instructions">
-                <h2>🎯 Positionieren Sie Ihre Dinosaurier!</h2>
-                <div class="current-group">
-                    <p>Klicken Sie um zu platzieren:</p>
-                    <h3 id="currentGroupName">Gruppe wird geladen...</h3>
-                </div>
-                <div class="placement-progress">
-                    <span id="placedCount">0</span> / <span id="totalGroups">0</span> platziert
+                
+                <!-- Instructions und Progress kombiniert -->
+                <div class="placement-instructions-compact">
+                    <h3 id="currentGroupName">🦕 Gruppe wird geladen...</h3>
+                    <div class="progress">
+                        <span id="placedCount">0</span> / <span id="totalGroups">0</span> platziert
+                    </div>
                 </div>
             </div>
         </div>
-
         <!-- ERROR SCREEN -->
         <div class="error-message" id="errorScreen" style="display: none;">
             <h3>❌ Fehler beim Laden</h3>
