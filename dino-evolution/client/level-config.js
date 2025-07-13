@@ -392,6 +392,315 @@ class EnvironmentObject {
 
 
 // ===================================
+// PLACEMENT SYSTEM FUNKTIONEN
+// ===================================
+
+function startPlacementPhase() {
+    console.log('🎯 Platzierungsphase gestartet');
+    
+    placementPhase = true;
+    placementTimeRemaining = 15;
+    placementStartTime = Date.now();
+    currentPlacementGroup = 0;
+    groupPlacements = [];
+    
+    // UI anzeigen
+    const placementUI = document.getElementById('placementPhase');
+    placementUI.style.display = 'block';
+    
+    // Canvas für Placement-Mode vorbereiten
+    canvas.classList.add('placement-mode');
+    
+    // Placement-Zone visualisieren
+    createPlacementZoneOverlay();
+    
+    // Gruppen-Info aktualisieren
+    updatePlacementUI();
+    
+    // Click-Handler registrieren
+    canvas.addEventListener('mousedown', handlePlacementMouseDown);
+    canvas.addEventListener('mousemove', handlePlacementMouseMove);
+    canvas.addEventListener('mouseup', handlePlacementMouseUp);
+    
+    // Timer starten
+    requestAnimationFrame(updatePlacementTimer);
+}
+
+function createPlacementZoneOverlay() {
+    // Overlay-Element erstellen
+    placementZoneOverlay = document.createElement('div');
+    placementZoneOverlay.className = 'placement-zone-overlay';
+    
+    // Position und Größe berechnen
+    const leftBound = mapWidth * 0.05 * tileSize + terrainOffsetX;
+    const rightBound = mapWidth * 0.45 * tileSize + terrainOffsetX;
+    const topBound = 1 * tileSize + terrainOffsetY;
+    const bottomBound = (mapHeight - 2) * tileSize + terrainOffsetY;
+    
+    placementZoneOverlay.style.left = leftBound + 'px';
+    placementZoneOverlay.style.top = topBound + 'px';
+    placementZoneOverlay.style.width = (rightBound - leftBound) + 'px';
+    placementZoneOverlay.style.height = (bottomBound - topBound) + 'px';
+    
+    document.querySelector('.game-container').appendChild(placementZoneOverlay);
+}
+
+function updatePlacementZoneOverlay() {
+    if (!placementZoneOverlay) return;
+    
+    // Position und Größe neu berechnen (für Zoom/Scroll)
+    const leftBound = mapWidth * 0.05 * tileSize + terrainOffsetX;
+    const rightBound = mapWidth * 0.45 * tileSize + terrainOffsetX;
+    const topBound = 1 * tileSize + terrainOffsetY;
+    const bottomBound = (mapHeight - 2) * tileSize + terrainOffsetY;
+    
+    placementZoneOverlay.style.left = leftBound + 'px';
+    placementZoneOverlay.style.top = topBound + 'px';
+    placementZoneOverlay.style.width = (rightBound - leftBound) + 'px';
+    placementZoneOverlay.style.height = (bottomBound - topBound) + 'px';
+}
+
+function updatePlacementUI() {
+    const totalGroups = levelData.populationData.filter(species => !species.population.isExtinct).length;
+    
+    // Gruppen-Zähler aktualisieren
+    document.getElementById('placedCount').textContent = groupPlacements.length;
+    document.getElementById('totalGroups').textContent = totalGroups;
+    
+    // Aktuelle Gruppe anzeigen
+    if (currentPlacementGroup < totalGroups) {
+        const activeGroups = levelData.populationData.filter(species => !species.population.isExtinct);
+        const currentSpecies = activeGroups[currentPlacementGroup];
+        document.getElementById('currentGroupName').textContent = `🦕 ${currentSpecies.name}`;
+    } else {
+        document.getElementById('currentGroupName').textContent = '✅ Alle Gruppen platziert!';
+    }
+}
+
+function updatePlacementTimer() {
+    if (!placementPhase) return;
+    
+    const elapsed = (Date.now() - placementStartTime) / 1000;
+    placementTimeRemaining = Math.max(0, 15 - elapsed);
+    
+    // Timer-Text aktualisieren
+    const timerText = document.getElementById('placementTimer');
+    timerText.textContent = Math.ceil(placementTimeRemaining);
+    
+    // Timer-Kreis Animation
+    const timerProgress = document.getElementById('timerProgress');
+    const circumference = 2 * Math.PI * 50; // Radius = 50
+    const offset = circumference * (1 - placementTimeRemaining / 15);
+    timerProgress.style.strokeDashoffset = offset;
+    
+    // Farbe ändern wenn Zeit knapp wird
+    if (placementTimeRemaining <= 5) {
+        timerProgress.style.stroke = '#ff4444';
+        timerText.style.color = '#ff4444';
+    } else if (placementTimeRemaining <= 10) {
+        timerProgress.style.stroke = '#ffa500';
+        timerText.style.color = '#ffa500';
+    }
+    
+    // Zeit abgelaufen?
+    if (placementTimeRemaining <= 0) {
+        endPlacementPhase();
+    } else {
+        requestAnimationFrame(updatePlacementTimer);
+    }
+}
+
+function handlePlacementClick(event) {
+    if (!placementPhase) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    // In Tile-Koordinaten umrechnen
+    const tilePos = PositionUtils.pixelToTile(mouseX, mouseY, tileSize, terrainOffsetX, terrainOffsetY);
+    
+    // Prüfen ob Klick im erlaubten Bereich
+    const minX = mapWidth * 0.05;
+    const maxX = mapWidth * 0.45;
+    const minY = 1;
+    const maxY = mapHeight - 2;
+    
+    if (tilePos.tileX >= minX && tilePos.tileX <= maxX && 
+        tilePos.tileY >= minY && tilePos.tileY <= maxY) {
+        
+        // Prüfen ob noch Gruppen zu platzieren sind
+        const totalGroups = levelData.populationData.filter(species => !species.population.isExtinct).length;
+        
+        if (currentPlacementGroup < totalGroups) {
+            // Position speichern
+            groupPlacements.push({
+                x: tilePos.tileX,
+                y: tilePos.tileY,
+                groupIndex: currentPlacementGroup
+            });
+            
+            // Visueller Marker
+            showPlacementMarker(mouseX, mouseY);
+            
+            // Nächste Gruppe
+            currentPlacementGroup++;
+            updatePlacementUI();
+            
+            // Alle platziert?
+            if (currentPlacementGroup >= totalGroups) {
+                setTimeout(() => endPlacementPhase(), 500); // Kurze Verzögerung für besseres Feedback
+            }
+        }
+    } else {
+        // Visuelles Feedback für ungültigen Klick
+        showInvalidClickFeedback(mouseX, mouseY);
+        console.log('❌ Klick außerhalb des erlaubten Bereichs');
+    }
+}
+
+function showPlacementMarker(x, y) {
+    const marker = document.createElement('div');
+    marker.className = 'placement-marker';
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+    document.querySelector('.game-container').appendChild(marker);
+    
+    // Nach 2 Sekunden entfernen
+    setTimeout(() => {
+        marker.remove();
+    }, 2000);
+}
+
+function showInvalidClickFeedback(x, y) {
+    const feedback = document.createElement('div');
+    feedback.style.position = 'absolute';
+    feedback.style.left = x + 'px';
+    feedback.style.top = y + 'px';
+    feedback.style.transform = 'translate(-50%, -50%)';
+    feedback.style.color = '#ff4444';
+    feedback.style.fontSize = '20px';
+    feedback.style.fontWeight = 'bold';
+    feedback.style.pointerEvents = 'none';
+    feedback.style.zIndex = '100';
+    feedback.textContent = '❌';
+    feedback.style.animation = 'fadeOut 1s ease-out';
+    
+    document.querySelector('.game-container').appendChild(feedback);
+    
+    setTimeout(() => {
+        feedback.remove();
+    }, 1000);
+}
+
+function endPlacementPhase() {
+    console.log('🏁 Platzierungsphase beendet');
+    
+    placementPhase = false;
+    
+    // UI ausblenden
+    document.getElementById('placementPhase').style.display = 'none';
+    canvas.classList.remove('placement-mode');
+    
+    // Click-Handler entfernen
+    canvas.removeEventListener('mousedown', handlePlacementMouseDown);
+    canvas.removeEventListener('mousemove', handlePlacementMouseMove);
+    canvas.removeEventListener('mouseup', handlePlacementMouseUp);
+    
+    // Overlay entfernen
+    if (placementZoneOverlay) {
+        placementZoneOverlay.remove();
+        placementZoneOverlay = null;
+    }
+    
+    // Dinos spawnen
+    spawnDinosWithPlacements();
+    
+    // Level-Timer starten
+    startLevelTimer();
+    //startPlacementPhase();
+}
+
+function spawnDinosWithPlacements() {
+    const objectCounts = { ownDinos: 0, enemyDinos: 0 };
+    let groupIndex = 0;
+    
+    // Eigene Dinos spawnen
+    levelData.populationData.forEach((species, speciesIndex) => {
+        if (!species.population.isExtinct) {
+            // Prüfen ob für diese Gruppe eine Position gewählt wurde
+            const placement = groupPlacements.find(p => p.groupIndex === groupIndex);
+            
+            let centerTileX, centerTileY;
+            
+            if (placement) {
+                // Spieler hat Position gewählt
+                centerTileX = placement.x;
+                centerTileY = placement.y;
+                console.log(`✅ Spawne ${species.name} an gewählter Position: (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)})`);
+            } else {
+                // Zufällige Position (wie vorher)
+                const spawnWidth = mapWidth * 0.25;
+                centerTileX = mapWidth * 0.05 + Math.random() * spawnWidth;
+                centerTileY = 2 + Math.random() * (mapHeight * 0.8);
+                console.log(`🎲 Spawne ${species.name} an zufälliger Position: (${centerTileX.toFixed(1)}, ${centerTileY.toFixed(1)})`);
+            }
+            
+            // Erwachsene spawnen
+            for (let i = 0; i < species.population.adults; i++) {
+                let dinoPlaced = false;
+                let attempts = 0;
+                while (!dinoPlaced && attempts < 50) {
+                    const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                    const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
+                    const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));
+                    const newDino = new Dino(finalTileX, finalTileY, species, true, false);
+                    
+                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {
+                        gameObjects.push(newDino);
+                        objectCounts.ownDinos++;
+                        dinoPlaced = true;
+                    }
+                    attempts++;
+                }
+            }
+            
+            // Jungtiere spawnen
+            for (let i = 0; i < species.population.juveniles; i++) {
+                let dinoPlaced = false;
+                let attempts = 0;
+                while (!dinoPlaced && attempts < 50) {
+                    const position = findValidLandPosition(centerTileX, centerTileY, 8);
+                    const finalTileX = Math.max(2, Math.min(mapWidth * 0.45, position.tileX));
+                    const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));
+                    const newDino = new Dino(finalTileX, finalTileY, species, false, false);
+                    
+                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {
+                        gameObjects.push(newDino);
+                        objectCounts.ownDinos++;
+                        dinoPlaced = true;
+                    }
+                    attempts++;
+                }
+            }
+            
+            groupIndex++;
+        }
+    });
+    
+    // Feinde spawnen (unverändert)
+    generateEnemyDinosFromData(objectCounts);
+    
+    // Combat-System initialisieren
+    initializeCombatForAllDinos();
+    
+    // HUD aktualisieren
+    updateHUD();
+    
+    console.log(`✅ Spawning abgeschlossen: ${objectCounts.ownDinos} eigene Dinos, ${objectCounts.enemyDinos} Feinde`);
+}
+
+// ===================================
 // LEVEL GENERATION
 // ===================================
 
@@ -403,7 +712,7 @@ function generateLevel() {
     calculateRandomLevelResources();
     calculateRandomMapWidth();
 
-    setLoadingText('Generiere Terrain...');
+    //setLoadingText('Generiere Terrain...');
     generateTileMap();
     
     gameObjects = [];
@@ -413,8 +722,8 @@ function generateLevel() {
     generateEnvironment(objectCounts);
     
     setLoadingText('Erwecke Dinosaurier...');
-    generateOwnDinosFromData(objectCounts);
-    generateEnemyDinosFromData(objectCounts);    
+    //generateOwnDinosFromData(objectCounts);
+    //generateEnemyDinosFromData(objectCounts);    
     updateAllObjectScales();
     updateHUD();
     
@@ -918,8 +1227,13 @@ function isValidPosition(x, y) {
 function calculateTerrainOffsets() {
     const terrainPixelWidth = mapWidth * tileSize;
     const terrainPixelHeight = mapHeight * tileSize;
-    
-    // NEU: Zentrieren nur wenn Terrain kleiner als Canvas
+
+    if (terrainPixelWidth < canvas.width) {
+        terrainOffsetX = (canvas.width - terrainPixelWidth) / 2 - scrollX;
+    } else {
+        terrainOffsetX = -scrollX; // Scrolling wenn größer
+    }
+
     if (terrainPixelWidth < canvas.width) {
         terrainOffsetX = (canvas.width - terrainPixelWidth) / 2 - scrollX;
     } else {
@@ -930,6 +1244,10 @@ function calculateTerrainOffsets() {
         terrainOffsetY = (canvas.height - terrainPixelHeight) / 2 - scrollY;
     } else {
         terrainOffsetY = -scrollY; // Scrolling wenn größer
+    }
+
+    if (placementPhase && placementZoneOverlay) {
+        updatePlacementZoneOverlay();
     }
 }
 

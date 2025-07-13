@@ -22,6 +22,19 @@ let levelStartTime = null;
 let levelEndTime = null;
 let gameEnded = false;
 
+// Placement System Variablen
+let placementPhase = true;
+let placementTimeRemaining = 15; // Sekunden
+let placementStartTime = null;
+let currentPlacementGroup = 0;
+let groupPlacements = []; // Array für die platzierten Positionen
+let placementZoneOverlay = null;
+let placementClickHandler = null;
+
+let placementClickStartX = 0;
+let placementClickStartY = 0;
+let placementIsDragging = false;
+
 let currentLevel = 1;
 
 // API Base URL
@@ -693,7 +706,8 @@ function hideLoadingShowGame() {
     const displayLevel = currentLevel || levelData.currentLevel || levelData.level || 1;
     levelTitle.textContent = `🎮 Level ${displayLevel} - Überleben`;
 
-    startLevelTimer();
+    //startLevelTimer();
+    startPlacementPhase();
     
     isLoading = false;
 }
@@ -2028,6 +2042,10 @@ function resizeCanvas() {
         if (gameObjects && gameObjects.length > 0) {
             updateAllObjectScales();
         }
+
+        if (placementPhase && placementZoneOverlay) {
+            updatePlacementZoneOverlay();
+        }
     }
 }
 
@@ -2078,6 +2096,11 @@ function handleClick(event, checkOnly = false) {
 // ===================================
 
 function pauseGame() {
+    if (placementPhase) {
+        console.log('⚠️ Pause während Platzierung nicht möglich');
+        return;
+    }
+
     isPaused = !isPaused;
     const pauseBtn = document.getElementById('pauseBtn');
     pauseBtn.textContent = isPaused ? '▶️ Weiter' : '⏸️ Pause';
@@ -2113,6 +2136,123 @@ function speedUp() {
     }
 }
 
+function showInvalidClickFeedback(x, y) {
+    const feedback = document.createElement('div');
+    feedback.style.position = 'absolute';
+    feedback.style.left = x + 'px';
+    feedback.style.top = y + 'px';
+    feedback.style.transform = 'translate(-50%, -50%)';
+    feedback.style.color = '#ff4444';
+    feedback.style.fontSize = '20px';
+    feedback.style.fontWeight = 'bold';
+    feedback.style.pointerEvents = 'none';
+    feedback.style.zIndex = '100';
+    feedback.textContent = '❌';
+    feedback.style.animation = 'fadeOut 1s ease-out';
+    
+    document.querySelector('.game-container').appendChild(feedback);
+    
+    setTimeout(() => {
+        feedback.remove();
+    }, 1000);
+}
+
+function handlePlacementClick(event) {
+    if (!placementPhase) return;
+    
+    // Ignoriere Klick wenn es ein Drag war
+    if (placementIsDragging) {
+        placementIsDragging = false;
+        return;
+    }
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    // In Tile-Koordinaten umrechnen
+    const tilePos = PositionUtils.pixelToTile(mouseX, mouseY, tileSize, terrainOffsetX, terrainOffsetY);
+    
+    // Prüfen ob Klick im erlaubten Bereich
+    const minX = mapWidth * 0.05;
+    const maxX = mapWidth * 0.45;
+    const minY = 1;
+    const maxY = mapHeight - 2;
+    
+    if (tilePos.tileX >= minX && tilePos.tileX <= maxX && 
+        tilePos.tileY >= minY && tilePos.tileY <= maxY) {
+        
+        // Prüfen ob noch Gruppen zu platzieren sind
+        const totalGroups = levelData.populationData.filter(species => !species.population.isExtinct).length;
+        
+        if (currentPlacementGroup < totalGroups) {
+            // Position speichern
+            groupPlacements.push({
+                x: tilePos.tileX,
+                y: tilePos.tileY,
+                groupIndex: currentPlacementGroup
+            });
+            
+            // Visueller Marker
+            showPlacementMarker(mouseX, mouseY);
+            
+            // Nächste Gruppe
+            currentPlacementGroup++;
+            updatePlacementUI();
+            
+            // Alle platziert?
+            if (currentPlacementGroup >= totalGroups) {
+                setTimeout(() => endPlacementPhase(), 500);
+            }
+        }
+    } else {
+        // Visuelles Feedback für ungültigen Klick
+        showInvalidClickFeedback(mouseX, mouseY);
+        console.log('❌ Klick außerhalb des erlaubten Bereichs');
+    }
+}
+
+function handlePlacementMouseDown(event) {
+    if (!placementPhase) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    placementClickStartX = event.clientX - rect.left;
+    placementClickStartY = event.clientY - rect.top;
+    placementIsDragging = false;
+}
+
+function handlePlacementMouseMove(event) {
+    if (!placementPhase) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    // Prüfe ob Maus bewegt wurde (mehr als 5 Pixel)
+    const distance = Math.sqrt(
+        Math.pow(mouseX - placementClickStartX, 2) + 
+        Math.pow(mouseY - placementClickStartY, 2)
+    );
+    
+    if (distance > 5) {
+        placementIsDragging = true;
+    }
+}
+
+function handlePlacementMouseUp(event) {
+    if (!placementPhase) return;
+    
+    // Nur als Klick werten wenn nicht gedraggt wurde
+    if (!placementIsDragging) {
+        handlePlacementClick(event);
+    }
+    
+    placementIsDragging = false;
+}
+
+// ===================================
+// KAMPFLOGIK
+// ===================================
 
 // Verfügbare Angriffe basierend auf Fähigkeiten
 function getAvailableAttacks(dino) {
@@ -2169,9 +2309,6 @@ function getAvailableAttacks(dino) {
     return attacks.sort((a, b) => b.probability - a.probability);
 }
 
-// ===================================
-// KAMPFLOGIK
-// ===================================
 
 function findEnemiesInRange(dino) {
     if (dino.state === DINO_STATES.DEAD) return [];
@@ -3343,6 +3480,7 @@ function startGameLoop() {
 }
 
 function update() {
+    if (placementPhase) return;
     if (!isPaused && !isLoading) {
         animationTime += 0.016 * gameSpeed;
         
@@ -3359,6 +3497,10 @@ function render() {
     if (isLoading) return;
     
     renderTerrain();
+
+    if (placementPhase && placementZoneOverlay) {
+        updatePlacementZoneOverlay();
+    }
 
     gameObjects.sort((a, b) => {
         const aY = a.tileY || a.y;

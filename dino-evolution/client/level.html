@@ -444,6 +444,167 @@
             font-size: 1.2em;
         }
 
+        /* Placement Phase Styles */
+        .placement-phase {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .placement-timer {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: auto;
+        }
+
+        .timer-circle {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 50%;
+            border: 3px solid #32cd32;
+            box-shadow: 0 0 30px rgba(50, 205, 50, 0.6);
+        }
+
+        .timer-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            font-weight: bold;
+            color: #32cd32;
+            text-shadow: 0 0 10px rgba(50, 205, 50, 0.8);
+        }
+
+        .placement-instructions {
+            position: absolute;
+            top: 160px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 3px solid #32cd32;
+            border-radius: 15px;
+            padding: 20px 40px;
+            text-align: center;
+            pointer-events: auto;
+        }
+
+        .placement-instructions h2 {
+            color: #32cd32;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .current-group {
+            margin-bottom: 15px;
+        }
+
+        .current-group p {
+            color: #cd853f;
+            margin-bottom: 8px;
+        }
+
+        .current-group h3 {
+            color: #ff6b35;
+            font-size: 1.5em;
+            margin: 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .placement-progress {
+            color: #e8d5c4;
+            font-size: 1.1em;
+        }
+
+        .placement-progress span {
+            color: #32cd32;
+            font-weight: bold;
+        }
+
+        /* Placement Zone Overlay */
+        .placement-zone-overlay {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.1);
+            border: 3px solid rgba(50, 205, 50, 0.6);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Placement Marker */
+        .placement-marker {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, #32cd32 30%, transparent 70%);
+            border: 2px solid #32cd32;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 51;
+            animation: pulseMarker 1s infinite;
+        }
+
+        @keyframes pulseMarker {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        /* Canvas cursor during placement */
+        .game-canvas.placement-mode {
+            cursor: pointer !important;
+        }
+
+        /* Invalid click feedback */
+        .invalid-feedback {
+            position: absolute;
+            color: #ff4444;
+            font-size: 20px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 100;
+            animation: fadeOut 1s ease-out;
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .placement-instructions {
+                padding: 15px 25px;
+                top: 140px;
+            }
+            
+            .placement-instructions h2 {
+                font-size: 1.4em;
+            }
+            
+            .current-group h3 {
+                font-size: 1.2em;
+            }
+            
+            .timer-circle {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .timer-text {
+                font-size: 30px;
+            }
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .timer-display {
@@ -476,6 +637,31 @@
         <div class="loading" id="loadingScreen">
             <div class="loading-spinner"></div>
             <span id="loadingText">Lade Level-Daten...</span>
+        </div>
+
+        <!-- PLACEMENT PHASE UI -->
+        <div class="placement-phase" id="placementPhase" style="display: none;">
+            <div class="placement-timer">
+                <div class="timer-circle">
+                    <svg width="120" height="120">
+                        <circle cx="60" cy="60" r="50" fill="none" stroke="#333" stroke-width="8"/>
+                        <circle id="timerProgress" cx="60" cy="60" r="50" fill="none" stroke="#32cd32" stroke-width="8"
+                                stroke-dasharray="314" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+                    </svg>
+                    <div class="timer-text" id="placementTimer">15</div>
+                </div>
+            </div>
+            
+            <div class="placement-instructions">
+                <h2>🎯 Positionieren Sie Ihre Dinosaurier!</h2>
+                <div class="current-group">
+                    <p>Klicken Sie um zu platzieren:</p>
+                    <h3 id="currentGroupName">Gruppe wird geladen...</h3>
+                </div>
+                <div class="placement-progress">
+                    <span id="placedCount">0</span> / <span id="totalGroups">0</span> platziert
+                </div>
+            </div>
         </div>
 
         <!-- ERROR SCREEN -->
