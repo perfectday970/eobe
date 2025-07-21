@@ -937,6 +937,16 @@ class Dino {
         this.isMovingForward = true;
         this.animationPhase = 'idle';
         this.phaseStartTime = Date.now();
+
+        this.health = isAdult ? 100 : 60;
+        this.energy = 100;
+
+        // NEUE PROPERTIES FÜR FORTPFLANZUNG
+        this.isPregnant = false;
+        this.pregnancyStartTime = null;
+        this.nextPregnancyCheck = 0; // NEU: Individueller Timer
+        this.pregnancyCheckInterval = 0; // NEU: Individuelles Intervall
+        this.reproductionValue = 0;
     }
 
     getMovementSpeed() {
@@ -2824,10 +2834,6 @@ function renderCombatEffects() {
 function renderCombatUI(dino) {
     if (dino.state === DINO_STATES.DEAD) return;
     
-    /*
-    const pixelX = dino.tileX * tileSize + tileSize / 2 + terrainOffsetX;
-    const pixelY = dino.tileY * tileSize + tileSize / 2 + terrainOffsetY;
-    */
     const pixel = PositionUtils.tileToPixel(dino.tileX, dino.tileY, tileSize, terrainOffsetX, terrainOffsetY);
     const pixelX = pixel.x;
     const pixelY = pixel.y;
@@ -2869,6 +2875,7 @@ function renderCombatUI(dino) {
     }
     let symbolX = 0;
     const symbolY = startY - 12; 
+
     // Kampf-Symbol
     if (dino.state === DINO_STATES.FIGHTING) {
         ctx.fillStyle = '#FF6B35';
@@ -2882,8 +2889,21 @@ function renderCombatUI(dino) {
         ctx.fillText('⚔️', pixelX, symbolY);
         symbolX += 15; // Platz für nächstes Icon
     }
+  
+    // Schwangerschafts-Icon
+    if (dino.isPregnant) {
+        ctx.fillStyle = '#FFB6C1'; // Zartes Rosa
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        
+        ctx.strokeText(PREGNANCY_CONFIG.PREGNANCY_ICON, pixelX + symbolX, symbolY);
+        ctx.fillText(PREGNANCY_CONFIG.PREGNANCY_ICON, pixelX + symbolX, symbolY);
+        symbolX += 15; // Platz für nächstes Icon
+    }
     
-    // NEU: Muskel-Icon für Dinos mit Boost
+    // Muskel-Icon für Dinos mit Boost
     if (dino.hasMuscleBoostMax) {
         ctx.fillStyle = '#FF4500'; // Orange-Rot für Stufe 2
         ctx.strokeStyle = '#000000';
@@ -2905,7 +2925,7 @@ function renderCombatUI(dino) {
         symbolX += 15; // Platz für nächstes Icon
     }
 
-    // NEU: Schild-Icon für gesättigte Dinos
+    // Schild-Icon für gesättigte Dinos
     if (dino.hasSatiatedBoostMax) {
         ctx.fillStyle = '#8B0000'; // Dunkelrot für Stufe 2
         ctx.strokeStyle = '#000000';
@@ -3487,6 +3507,9 @@ function update() {
         gameObjects.forEach(obj => {
             if (obj.update) obj.update();
         });
+
+        const allDinos = gameObjects.filter(obj => obj instanceof Dino);
+        pregnancyManager.update(allDinos, gameSpeed);
     }
     updateCombatSystem();
     updateTimer();
@@ -3525,7 +3548,17 @@ function updateHUD() {
     levelData.populationData.forEach(species => {
         const ownCount = ownDinos.filter(d => d.species.name === species.name).length;
         const enemyCount = enemyDinos.filter(d => d.species && d.species.name === species.name).length || 0;
-        
+        const pregnantCount = ownDinos.filter(d => d.species.name === species.name && d.isPregnant).length;
+        html += `
+            <div class="species-status">
+                <span class="species-name">${species.name}:</span>
+                <span class="population-count">Eigene: ${ownCount}</span>
+                ${pregnantCount > 0 ? `<span style="color: #FFB6C1;"> (${pregnantCount}🥚)</span>` : ''}
+                | <span style="color: #ff6b35;">Feinde: ${enemyCount}</span>
+            </div>
+        `;
+
+
         html += `
             <div class="species-status">
                 <span class="species-name">${species.name}:</span>
@@ -3533,14 +3566,15 @@ function updateHUD() {
                 <span style="color: #ff6b35;">Feinde: ${enemyCount}</span>
             </div>
         `;
-    });
-    html += `
-        <div class="species-status" style="border-top: 1px solid #8b4513; margin-top: 10px; padding-top: 10px;">
-            <span style="color: #32cd32; font-weight: bold;">
-                🌿 Pflanzen: ${teamFood.plants} | 🥩 Fleisch: ${teamFood.meat}
-            </span>
-        </div>
-    `;
+        });
+        html += `
+            <div class="species-status" style="border-top: 1px solid #8b4513; margin-top: 10px; padding-top: 10px;">
+                <span style="color: #32cd32; font-weight: bold;">
+                    🌿 Pflanzen: ${teamFood.plants} | 🥩 Fleisch: ${teamFood.meat}
+                </span>
+            </div>
+        `;
+
     statusContainer.innerHTML = html;
 }
 
@@ -3592,6 +3626,8 @@ function addCombatPropertiesToDino(dino) {
     dino.abilities = window.DinoAbilities.calculateDinoAbilities(dino.species.properties);
     dino.baseSpeed = 0.00 + dino.abilities['Geschwindigkeit'] / 2000;
 
+    dino.reproductionValue = dino.abilities['Fortpflanzungsgeschwindigkeit'] || 0;
+
     // Kampfwerte
     dino.maxHP = dino.abilities['Lebenspunkte'];
     dino.currentHP = dino.maxHP;
@@ -3621,6 +3657,100 @@ function addCombatPropertiesToDino(dino) {
     // Verfügbare Angriffe ermitteln
     dino.availableAttacks = getAvailableAttacks(dino);
 }
+
+// ===================================
+// FORTPFLANZUNGS-SYSTEM
+// ===================================
+
+// ===================================
+// FORTPFLANZUNGS-SYSTEM
+// ===================================
+
+const PREGNANCY_CONFIG = {
+    CHECK_INTERVAL: 3 * 60, // 3 Minuten in Sekunden
+    MIN_REPRODUCTION_VALUE: 50,
+    PREGNANCY_ICON: '🥚'
+};
+
+class PregnancyManager {
+    constructor() {
+        this.lastUpdateTime = Date.now();
+    }
+
+    initializeDino(dino) {
+        // Jeder Dino bekommt einen zufälligen Start-Offset für seinen ersten Check
+        // So werden die Checks über die Zeit verteilt
+        const randomOffset = Math.random() * PREGNANCY_CONFIG.CHECK_INTERVAL;
+        dino.nextPregnancyCheck = randomOffset;
+        dino.pregnancyCheckInterval = PREGNANCY_CONFIG.CHECK_INTERVAL;
+    }
+
+    update(dinos, gameSpeed) {
+        const currentTime = Date.now();
+        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // in Sekunden
+        this.lastUpdateTime = currentTime;
+        
+        // Zeit mit Spielgeschwindigkeit skalieren
+        const gameTimeDelta = deltaTime * gameSpeed;
+        
+        dinos.forEach(dino => {
+            if (dino.state === DINO_STATES.DEAD || !dino.isAdult) return;
+            
+            // Zeit bis zum nächsten Check reduzieren
+            dino.nextPregnancyCheck -= gameTimeDelta;
+            
+            // Zeit für einen Check?
+            if (dino.nextPregnancyCheck <= 0 && !dino.isPregnant) {
+                this.performPregnancyCheck(dino);
+                
+                // Nächsten Check planen (mit kleiner Zufälligkeit für Variation)
+                const variation = (Math.random() - 0.5) * 30; // ±15 Sekunden
+                dino.nextPregnancyCheck = PREGNANCY_CONFIG.CHECK_INTERVAL + variation;
+            }
+            
+            // Schwangerschafts-Update (für später wenn Eier gelegt werden sollen)
+            if (dino.isPregnant) {
+                const pregnancyDuration = (dino.abilities['Zeit zum Erwachsenwerden'] || 180) / 2;
+                const pregnancyElapsed = (currentTime - dino.pregnancyStartTime) / 1000;
+                
+                if (pregnancyElapsed >= pregnancyDuration) {
+                    // Hier später: Ei legen Logik
+                    dino.isPregnant = false;
+                    console.log(`🥚 ${dino.species.name} Schwangerschaft beendet (würde Ei legen)`);
+                }
+            }
+        });
+    }
+
+    performPregnancyCheck(dino) {
+        if (dino.reproductionValue < PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE) return;
+        
+        // Berechne Schwangerschafts-Chance
+        const chance = this.calculatePregnancyChance(dino.reproductionValue);
+        
+        if (Math.random() < chance) {
+            this.makePregnant(dino);
+        }
+    }
+
+    calculatePregnancyChance(reproductionValue) {
+        if (reproductionValue < PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE) return 0;
+        
+        // Lineare Skalierung von 10% bei Wert 50 bis 100% bei Wert 100
+        const normalizedValue = (reproductionValue - PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE) / 
+                               (100 - PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE);
+        return 0.1 + (normalizedValue * 0.9);
+    }
+
+    makePregnant(dino) {
+        dino.isPregnant = true;
+        dino.pregnancyStartTime = Date.now();
+        console.log(`🥚 ${dino.species.name} ist jetzt schwanger! (${dino.isEnemy ? 'Feind' : 'Eigener'})`);
+    }
+}
+
+// Globale Instanz
+let pregnancyManager = new PregnancyManager();
 
 // Kampfsystem für alle Dinos initialisieren (nach Level-Generation)
 function initializeCombatForAllDinos() {

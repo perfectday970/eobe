@@ -630,10 +630,14 @@ function endPlacementPhase() {
     
     // Dinos spawnen
     spawnDinosWithPlacements();
+
+    const allDinos = gameObjects.filter(obj => obj instanceof Dino);
+    allDinos.forEach(dino => {
+        pregnancyManager.initializeDino(dino);
+    });
     
     // Level-Timer starten
-    startLevelTimer();
-    //startPlacementPhase();
+    startLevelTimer();;
 }
 
 function spawnDinosWithPlacements() {
