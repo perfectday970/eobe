@@ -675,7 +675,7 @@ function spawnDinosWithPlacements() {
                     const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));
                     const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                     
-                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {
+                    if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {
                         gameObjects.push(newDino);
                         objectCounts.ownDinos++;
                         dinoPlaced = true;
@@ -694,7 +694,7 @@ function spawnDinosWithPlacements() {
                     const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));
                     const newDino = new Dino(finalTileX, finalTileY, species, false, false);
                     
-                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {
+                    if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {
                         gameObjects.push(newDino);
                         objectCounts.ownDinos++;
                         dinoPlaced = true;
@@ -765,7 +765,7 @@ function generateOwnDinosFromData(objectCounts) {
                     const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));                              
                     const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                     
-                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                    if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {                                
                         gameObjects.push(newDino);
                         objectCounts.ownDinos++;
                         dinoPlaced = true;
@@ -781,7 +781,7 @@ function generateOwnDinosFromData(objectCounts) {
                     const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));                              
                     const newDino = new Dino(finalTileX, finalTileY, species, true, false);
                     
-                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                    if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {                                
                         gameObjects.push(newDino);
                         objectCounts.ownDinos++;
                         dinoPlaced = true;                                
@@ -810,7 +810,7 @@ function generateEnemyDinosFromData(objectCounts) {
                     const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));
                     const newDino = new Dino(finalTileX, finalTileY, species, true, true);
                     
-                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                    if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {                                
                         gameObjects.push(newDino);
                         objectCounts.enemyDinos++;
                         dinoPlaced = true;
@@ -825,7 +825,7 @@ function generateEnemyDinosFromData(objectCounts) {
                     const finalTileY = Math.max(1, Math.min(mapHeight - 2, position.tileY));                             
                     const newDino = new Dino(finalTileX, finalTileY, species, true, true);
                     
-                    if (isPositionValidForMovement(newDino, finalTileX, finalTileY)) {                                
+                    if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {                                
                         gameObjects.push(newDino);
                         objectCounts.enemyDinos++;
                         dinoPlaced = true;                                

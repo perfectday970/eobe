@@ -158,6 +158,9 @@ const DINO_STATES = {
     // Nahrungs-Zustände
     SEEKING_FOOD: 'seeking_food',    // Nahrung suchen/ansteuern
     CONSUMING: 'consuming',          // Nahrung konsumieren
+
+    SEEKING_HOTBED: 'seeking_hotbed',  // Brutstätte suchen
+    LAYING_EGG: 'laying_egg',          // Ei legen
     
     // Spezial-Zustände
     AVOIDING: 'avoiding',            // Hindernis umgehen
@@ -930,7 +933,7 @@ class Dino {
         // Animation wird vom State abgeleitet
         this.animationPhase = this.getAnimationForState();
 
-                // NEU: Cross-Movement System
+                // Cross-Movement System
         this.initializeCrossMovement();
         
         this.initializeMovementBehavior();
@@ -941,12 +944,14 @@ class Dino {
         this.health = isAdult ? 100 : 60;
         this.energy = 100;
 
-        // NEUE PROPERTIES FÜR FORTPFLANZUNG
+        // PROPERTIES FÜR FORTPFLANZUNG
         this.isPregnant = false;
         this.pregnancyStartTime = null;
-        this.nextPregnancyCheck = 0; // NEU: Individueller Timer
-        this.pregnancyCheckInterval = 0; // NEU: Individuelles Intervall
+        this.nextPregnancyCheck = 0; // Individueller Timer
+        this.pregnancyCheckInterval = 0; // Individuelles Intervall
         this.reproductionValue = 0;
+        this.nestingTarget = null;      // Ziel-Brutstätte
+        this.eggLayingStartTime = null;
     }
 
     getMovementSpeed() {
@@ -960,7 +965,6 @@ class Dino {
         return this.baseSpeed * multiplier * gameSpeed;
     }
 
-    // Neue Methode in der Dino-Klasse
     updateAvoidanceMode() {
         if (!this.avoidanceMode.active) return;
         
@@ -1110,7 +1114,7 @@ class Dino {
             const checkX = fromX + dx * progress;
             const checkY = fromY + dy * progress;
             // console.log("dieser dino? checkPathBlocked ", checkDino);
-            if (!isPositionValidForMovement(checkDino, checkX, checkY)) {
+            if (!isPositionValidFor(checkDino, checkX, checkY, 'movement')) {
                 // Blockierung gefunden, gebe Position zurück
                 return {
                     blocked: true,
@@ -1717,6 +1721,7 @@ class Dino {
             case DINO_STATES.IDLE:
             case DINO_STATES.FIGHTING:
             case DINO_STATES.CONSUMING:
+            case DINO_STATES.LAYING_EGG: 
                 return 'idle';
                 
             case DINO_STATES.WANDERING:
@@ -1724,6 +1729,7 @@ class Dino {
             case DINO_STATES.SEEKING_FOOD:
             case DINO_STATES.AVOIDING:
             case DINO_STATES.FLEEING:
+            case DINO_STATES.SEEKING_HOTBED:
                 return 'walking';
                 
             case DINO_STATES.DEAD:
@@ -1807,6 +1813,12 @@ class Dino {
                 case DINO_STATES.CONSUMING:
                     updateFoodConsumingState(this);
                     break;
+                case DINO_STATES.SEEKING_HOTBED:
+                    this.updateSeekingHotbedState();
+                    break;
+                case DINO_STATES.LAYING_EGG:
+                    this.updateLayingEggState();
+                    break;
             }
         }
     }
@@ -1880,7 +1892,7 @@ class Dino {
             const newTileX = this.tileX + moveTileX;
             const newTileY = this.tileY + moveTileY;
             
-            if (isPositionValidForMovement(this, newTileX, newTileY)) {
+            if (isPositionValidFor(this, newTileX, newTileY, 'movement')) {
                 this.tileX = newTileX;
                 this.tileY = newTileY;
                 this.updateFacingDirection(moveTileX, moveTileY);
@@ -1927,6 +1939,18 @@ class Dino {
         // State-Timer
         const deltaTime = gameSpeed / 60;      
         this.stateTimer += deltaTime;
+
+        if (this.isPregnant && this.state === DINO_STATES.IDLE) {
+            const nestingSites = this.findNestingSitesInRange();
+            if (nestingSites.length > 0) {
+                // Nächste geeignete Stelle auswählen
+                this.nestingTarget = nestingSites[0];
+                this.changeState(DINO_STATES.SEEKING_HOTBED);
+                this.seekingStartTime = Date.now();
+                console.log(`🥚 ${this.species.name} sucht Brutstätte`);
+                return;
+            }
+        }
         
         this.handleState();
 
@@ -1952,13 +1976,164 @@ class Dino {
         // Animation synchronisieren
         this.animationPhase = this.getAnimationForState();
     }
+
+    findNestingSitesInRange() {
+        const sites = [];
+        const checkRadius = Math.ceil(this.detectionRadius);
+        
+        for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+            for (let dy = -checkRadius; dy <= checkRadius; dy++) {
+                const checkX = Math.floor(this.tileX + dx);
+                const checkY = Math.floor(this.tileY + dy);
+                
+                // Prüfe ob in Reichweite
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > this.detectionRadius) continue;
+                
+                // Prüfe ob gültige Position
+                if (checkX < 0 || checkX >= mapWidth || checkY < 0 || checkY >= mapHeight) continue;
+                
+                // Prüfe ob Wiese
+                if (tileMap[checkY] && tileMap[checkY][checkX] === TILE_TYPES.GRASS) {
+                    sites.push({
+                        tileX: checkX,
+                        tileY: checkY,
+                        distance: distance
+                    });
+                }
+            }
+        }
+        
+        // Nach Entfernung sortieren
+        sites.sort((a, b) => a.distance - b.distance);
+        return sites;
+    }
+
+updateSeekingHotbedState() {
+    if (!this.nestingTarget) {
+        this.changeState(DINO_STATES.IDLE);
+        return;
+    }
+    
+    const seekingTime = (Date.now() - this.seekingStartTime) / 1000;
+    if (seekingTime > 10) {
+        console.log(`⏰ ${this.species.name} Brutstätten-Suche timeout`);
+        this.changeState(DINO_STATES.IDLE);
+        this.nestingTarget = null;
+        return;
+    }
+    
+    const enemies = findEnemiesInRange(this);
+    if (enemies.length > 0) {
+        this.nestingTarget = null;
+        return;
+    }
+    
+    // GEÄNDERT: Berechne Zielposition basierend auf Dino-Position und Grass-Tile
+    // Nicht immer Mitte, sondern näher zum Dino hin
+    let targetX, targetY;
+    
+    const tileCenterX = this.nestingTarget.tileX;
+    const tileCenterY = this.nestingTarget.tileY;
+    
+    // Berechne Kollisionsbox-Größe in Tiles
+    const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8 / tileSize;
+    const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6 / tileSize;
+    
+    // Sichere Marge vom Rand (halbe Box-Größe + kleiner Puffer)
+    const marginX = boxWidth / 2 + 0.1;
+    const marginY = boxHeight / 2 + 0.1;
+    
+    // Begrenze Zielposition innerhalb der Grass-Kachel mit Sicherheitsmarge
+    targetX = tileCenterX;
+    targetY = tileCenterY;
+    
+    const distance = Math.sqrt((this.tileX - targetX) ** 2 + (this.tileY - targetY) ** 2);
+    
+    // Prüfe ob auf Gras und nah genug
+    if (distance < 0.2 && isPositionValidFor(this, this.tileX, this.tileY, "egglaying")) {
+        this.changeState(DINO_STATES.LAYING_EGG);
+        this.eggLayingStartTime = Date.now();
+        console.log(`🥚 ${this.species.name} beginnt Ei zu legen bei (${this.tileX.toFixed(2)}, ${this.tileY.toFixed(2)})`);
+        return;
+    }
+    
+    // Bewegung
+    const moveSpeed = this.getMovementSpeed();
+    const dirX = targetX - this.tileX;
+    const dirY = targetY - this.tileY;
+    const moveDistance = Math.sqrt(dirX * dirX + dirY * dirY);
+    
+    if (moveDistance > 0.1) {
+        const normalizedDirX = dirX / moveDistance;
+        const normalizedDirY = dirY / moveDistance;
+        
+        const newX = this.tileX + normalizedDirX * moveSpeed;
+        const newY = this.tileY + normalizedDirY * moveSpeed;
+        
+        if (isPositionValidFor(this, newX, newY, 'movement')) {
+            this.tileX = newX;
+            this.tileY = newY;
+            
+            if (Math.abs(dirX) > 0.01) {
+                this.facingRight = dirX < 0;
+            }
+        } else {
+            console.log(`❌ ${this.species.name} Weg blockiert`);
+            this.changeState(DINO_STATES.IDLE);
+            this.nestingTarget = null;
+        }
+    }
+}
+
+    updateLayingEggState() {
+        // Nutze die gleiche Validierungs-Logik
+        if (!isPositionValidFor(this, this.tileX, this.tileY, "egglaying")) {
+            console.log(`❌ ${this.species.name} Eiablage unterbrochen - nicht mehr auf Wiese`);
+            this.changeState(DINO_STATES.IDLE);
+            return;
+        }
+        
+        const enemies = findEnemiesInRange(this);
+        if (enemies.length > 0) {
+            console.log(`⚔️ ${this.species.name} Eiablage unterbrochen - Feind nähert sich`);
+            return;
+        }
+        
+        const layingTime = (Date.now() - this.eggLayingStartTime) / 1000;
+        if (layingTime >= 5) {
+            console.log(`✅ ${this.species.name} hat Ei gelegt!`);
+            this.isPregnant = false;
+            this.pregnancyStartTime = null;
+            this.changeState(DINO_STATES.IDLE);
+            // TODO: Hier später Ei-Objekt erstellen
+        }
+    }
+
+    getCollisionBoxInTiles(tileX, tileY) {
+        // Nutze die Berechnung aus getCollisionBox, aber in Tile-Koordinaten
+        const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8;
+        const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6;
+        const verticalOffset = boxHeight * 0.5 / tileSize;
+        
+        // In Tile-Koordinaten umrechnen
+        const boxWidthInTiles = boxWidth / tileSize;
+        const boxHeightInTiles = boxHeight / tileSize;
+        
+        return {
+            left: tileX - boxWidthInTiles / 2,
+            right: tileX + boxWidthInTiles / 2,
+            top: tileY - boxHeightInTiles / 2 + verticalOffset,
+            bottom: tileY + boxHeightInTiles / 2 + verticalOffset
+        };
+    }
 }
 
 
 // ===================================
 // BEWGUNGs-FUNKTIONEN
 // ===================================
-
+/*
 function isPositionValidForMovement(checkDino, newTileX, newTileY) {
 
     if (checkDino.canSwim()) {
@@ -1990,6 +2165,53 @@ function isPositionValidForMovement(checkDino, newTileX, newTileY) {
         const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
         if (tileType === TILE_TYPES.WATER) {
             return false;
+        }
+    }
+    
+    return true;
+}*/
+
+function isPositionValidFor(checkDino, newTileX, newTileY, purpose = 'movement') {
+    // Schwimmer können sich überall bewegen
+    if (purpose === 'movement' && checkDino.canSwim()) {
+        return true;
+    }
+    
+    newTileX = newTileX + 0.5;
+    newTileY = newTileY + 0.5;  
+
+    const boxWidth = (checkDino.species.properties.körper_länge || 50) * checkDino.scale * 0.8;
+    const boxHeight = (checkDino.species.properties.körper_höhe || 50) * checkDino.scale * 0.6;
+    const verticalOffset = boxHeight * 0.5 / tileSize;
+    
+    const testBox = {
+        left: newTileX - boxWidth / (2 * tileSize),
+        right: newTileX + boxWidth / (2 * tileSize),
+        top: newTileY - boxHeight / (2 * tileSize) + verticalOffset,
+        bottom: newTileY + boxHeight / (2 * tileSize) + verticalOffset
+    };
+    
+    const checkPoints = [
+        { x: testBox.left, y: testBox.top },      // Oben links
+        { x: testBox.right, y: testBox.top },     // Oben rechts
+        { x: testBox.left, y: testBox.bottom },   // Unten links
+        { x: testBox.right, y: testBox.bottom },  // Unten rechts
+        { x: newTileX, y: newTileY + verticalOffset }  // Mitte (auch mit Offset)
+    ];
+
+    for (const point of checkPoints) {
+        const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
+        
+        if (purpose === 'movement') {
+            // Für Bewegung: Wasser vermeiden
+            if (tileType === TILE_TYPES.WATER) {
+                return false;
+            }
+        } else if (purpose === 'egglaying') {
+            // Für Eiablage: MUSS Gras sein
+            if (tileType !== TILE_TYPES.GRASS) {
+                return false;
+            }
         }
     }
     
@@ -2028,6 +2250,38 @@ function isPathClear(fromX, fromY, toX, toY) {
     }
     
     return true; // Weg ist frei
+}
+
+function isFullyOnGrass(dino, tileX, tileY) {
+    const box = dino.getCollisionBoxInTiles(tileX, tileY);
+    
+    // Prüfe alle Eckpunkte und die Mitte
+    const checkPoints = [
+        { x: box.left, y: box.top },      // Oben links
+        { x: box.right, y: box.top },     // Oben rechts
+        { x: box.left, y: box.bottom },   // Unten links
+        { x: box.right, y: box.bottom },  // Unten rechts
+        { x: tileX, y: tileY }            // Mitte
+    ];
+
+    // Alle Punkte müssen auf Gras sein
+    for (const point of checkPoints) {
+        const checkTileX = Math.floor(point.x);
+        const checkTileY = Math.floor(point.y);
+        
+        // Bounds check
+        if (checkTileX < 0 || checkTileX >= mapWidth || 
+            checkTileY < 0 || checkTileY >= mapHeight) {
+            return false;
+        }
+        
+        // Grass check
+        if (!tileMap[checkTileY] || tileMap[checkTileY][checkTileX] !== TILE_TYPES.GRASS) {
+            return false;
+        }
+    }
+    
+    return true;
 }
 
 // ===================================
@@ -2429,7 +2683,7 @@ function seekEnemy(dino) {
             moveSpeed
         );
         
-        if (isPositionValidForMovement(dino, newPos.x, newPos.y)) {
+        if (isPositionValidFor(dino, newPos.x, newPos.y, 'movement')) {
             dino.tileX = newPos.x;
             dino.tileY = newPos.y;
             
@@ -3324,7 +3578,7 @@ function updateFoodSeekingState(dino) {
         const newX = dino.tileX + (dx / moveDistance) * moveSpeed;
         const newY = dino.tileY + (dy / moveDistance) * moveSpeed;
         
-        if (isPositionValidForMovement(dino, newX, newY)) {
+        if (isPositionValidFor(dino, newX, newY, 'movement')) {
             const boundedPos = PositionUtils.clampToMapBounds(newX, newY, mapWidth, mapHeight, 1);
             dino.tileX = boundedPos.x;
             dino.tileY = Math.max(1, Math.min(mapHeight - 1, boundedPos.y));
@@ -3739,7 +3993,7 @@ class PregnancyManager {
         // Lineare Skalierung von 10% bei Wert 50 bis 100% bei Wert 100
         const normalizedValue = (reproductionValue - PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE) / 
                                (100 - PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE);
-        return 0.1 + (normalizedValue * 0.9);
+        return 0.8 + (normalizedValue * 0.9);
     }
 
     makePregnant(dino) {
