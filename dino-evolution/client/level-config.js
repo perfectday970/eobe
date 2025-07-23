@@ -677,6 +677,7 @@ function spawnDinosWithPlacements() {
                     
                     if (isPositionValidFor(newDino, finalTileX, finalTileY, "movement")) {
                         gameObjects.push(newDino);
+                        newDino.updateScale();
                         objectCounts.ownDinos++;
                         dinoPlaced = true;
                     }

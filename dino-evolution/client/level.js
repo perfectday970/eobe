@@ -64,6 +64,9 @@ let attackIcons = []; // Angriffs-Icons
 let corpses = []; // Leichen
 let leafParticles = []; 
 
+// Eierschalen-Partikel Array (füge dies zu den anderen Partikel-Arrays hinzu)
+let eggshellParticles = [];
+
 let teamFood = {
     plants: 0,
     meat: 0
@@ -863,6 +866,273 @@ function handleTouchMove(event) {
 function handleTouchEnd(event) {
     event.preventDefault();
     isDragging = false;
+}
+
+// ===================================
+// EGG-KLASSE
+// ===================================
+
+class Egg {
+    constructor(tileX, tileY, parentSpecies, isEnemy = false) {
+        this.tileX = tileX;
+        this.tileY = tileY;
+        this.parentSpecies = parentSpecies;
+        this.isEnemy = isEnemy;
+        this.type = 'egg';
+        
+        // Zeitpunkt der Eiablage
+        this.layTime = Date.now();
+        this.incubationTime = 5000; // 5 Sekunden in Millisekunden
+        
+        // Visuelle Eigenschaften
+        this.baseSize = 1; // Relative Größe zum Tilesize
+        this.scale = this.baseSize;
+        this.wobbleAmount = 0;
+        this.crackLevel = 0; // 0 = intakt, 1-3 = verschiedene Riss-Stadien
+        
+        // Animation
+        this.animationOffset = Math.random() * Math.PI * 2; // Zufälliger Start für Wobble
+    }
+    
+    updateScale() {
+        const scaleFactor = tileSize / baseTileSize;
+        this.scale = this.baseSize * scaleFactor;
+    }
+    
+    update() {
+        if (isPaused) return;
+        
+        const currentTime = Date.now();
+        const elapsed = currentTime - this.layTime;
+        const progress = elapsed / this.incubationTime;
+        
+        // Wobble-Animation wird stärker, je näher das Schlüpfen
+        if (progress > 0.5) {
+            this.wobbleAmount = Math.sin((currentTime * 0.01) + this.animationOffset) * (progress - 0.5) * 10;
+        }
+        
+        // Risse erscheinen
+        if (progress > 0.6 && this.crackLevel === 0) {
+            this.crackLevel = 1;
+        }
+        if (progress > 0.8 && this.crackLevel === 1) {
+            this.crackLevel = 2;
+        }
+        if (progress > 0.95 && this.crackLevel === 2) {
+            this.crackLevel = 3;
+        }
+        
+        // Zeit zum Schlüpfen!
+        if (elapsed >= this.incubationTime) {
+            this.hatch();
+        }
+    }
+    
+    hatch() {
+        console.log(`🐣 Ei schlüpft! ${this.parentSpecies.name} Jungtier spawnt`);
+        
+        // Schlüpf-Effekt (optional)
+        this.createHatchEffect();
+        
+        // Jungtier erstellen
+        const juvenile = new Dino(
+            this.tileX, 
+            this.tileY, 
+            this.parentSpecies, 
+            false, // isAdult = false
+            this.isEnemy
+        );
+        
+        // Combat-Eigenschaften hinzufügen
+        addCombatPropertiesToDino(juvenile);
+        juvenile.initializeFoodBehavior();
+        
+        // Jungtier zur Spielwelt hinzufügen
+        gameObjects.push(juvenile);
+        juvenile.updateScale(); // Skalierung anpassen
+        
+        // Ei aus gameObjects entfernen
+        const index = gameObjects.indexOf(this);
+        if (index > -1) {
+            gameObjects.splice(index, 1);
+        }
+        
+        // HUD aktualisieren
+        updateHUD();
+    }
+    
+    createHatchEffect() {
+        // Eierschalen-Partikel erstellen
+        const particleCount = 5 + Math.random() * 3;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = {
+                x: this.tileX * tileSize + tileSize / 2 + terrainOffsetX + (Math.random() - 0.5) * 20,
+                y: this.tileY * tileSize + tileSize / 2 + terrainOffsetY + (Math.random() - 0.5) * 20,
+                vx: (Math.random() - 0.5) * 80,
+                vy: -50 - Math.random() * 50, // Nach oben
+                life: 1.0,
+                maxLife: 0.8 + Math.random() * 0.4,
+                size: 3 + Math.random() * 3,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 8,
+                type: 'eggshell'
+            };
+            
+            eggshellParticles.push(particle);
+        }
+    }
+    
+    render() {
+        const pixel = PositionUtils.tileToPixel(this.tileX, this.tileY, tileSize, terrainOffsetX, terrainOffsetY);
+        const pixelX = pixel.x;
+        const pixelY = pixel.y;
+        
+        ctx.save();
+        ctx.translate(pixelX, pixelY);
+        
+        // Wobble-Rotation
+        if (this.wobbleAmount !== 0) {
+            ctx.rotate(this.wobbleAmount * Math.PI / 180);
+        }
+        
+        const eggWidth = 16 * this.scale;
+        const eggHeight = 20 * this.scale;
+        
+        // Ei-Form (Oval)
+        ctx.beginPath();
+        ctx.ellipse(0, 0, eggWidth/2, eggHeight/2, 0, 0, 2 * Math.PI);
+        
+        // Grundfarbe (cremeweiß)
+        ctx.fillStyle = '#F5E6D3';
+        ctx.fill();
+        
+        // Schatten/3D-Effekt
+        ctx.beginPath();
+        ctx.ellipse(2 * this.scale, 2 * this.scale, eggWidth/2, eggHeight/2, 0, 0, Math.PI);
+        ctx.fillStyle = 'rgba(139, 90, 43, 0.2)';
+        ctx.fill();
+        
+        // Glanzlicht
+        ctx.beginPath();
+        ctx.ellipse(-3 * this.scale, -5 * this.scale, eggWidth/4, eggHeight/4, -Math.PI/4, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fill();
+        
+        // Sprenkel/Muster basierend auf Dino-Art
+        ctx.fillStyle = this.isEnemy ? 'rgba(139, 0, 0, 0.3)' : 'rgba(139, 69, 19, 0.3)';
+        for (let i = 0; i < 8; i++) {
+            const speckleX = (Math.sin(i * 1.7) * eggWidth * 0.3);
+            const speckleY = (Math.cos(i * 2.3) * eggHeight * 0.3);
+            const speckleSize = 1.5 * this.scale + Math.sin(i * 3.1) * 0.5 * this.scale;
+            
+            ctx.beginPath();
+            ctx.arc(speckleX, speckleY, speckleSize, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        
+        // Risse zeichnen (wenn vorhanden)
+        if (this.crackLevel > 0) {
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1 * this.scale;
+            
+            // Riss 1
+            if (this.crackLevel >= 1) {
+                ctx.beginPath();
+                ctx.moveTo(-eggWidth/4, -eggHeight/4);
+                ctx.lineTo(-eggWidth/6, 0);
+                ctx.lineTo(-eggWidth/4, eggHeight/6);
+                ctx.stroke();
+            }
+            
+            // Riss 2
+            if (this.crackLevel >= 2) {
+                ctx.beginPath();
+                ctx.moveTo(eggWidth/6, -eggHeight/3);
+                ctx.lineTo(eggWidth/4, -eggHeight/6);
+                ctx.lineTo(eggWidth/5, eggHeight/8);
+                ctx.stroke();
+            }
+            
+            // Riss 3 (kurz vor dem Schlüpfen)
+            if (this.crackLevel >= 3) {
+                ctx.beginPath();
+                ctx.moveTo(0, -eggHeight/3);
+                ctx.lineTo(-eggWidth/8, -eggHeight/5);
+                ctx.lineTo(0, 0);
+                ctx.lineTo(eggWidth/8, eggHeight/6);
+                ctx.stroke();
+                
+                // Kleines Loch oben
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.arc(0, -eggHeight/3, 2 * this.scale, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+        
+        ctx.restore();
+        
+        // Debug-Info (wenn aktiviert)
+        if (debugMode) {
+            ctx.save();
+            ctx.fillStyle = '#FFFF00';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            
+            const timeRemaining = Math.max(0, (this.incubationTime - (Date.now() - this.layTime)) / 1000);
+            ctx.fillText(`${timeRemaining.toFixed(1)}s`, pixelX, pixelY + eggHeight/2 + 15);
+            
+            ctx.restore();
+        }
+    }
+}
+
+
+function createEgg(dino) {
+    const egg = new Egg(
+        dino.tileX,
+        dino.tileY,
+        dino.species,
+        dino.isEnemy
+    );
+    
+    gameObjects.push(egg);
+    console.log(`🥚 Ei gelegt bei (${egg.tileX.toFixed(2)}, ${egg.tileY.toFixed(2)}) von ${dino.species.name}`);
+}
+
+
+// Update für Eierschalen-Partikel (füge dies zur updateCombatSystem() Funktion hinzu)
+function updateEggshellParticles() {
+    eggshellParticles = eggshellParticles.filter(particle => {
+        particle.x += particle.vx * gameSpeed / 60;
+        particle.y += particle.vy * gameSpeed / 60;
+        particle.vy += 150 * gameSpeed / 60; // Schwerkraft
+        particle.rotation += particle.rotationSpeed * gameSpeed / 60;
+        particle.life -= gameSpeed / 60 / particle.maxLife;
+        
+        return particle.life > 0;
+    });
+}
+
+// Render für Eierschalen-Partikel (füge dies zur renderCombatEffects() Funktion hinzu)
+function renderEggshellParticles() {
+    eggshellParticles.forEach(particle => {
+        ctx.save();
+        ctx.globalAlpha = particle.life;
+        ctx.translate(particle.x, particle.y);
+        ctx.rotate(particle.rotation);
+        
+        // Eierschalen-Fragment (weißlich)
+        ctx.fillStyle = '#F5E6D3';
+        ctx.fillRect(-particle.size/2, -particle.size/2, particle.size, particle.size/2);
+        
+        // Innenseite (etwas dunkler)
+        ctx.fillStyle = '#E5D6C3';
+        ctx.fillRect(-particle.size/2, 0, particle.size, particle.size/2);
+        
+        ctx.restore();
+    });
 }
 
 // ===================================
@@ -2009,82 +2279,82 @@ class Dino {
         return sites;
     }
 
-updateSeekingHotbedState() {
-    if (!this.nestingTarget) {
-        this.changeState(DINO_STATES.IDLE);
-        return;
-    }
-    
-    const seekingTime = (Date.now() - this.seekingStartTime) / 1000;
-    if (seekingTime > 10) {
-        console.log(`⏰ ${this.species.name} Brutstätten-Suche timeout`);
-        this.changeState(DINO_STATES.IDLE);
-        this.nestingTarget = null;
-        return;
-    }
-    
-    const enemies = findEnemiesInRange(this);
-    if (enemies.length > 0) {
-        this.nestingTarget = null;
-        return;
-    }
-    
-    // GEÄNDERT: Berechne Zielposition basierend auf Dino-Position und Grass-Tile
-    // Nicht immer Mitte, sondern näher zum Dino hin
-    let targetX, targetY;
-    
-    const tileCenterX = this.nestingTarget.tileX;
-    const tileCenterY = this.nestingTarget.tileY;
-    
-    // Berechne Kollisionsbox-Größe in Tiles
-    const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8 / tileSize;
-    const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6 / tileSize;
-    
-    // Sichere Marge vom Rand (halbe Box-Größe + kleiner Puffer)
-    const marginX = boxWidth / 2 + 0.1;
-    const marginY = boxHeight / 2 + 0.1;
-    
-    // Begrenze Zielposition innerhalb der Grass-Kachel mit Sicherheitsmarge
-    targetX = tileCenterX;
-    targetY = tileCenterY;
-    
-    const distance = Math.sqrt((this.tileX - targetX) ** 2 + (this.tileY - targetY) ** 2);
-    
-    // Prüfe ob auf Gras und nah genug
-    if (distance < 0.2 && isPositionValidFor(this, this.tileX, this.tileY, "egglaying")) {
-        this.changeState(DINO_STATES.LAYING_EGG);
-        this.eggLayingStartTime = Date.now();
-        console.log(`🥚 ${this.species.name} beginnt Ei zu legen bei (${this.tileX.toFixed(2)}, ${this.tileY.toFixed(2)})`);
-        return;
-    }
-    
-    // Bewegung
-    const moveSpeed = this.getMovementSpeed();
-    const dirX = targetX - this.tileX;
-    const dirY = targetY - this.tileY;
-    const moveDistance = Math.sqrt(dirX * dirX + dirY * dirY);
-    
-    if (moveDistance > 0.1) {
-        const normalizedDirX = dirX / moveDistance;
-        const normalizedDirY = dirY / moveDistance;
+    updateSeekingHotbedState() {
+        if (!this.nestingTarget) {
+            this.changeState(DINO_STATES.IDLE);
+            return;
+        }
         
-        const newX = this.tileX + normalizedDirX * moveSpeed;
-        const newY = this.tileY + normalizedDirY * moveSpeed;
-        
-        if (isPositionValidFor(this, newX, newY, 'movement')) {
-            this.tileX = newX;
-            this.tileY = newY;
-            
-            if (Math.abs(dirX) > 0.01) {
-                this.facingRight = dirX < 0;
-            }
-        } else {
-            console.log(`❌ ${this.species.name} Weg blockiert`);
+        const seekingTime = (Date.now() - this.seekingStartTime) / 1000;
+        if (seekingTime > 10) {
+            console.log(`⏰ ${this.species.name} Brutstätten-Suche timeout`);
             this.changeState(DINO_STATES.IDLE);
             this.nestingTarget = null;
+            return;
+        }
+        
+        const enemies = findEnemiesInRange(this);
+        if (enemies.length > 0) {
+            this.nestingTarget = null;
+            return;
+        }
+        
+        // GEÄNDERT: Berechne Zielposition basierend auf Dino-Position und Grass-Tile
+        // Nicht immer Mitte, sondern näher zum Dino hin
+        let targetX, targetY;
+        
+        const tileCenterX = this.nestingTarget.tileX;
+        const tileCenterY = this.nestingTarget.tileY;
+        
+        // Berechne Kollisionsbox-Größe in Tiles
+        const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8 / tileSize;
+        const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6 / tileSize;
+        
+        // Sichere Marge vom Rand (halbe Box-Größe + kleiner Puffer)
+        const marginX = boxWidth / 2 + 0.1;
+        const marginY = boxHeight / 2 + 0.1;
+        
+        // Begrenze Zielposition innerhalb der Grass-Kachel mit Sicherheitsmarge
+        targetX = tileCenterX;
+        targetY = tileCenterY;
+        
+        const distance = Math.sqrt((this.tileX - targetX) ** 2 + (this.tileY - targetY) ** 2);
+        
+        // Prüfe ob auf Gras und nah genug
+        if (distance < 0.2 && isPositionValidFor(this, this.tileX, this.tileY, "egglaying")) {
+            this.changeState(DINO_STATES.LAYING_EGG);
+            this.eggLayingStartTime = Date.now();
+            console.log(`🥚 ${this.species.name} beginnt Ei zu legen bei (${this.tileX.toFixed(2)}, ${this.tileY.toFixed(2)})`);
+            return;
+        }
+        
+        // Bewegung
+        const moveSpeed = this.getMovementSpeed();
+        const dirX = targetX - this.tileX;
+        const dirY = targetY - this.tileY;
+        const moveDistance = Math.sqrt(dirX * dirX + dirY * dirY);
+        
+        if (moveDistance > 0.1) {
+            const normalizedDirX = dirX / moveDistance;
+            const normalizedDirY = dirY / moveDistance;
+            
+            const newX = this.tileX + normalizedDirX * moveSpeed;
+            const newY = this.tileY + normalizedDirY * moveSpeed;
+            
+            if (isPositionValidFor(this, newX, newY, 'movement')) {
+                this.tileX = newX;
+                this.tileY = newY;
+                
+                if (Math.abs(dirX) > 0.01) {
+                    this.facingRight = dirX < 0;
+                }
+            } else {
+                console.log(`❌ ${this.species.name} Weg blockiert`);
+                this.changeState(DINO_STATES.IDLE);
+                this.nestingTarget = null;
+            }
         }
     }
-}
 
     updateLayingEggState() {
         // Nutze die gleiche Validierungs-Logik
@@ -2103,10 +2373,22 @@ updateSeekingHotbedState() {
         const layingTime = (Date.now() - this.eggLayingStartTime) / 1000;
         if (layingTime >= 5) {
             console.log(`✅ ${this.species.name} hat Ei gelegt!`);
+            
+            // EI ERSTELLEN
+            const egg = new Egg(
+                this.tileX,
+                this.tileY,
+                this.species,
+                this.isEnemy
+            );
+            
+            gameObjects.push(egg);
+            console.log(`🥚 Ei gelegt bei (${egg.tileX.toFixed(2)}, ${egg.tileY.toFixed(2)}) von ${this.species.name}`);
+            
+            // Schwangerschaft beenden
             this.isPregnant = false;
             this.pregnancyStartTime = null;
             this.changeState(DINO_STATES.IDLE);
-            // TODO: Hier später Ei-Objekt erstellen
         }
     }
 
@@ -2298,7 +2580,7 @@ function resizeCanvas() {
         const canvasTileSizeByHeight = canvas.height / mapHeight;
         const canvasTileSize = Math.min(canvasTileSizeByWidth, canvasTileSizeByHeight);
         
-        const oldTileSize = tileSize;
+       // const oldTileSize = tileSize;
         tileSize = Math.max(minTileSize, Math.min(maxTileSize, canvasTileSize * currentZoom));
  
         calculateTerrainOffsets();
@@ -2971,6 +3253,16 @@ function updateCombatSystem() {
         
         return particle.life > 0;
     });
+
+    eggshellParticles = eggshellParticles.filter(particle => {
+        particle.x += particle.vx * gameSpeed / 60;
+        particle.y += particle.vy * gameSpeed / 60;
+        particle.vy += 150 * gameSpeed / 60; // Schwerkraft
+        particle.rotation += particle.rotationSpeed * gameSpeed / 60;
+        particle.life -= gameSpeed / 60 / particle.maxLife;
+        
+        return particle.life > 0;
+    });
     
     // Attack-Icons updaten
     attackIcons.forEach(icon => {
@@ -3020,6 +3312,23 @@ function renderCombatEffects() {
         // Hellerer Fleck in der Mitte
         ctx.fillStyle = '#32CD32';
         ctx.fillRect(-particle.size/4, -particle.size/8, particle.size/2, particle.size/4);
+        
+        ctx.restore();
+    });
+
+    eggshellParticles.forEach(particle => {
+        ctx.save();
+        ctx.globalAlpha = particle.life;
+        ctx.translate(particle.x, particle.y);
+        ctx.rotate(particle.rotation);
+        
+        // Eierschalen-Fragment (weißlich)
+        ctx.fillStyle = '#F5E6D3';
+        ctx.fillRect(-particle.size/2, -particle.size/2, particle.size, particle.size/2);
+        
+        // Innenseite (etwas dunkler)
+        ctx.fillStyle = '#E5D6C3';
+        ctx.fillRect(-particle.size/2, 0, particle.size, particle.size/2);
         
         ctx.restore();
     });
@@ -3545,10 +3854,10 @@ function updateFoodSeekingState(dino) {
     
     // Erforderliche Distanz
     let requiredDistance;
-    if (targetObj.type === 'tree') requiredDistance = 0.1;        // Vorher: 1.0
-    else if (targetObj.type === 'rodent') requiredDistance = 0.1;  // Vorher: 0.4  
-    else if (targetObj.deathTime) requiredDistance = 0.1;         // Vorher: 0.6
-    else requiredDistance = 0.1;                                  // Vorher: 0.8
+    if (targetObj.type === 'tree') requiredDistance = 0.1;
+    else if (targetObj.type === 'rodent') requiredDistance = 0.1;   
+    else if (targetObj.deathTime) requiredDistance = 0.1;
+    else requiredDistance = 0.1;
 
     // Nah genug zum Fressen?
     if (distance <= requiredDistance) {
