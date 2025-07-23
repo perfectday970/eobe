@@ -883,7 +883,7 @@ function generateTreeGroups(objectCounts) {
         const actualTreesInGroup = Math.floor(treesPerGroup * (0.7 + Math.random() * 0.6)); // ±30% Variation
         
         for (let i = 0; i < actualTreesInGroup; i++) {
-            const position = findValidLandPosition(groupCenterTileX, groupCenterTileY, 4);
+            const position = findValidTreePosition(groupCenterTileX, groupCenterTileY, 4);
             
             if (position.valid) {
                 gameObjects.push(new EnvironmentObject(position.tileX, position.tileY, 'tree'));
@@ -894,7 +894,7 @@ function generateTreeGroups(objectCounts) {
     
     // Einzelne Bäume
     for (let i = 0; i < singleTrees; i++) {
-        const position = findValidLandPosition(
+        const position = findValidTreePosition(
             Math.random() * mapWidth, 
             mapHeight * 0.3 + Math.random() * (mapHeight * 0.5), 
             0
@@ -1041,6 +1041,45 @@ function findValidLandPosition(centerTileX, centerTileY, maxDistanceInTiles, att
     return { tileX: centerTileX, tileY: centerTileY, valid: false };
 }
 
+
+function findValidTreePosition(centerTileX, centerTileY, maxDistanceInTiles, attempts = 50) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        let testTileX, testTileY;
+        
+        if (maxDistanceInTiles === 0) {
+            testTileX = centerTileX;
+            testTileY = centerTileY;
+        } else {
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = Math.random() * maxDistanceInTiles;
+            testTileX = centerTileX + Math.cos(angle) * distance;
+            testTileY = centerTileY + Math.sin(angle) * distance;
+        }
+        
+        const bounded = PositionUtils.clampPosition(
+            testTileX, testTileY,
+            1, mapWidth - 2,
+            1, mapHeight - 2
+        );
+        const boundedTileX = bounded.x;
+        const boundedTileY = bounded.y;
+        
+        const tileType = getTileTypeAtPosition(Math.floor(boundedTileX), Math.floor(boundedTileY));
+        
+        if (tileType !== TILE_TYPES.WATER) {
+            // NEU: Prüfe Wasser-Distanz für Bäume
+            const waterDistance = getDistanceToWater(Math.floor(boundedTileX), Math.floor(boundedTileY));
+            
+            // Bäume nur bis 20 Kacheln vom Wasser entfernt
+            if (waterDistance <= 20) {
+                return { tileX: boundedTileX, tileY: boundedTileY, valid: true };
+            }
+        }
+    }
+    
+    return { tileX: centerTileX, tileY: centerTileY, valid: false };
+}
+
 function generateTileMap() {
     const canvasTileSizeByWidth = canvas.width / mapWidth;
     const canvasTileSizeByHeight = canvas.height / mapHeight;
@@ -1149,7 +1188,6 @@ function growLake(startX, startY, targetSize) {
 }
 
 function generateGrassAroundWater() {
-
     const newMap = JSON.parse(JSON.stringify(tileMap));
     
     for (let y = 0; y < mapHeight; y++) {
@@ -1157,21 +1195,44 @@ function generateGrassAroundWater() {
             if (tileMap[y][x] !== TILE_TYPES.WATER) {
                 const waterDistance = getDistanceToWater(x, y);
                 
-                let grassProbability = 0;
-                if (waterDistance === 1) {
-                    grassProbability = 0.9;
-                } else if (waterDistance === 2) {
-                    grassProbability = 0.7;
-                } else if (waterDistance === 3) {
-                    grassProbability = 0.4;
-                } else if (waterDistance <= 5) {
-                    grassProbability = 0.2;
+                // Wüsten-System ab Distanz 25
+                if (waterDistance >= 55) {
+                    // Ab 40: Fast nur Wüste (90% Wahrscheinlichkeit)
+                    if (Math.random() < 0.95) {
+                        newMap[y][x] = TILE_TYPES.DESERT;
+                    } else {
+                        newMap[y][x] = TILE_TYPES.DIRT;
+                    }
+                } else if (waterDistance >= 18) {
+                    // 25-39: Mischgebiet (Wahrscheinlichkeit steigt linear)
+                    const desertProbability = (waterDistance - 18) / 25; // 0% bei 25, 100% bei 40
+                    
+                    if (Math.random() < desertProbability) {
+                        newMap[y][x] = TILE_TYPES.DESERT;
+                    } else {
+                        newMap[y][x] = TILE_TYPES.DIRT;
+                    }
+                } else if (waterDistance > 15) {
+                    // 16-24: Nur normales Terrain (kein Gras, keine Wüste)
+                    newMap[y][x] = TILE_TYPES.DIRT;
                 } else {
-                    grassProbability = 0.1;
-                }
-                
-                if (Math.random() < grassProbability) {
-                    newMap[y][x] = TILE_TYPES.GRASS;
+                    // 1-15: Gras-System (wie vorher)
+                    let grassProbability = 0;
+                    if (waterDistance === 1) {
+                        grassProbability = 0.9;
+                    } else if (waterDistance === 2) {
+                        grassProbability = 0.7;
+                    } else if (waterDistance === 3) {
+                        grassProbability = 0.4;
+                    } else if (waterDistance <= 5) {
+                        grassProbability = 0.2;
+                    } else {
+                        grassProbability = 0.1;
+                    }
+                    
+                    if (Math.random() < grassProbability) {
+                        newMap[y][x] = TILE_TYPES.GRASS;
+                    }
                 }
             }
         }
@@ -1182,8 +1243,8 @@ function generateGrassAroundWater() {
 function getDistanceToWater(x, y) {
     let minDistance = Infinity;
     
-    for (let dy = -8; dy <= 8; dy++) {
-        for (let dx = -8; dx <= 8; dx++) {
+    for (let dy = -40; dy <= 40; dy++) {
+        for (let dx = -40; dx <= 40; dx++) {
             const checkX = x + dx;
             const checkY = y + dy;
             
@@ -1347,9 +1408,45 @@ function renderTile(x, y, tileType, time = 0) {
                 ctx.fillRect(flowerX, flowerY, flowerSize, flowerSize);
             }
         }
-    }
-    
-    if (tileType === TILE_TYPES.DIRT) {
+    }else if (tileType === TILE_TYPES.DESERT) {
+        // Sand-Dünen-Streifen
+        ctx.fillStyle = colors.shadow;
+        const stripeCount = 2 + Math.floor(scale);
+        
+        for (let i = 0; i < stripeCount; i++) {
+            const randomX = ((noiseSeed + i * 41) % 100) / 100;
+            const randomY = ((noiseSeed + i * 83) % 100) / 100;
+            const randomWidth = ((noiseSeed + i * 127) % 100) / 100;
+            
+            const stripeX = tileX + (randomX * tileSize * 0.8);
+            const stripeY = tileY + (randomY * tileSize * 0.8);
+            const stripeWidth = (2 + randomWidth * 4) * scale;
+            const stripeHeight = 1 * scale;
+            
+            if (stripeX >= tileX && stripeX + stripeWidth <= tileX + tileSize &&
+                stripeY >= tileY && stripeY + stripeHeight <= tileY + tileSize) {
+                ctx.fillRect(stripeX, stripeY, stripeWidth, stripeHeight);
+            }
+        }
+        
+        // Sand-Körner (kleine Punkte)
+        ctx.fillStyle = colors.highlight;
+        const grainCount = 1 + Math.floor(scale * 0.5);
+        
+        for (let i = 0; i < grainCount; i++) {
+            const randomX = ((noiseSeed + i * 97) % 100) / 100;
+            const randomY = ((noiseSeed + i * 151) % 100) / 100;
+            
+            const grainX = tileX + (randomX * tileSize);
+            const grainY = tileY + (randomY * tileSize);
+            const grainSize = 1 * scale;
+            
+            if (grainX >= tileX && grainX + grainSize <= tileX + tileSize &&
+                grainY >= tileY && grainY + grainSize <= tileY + tileSize) {
+                ctx.fillRect(grainX, grainY, grainSize, grainSize);
+            }
+        }
+    }else if (tileType === TILE_TYPES.DIRT) {
         const rockColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
                                 ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
                                 ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`;

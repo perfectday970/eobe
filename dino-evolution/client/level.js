@@ -122,7 +122,8 @@ const FOOD_CONFIG = {
 const TILE_TYPES = {
     GRASS: 0,
     DIRT: 1,
-    WATER: 2
+    WATER: 2,
+    DESERT: 3
 };
 
 const TILE_COLORS = {
@@ -140,6 +141,11 @@ const TILE_COLORS = {
         base: '#4682B4',
         highlight: '#87CEEB',
         shadow: '#2F4F4F'
+    },
+    [TILE_TYPES.DESERT]: {
+        base: '#C4B088',
+        highlight: '#D4C098',
+        shadow: '#8B7355' 
     }
 };
 
