@@ -1412,8 +1412,32 @@ function generateGrassAroundWater() {
                 }
             }
         }
-    }   
+    }  
+
     tileMap = newMap;
+    
+    for (let y = 0; y < mapHeight; y++) {
+        for (let x = 0; x < mapWidth; x++) {
+            if (tileMap[y][x] === TILE_TYPES.DIRT || tileMap[y][x] === TILE_TYPES.DESERT) {
+                const waterDistance = getDistanceToWater(x, y);
+                
+                let dryGrassProbability = 0;
+                
+                if (waterDistance >= 14 && waterDistance <= 35) {
+                    if (tileMap[y][x] === TILE_TYPES.DIRT) {
+                        dryGrassProbability = 0.08; // 8% Chance
+                    }
+                    else if (tileMap[y][x] === TILE_TYPES.DESERT) {
+                        dryGrassProbability = 0.05; // 5% Chance
+                    }
+                    
+                    if (Math.random() < dryGrassProbability) {
+                        tileMap[y][x] = TILE_TYPES.DRY_GRASS;
+                    }
+                }
+            }
+        }
+    }   
 }
 
 function getDistanceToWater(x, y) {
@@ -1622,7 +1646,101 @@ function renderTile(x, y, tileType, time = 0) {
                 ctx.fillRect(grainX, grainY, grainSize, grainSize);
             }
         }
-    }else if (tileType === TILE_TYPES.DIRT) {
+    }else if (tileType === TILE_TYPES.DRY_GRASS) {
+    // Basis-Rendering ist schon durch TILE_COLORS erledigt
+    
+    // Seed basiert auf den WELT-Koordinaten, nicht auf Render-Position
+    const tileSeed = x * 1000 + y; // Fest an die Tile-Position gebunden
+    
+    // Weniger Halme für weniger Überlappung
+    const grassBlades = 10 + Math.floor(scale);
+    
+    for (let i = 0; i < grassBlades; i++) {
+        // Verwende tileSeed statt noiseSeed für stabile Positionen
+        const randomX = ((tileSeed + i * 47) % 100) / 100;
+        const randomY = ((tileSeed + i * 71) % 100) / 100;
+        const randomHeight = 0.4 + ((tileSeed + i * 31) % 100) / 200; // 0.4-0.9
+        const randomWidth = ((tileSeed + i * 59) % 100) / 100;
+        const randomColor = ((tileSeed + i * 83) % 100) / 100;
+        
+        // Position über die gesamte Kachel verteilt
+        const margin = 2 * scale;
+        const startX = tileX + margin + (randomX * (tileSize - 2 * margin));
+        const startY = tileY + margin + (randomY * (tileSize - 2 * margin)); // Über gesamte Höhe
+        
+        // Länge 70% mehr (war 10, jetzt 17)
+        let length = randomHeight * 17 * scale;
+        
+        // Begrenze die Länge, damit sie nicht über den oberen Rand ragt
+        const maxLength = startY - tileY - margin;
+        length = Math.min(length, maxLength);
+        
+        // Breite variiert zwischen dünn und etwas dicker
+        if (randomWidth < 0.4) {
+            ctx.lineWidth = Math.max(1, 0.5 * scale); // Sehr dünn
+        } else if (randomWidth < 0.7) {
+            ctx.lineWidth = Math.max(1, 1.0 * scale); // Normal
+        } else if (randomWidth < 0.9) {
+            ctx.lineWidth = Math.max(1, 1.5 * scale); // Dick
+        } else {
+            ctx.lineWidth = Math.max(1, 2.0 * scale); // Sehr dick
+        }
+        
+        // Farbe variiert zwischen hellem und dunklem Stroh
+        if (randomColor < 0.25) {
+            ctx.strokeStyle = '#D4B590'; // Sehr hell
+        } else if (randomColor < 0.5) {
+            ctx.strokeStyle = '#C4A57B'; // Hell
+        } else if (randomColor < 0.75) {
+            ctx.strokeStyle = '#B09060'; // Mittel
+        } else {
+            ctx.strokeStyle = '#9B7B55'; // Dunkel
+        }
+        
+        // Gerader vertikaler Strich
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(startX, startY - length); // Gerade nach oben
+        ctx.stroke();
+    }
+    
+    // Weniger kurze Halme, auch über die gesamte Kachel
+    const shortBlades = 3 + Math.floor(scale * 0.5);
+    
+    for (let i = 0; i < shortBlades; i++) {
+        // Auch hier tileSeed verwenden
+        const randomX = ((tileSeed + i * 197) % 100) / 100;
+        const randomY = ((tileSeed + i * 223) % 100) / 100;
+        const randomColor = ((tileSeed + i * 251) % 100) / 100;
+        
+        const margin = 3 * scale;
+        const bladeX = tileX + margin + (randomX * (tileSize - 2 * margin));
+        const bladeY = tileY + margin + (randomY * (tileSize - 2 * margin)); // Auch über gesamte Höhe
+        const bladeHeight = 4 * scale + ((tileSeed + i * 281) % 30) / 10 * scale;
+        
+        // Begrenze auch hier die Höhe
+        const maxHeight = bladeY - tileY - margin;
+        const finalHeight = Math.min(bladeHeight, maxHeight);
+        
+        // Normale Breite für kurze Halme
+        ctx.lineWidth = Math.max(1, 1.2 * scale);
+        
+        // Gleiche Farbpalette wie oben
+        if (randomColor < 0.33) {
+            ctx.strokeStyle = '#C4A57B'; // Hell
+        } else if (randomColor < 0.66) {
+            ctx.strokeStyle = '#B09060'; // Mittel  
+        } else {
+            ctx.strokeStyle = '#9B7B55'; // Dunkel
+        }
+        
+        // Durchgehende Linie
+        ctx.beginPath();
+        ctx.moveTo(bladeX, bladeY);
+        ctx.lineTo(bladeX, bladeY - finalHeight);
+        ctx.stroke();
+    }
+}else if (tileType === TILE_TYPES.DIRT) {
         const rockColor = `rgb(${Math.floor(parseInt(colors.base.substr(1,2), 16) * 0.9)}, 
                                 ${Math.floor(parseInt(colors.base.substr(3,2), 16) * 0.9)}, 
                                 ${Math.floor(parseInt(colors.base.substr(5,2), 16) * 0.9)})`;

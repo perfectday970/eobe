@@ -124,7 +124,8 @@ const TILE_TYPES = {
     GRASS: 0,
     DIRT: 1,
     WATER: 2,
-    DESERT: 3
+    DESERT: 3,
+    DRY_GRASS: 4
 };
 
 const TILE_COLORS = {
@@ -147,6 +148,11 @@ const TILE_COLORS = {
         base: '#C4B088',
         highlight: '#D4C098',
         shadow: '#8B7355' 
+    },
+    [TILE_TYPES.DRY_GRASS]: {
+        base: '#B8A068', 
+        highlight: '#C8B078', 
+        shadow: '#9B8855'    
     }
 };
 
@@ -210,7 +216,6 @@ async function loadLevelData() {
         updateSessionInfo();
         setLoadingText('Lade Level-Daten...');
         
-        // console.log(`🎮 Lade Level für Session: ${sessionId}`);
         
         const response = await fetch(`${API_BASE}/load-level/${sessionId}`);
         const data = await response.json();
@@ -221,10 +226,8 @@ async function loadLevelData() {
             // WICHTIG: currentLevel aus levelData extrahieren
             if (levelData.currentLevel) {
                 currentLevel = levelData.currentLevel;
-                // console.log('📊 Level aus levelData geladen:', currentLevel);
             } else if (levelData.level) {
                 currentLevel = levelData.level;
-                // console.log('📊 Level aus levelData.level geladen:', currentLevel);
             }
             // Validierung
             if (!levelData.populationData || levelData.populationData.length === 0) {
@@ -294,7 +297,6 @@ async function saveProgress() {
                 saveBtn.textContent = originalText;
             }, 2000);
             
-            // console.log('💾 Fortschritt gespeichert');
         } else {
             throw new Error(data.error || 'Speichern fehlgeschlagen');
         }
@@ -355,7 +357,6 @@ function calculateRandomLevelResources() {
 
 function startLevelTimer() {
     levelStartTime = Date.now();
-    // console.log('⏰ Level-Timer gestartet: 3 Minuten');
 }
 
 function updateTimer() {
@@ -936,8 +937,7 @@ class Egg {
     }
     
     hatch() {
-        console.log(`🐣 Ei schlüpft! ${this.parentSpecies.name} Jungtier spawnt`);
-        
+       
         // Schlüpf-Effekt (optional)
         this.createHatchEffect();
         
@@ -1105,7 +1105,6 @@ function createEgg(dino) {
     );
     
     gameObjects.push(egg);
-    console.log(`🥚 Ei gelegt bei (${egg.tileX.toFixed(2)}, ${egg.tileY.toFixed(2)}) von ${dino.species.name}`);
 }
 
 
@@ -1229,6 +1228,84 @@ class Dino {
         this.reproductionValue = 0;
         this.nestingTarget = null;      // Ziel-Brutstätte
         this.eggLayingStartTime = null;
+
+        this.birthTime = Date.now();  // Zeitpunkt der Geburt
+        this.hasEatenOnce = false;    // Hat mindestens einmal gegessen
+        this.maturationTime = 45;     // 45 Sekunden bis zum Erwachsenwerden
+    }
+
+    checkMaturation() {
+        // Nur für Jungtiere relevant
+        if (this.isAdult || this.state === DINO_STATES.DEAD) return;
+        
+        // Prüfe ob genug Zeit vergangen ist
+        const elapsed = (Date.now() - this.birthTime) / 1000; // In Sekunden
+        const gameAdjustedElapsed = elapsed * gameSpeed; // Mit Spielgeschwindigkeit
+        
+        // Kann nur erwachsen werden wenn:
+        // 1. 45 Sekunden vergangen sind
+        // 2. Mindestens einmal Nahrung aufgenommen wurde
+        if (gameAdjustedElapsed >= this.maturationTime && this.hasEatenOnce) {
+            this.growToAdult();
+        }
+    }
+
+    growToAdult() {
+        
+        // Erwachsen werden
+        this.isAdult = true;
+        
+        // Basis-Skalierung anpassen
+        this.baseScale = 0.2496; // Erwachsenen-Größe
+        this.updateScale();
+        
+        // HP auf Erwachsenen-Wert erhöhen
+        const oldMaxHP = this.maxHP;
+        this.health = 100;
+        this.maxHP = 100;
+        this.currentHP = 100;
+        
+        // Fähigkeiten neu berechnen (ohne Jungtier-Malus)
+        this.abilities = window.DinoAbilities.calculateDinoAbilities(this.species.properties, true);
+        this.maxHP = this.abilities['Lebenspunkte'];
+        this.currentHP = this.maxHP;
+        
+        // Fortpflanzung aktivieren
+        pregnancyManager.initializeDino(this);
+        
+        // Wachstums-Effekt (optional)
+        this.createGrowthEffect();
+        
+        // HUD aktualisieren
+        updateHUD();
+    }
+
+    createGrowthEffect() {
+        // Visueller Effekt beim Erwachsenwerden
+        const particleCount = 8;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (i / particleCount) * Math.PI * 2;
+            const particle = {
+                x: this.tileX * tileSize + tileSize / 2 + terrainOffsetX,
+                y: this.tileY * tileSize + tileSize / 2 + terrainOffsetY,
+                vx: Math.cos(angle) * 60,
+                vy: Math.sin(angle) * 60 - 30,
+                life: 1.0,
+                maxLife: 1.0,
+                size: 4 + Math.random() * 2,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 4,
+                type: 'growth',
+                color: '#32CD32' // Grün für Wachstum
+            };
+            
+            // Füge zu einem bestehenden Partikel-Array hinzu
+            // oder erstelle ein neues growthParticles Array
+            if (typeof growthParticles !== 'undefined') {
+                growthParticles.push(particle);
+            }
+        }
     }
 
     getMovementSpeed() {
@@ -1274,7 +1351,6 @@ class Dino {
         this.avoidanceMode.currentStep++;
       //  if(debugMode && this.selected) console.log(`🔄 Umgehung Schritt ${this.avoidanceMode.currentStep}`);
         if (this.avoidanceMode.currentStep > 8) { // 4 Bewegungen + 4 Pausen
-            if(debugMode && this.selected) console.log(`✅ Umgehung erfolgreich abgeschlossen`);
             // Zyklus abgeschlossen, von vorne beginnen
             this.avoidanceMode.currentStep = 1;
             this.avoidanceMode.attemptCount++;
@@ -2020,6 +2096,17 @@ class Dino {
     // State-spezifische Update-Logik
     handleState() {
 
+        if (this.isPregnant && (this.state === DINO_STATES.IDLE || this.state === DINO_STATES.AVOIDING)) {
+            const nestingSites = this.findNestingSitesInRange();
+            if (nestingSites.length > 0) {
+                // Nächste geeignete Stelle auswählen
+                this.nestingTarget = nestingSites[0];
+                this.changeState(DINO_STATES.SEEKING_HOTBED);
+                this.seekingStartTime = Date.now();
+                return;
+            }
+        }
+
         switch (this.state) {
             case DINO_STATES.IDLE:
                 if (this.stateTimer >= this.stateDuration) {
@@ -2063,7 +2150,6 @@ class Dino {
                 break;
             case DINO_STATES.FIGHTING:
                 updateFightingState(this);
-                // WICHTIG: Keine weitere Bewegung im fighting-State!
                 break;
         }
         
@@ -2217,17 +2303,7 @@ class Dino {
         const deltaTime = gameSpeed / 60;      
         this.stateTimer += deltaTime;
 
-        if (this.isPregnant && this.state === DINO_STATES.IDLE) {
-            const nestingSites = this.findNestingSitesInRange();
-            if (nestingSites.length > 0) {
-                // Nächste geeignete Stelle auswählen
-                this.nestingTarget = nestingSites[0];
-                this.changeState(DINO_STATES.SEEKING_HOTBED);
-                this.seekingStartTime = Date.now();
-                console.log(`🥚 ${this.species.name} sucht Brutstätte`);
-                return;
-            }
-        }
+        this.checkMaturation();
         
         this.handleState();
 
@@ -2267,16 +2343,18 @@ class Dino {
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 if (distance > this.detectionRadius) continue;
                 
-                // Prüfe ob gültige Position
-                if (checkX < 0 || checkX >= mapWidth || checkY < 0 || checkY >= mapHeight) continue;
-                
-                // Prüfe ob Wiese
-                if (tileMap[checkY] && tileMap[checkY][checkX] === TILE_TYPES.GRASS) {
-                    sites.push({
-                        tileX: checkX,
-                        tileY: checkY,
-                        distance: distance
-                    });
+                if (checkX >= 0 && checkX < mapWidth && checkY >= 0 && checkY < mapHeight) {
+                    const tileType = getTileTypeAtPosition(checkX, checkY);
+                    // NEU: Sowohl Gras als auch trockenes Gras sind geeignet
+                    if (tileType === TILE_TYPES.GRASS || tileType === TILE_TYPES.DRY_GRASS) {
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        sites.push({
+                            tileX: checkX,
+                            tileY: checkY,
+                            distance: distance,
+                            tileType: tileType
+                        });
+                    }
                 }
             }
         }
@@ -2294,7 +2372,6 @@ class Dino {
         
         const seekingTime = (Date.now() - this.seekingStartTime) / 1000;
         if (seekingTime > 10) {
-            console.log(`⏰ ${this.species.name} Brutstätten-Suche timeout`);
             this.changeState(DINO_STATES.IDLE);
             this.nestingTarget = null;
             return;
@@ -2314,12 +2391,12 @@ class Dino {
         const tileCenterY = this.nestingTarget.tileY;
         
         // Berechne Kollisionsbox-Größe in Tiles
-        const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8 / tileSize;
-        const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6 / tileSize;
+        //const boxWidth = (this.species.properties.körper_länge || 50) * this.scale * 0.8 / tileSize;
+       // const boxHeight = (this.species.properties.körper_höhe || 50) * this.scale * 0.6 / tileSize;
         
         // Sichere Marge vom Rand (halbe Box-Größe + kleiner Puffer)
-        const marginX = boxWidth / 2 + 0.1;
-        const marginY = boxHeight / 2 + 0.1;
+        //const marginX = boxWidth / 2 + 0.1;
+        //const marginY = boxHeight / 2 + 0.1;
         
         // Begrenze Zielposition innerhalb der Grass-Kachel mit Sicherheitsmarge
         targetX = tileCenterX;
@@ -2331,7 +2408,6 @@ class Dino {
         if (distance < 0.2 && isPositionValidFor(this, this.tileX, this.tileY, "egglaying")) {
             this.changeState(DINO_STATES.LAYING_EGG);
             this.eggLayingStartTime = Date.now();
-            console.log(`🥚 ${this.species.name} beginnt Ei zu legen bei (${this.tileX.toFixed(2)}, ${this.tileY.toFixed(2)})`);
             return;
         }
         
@@ -2356,8 +2432,7 @@ class Dino {
                     this.facingRight = dirX < 0;
                 }
             } else {
-                console.log(`❌ ${this.species.name} Weg blockiert`);
-                this.changeState(DINO_STATES.IDLE);
+                 this.changeState(DINO_STATES.IDLE);
                 this.nestingTarget = null;
             }
         }
@@ -2366,20 +2441,17 @@ class Dino {
     updateLayingEggState() {
         // Nutze die gleiche Validierungs-Logik
         if (!isPositionValidFor(this, this.tileX, this.tileY, "egglaying")) {
-            console.log(`❌ ${this.species.name} Eiablage unterbrochen - nicht mehr auf Wiese`);
             this.changeState(DINO_STATES.IDLE);
             return;
         }
         
         const enemies = findEnemiesInRange(this);
         if (enemies.length > 0) {
-            console.log(`⚔️ ${this.species.name} Eiablage unterbrochen - Feind nähert sich`);
             return;
         }
         
         const layingTime = (Date.now() - this.eggLayingStartTime) / 1000;
         if (layingTime >= 5) {
-            console.log(`✅ ${this.species.name} hat Ei gelegt!`);
             
             // EI ERSTELLEN
             const egg = new Egg(
@@ -2390,8 +2462,7 @@ class Dino {
             );
             
             gameObjects.push(egg);
-            console.log(`🥚 Ei gelegt bei (${egg.tileX.toFixed(2)}, ${egg.tileY.toFixed(2)}) von ${this.species.name}`);
-            
+           
             // Schwangerschaft beenden
             this.isPregnant = false;
             this.pregnancyStartTime = null;
@@ -2447,43 +2518,7 @@ class Dino {
 // ===================================
 // BEWGUNGs-FUNKTIONEN
 // ===================================
-/*
-function isPositionValidForMovement(checkDino, newTileX, newTileY) {
 
-    if (checkDino.canSwim()) {
-        return true;
-    }
-    newTileX = newTileX + 0.5;
-    newTileY = newTileY+ 0.5;  
-
-    const boxWidth = (checkDino.species.properties.körper_länge || 50) * checkDino.scale * 0.8;
-    const boxHeight = (checkDino.species.properties.körper_höhe || 50) * checkDino.scale * 0.6;
-    const verticalOffset = boxHeight * 0.5 / tileSize;
-    
-    const testBox = {
-        left: newTileX - boxWidth / (2 * tileSize),
-        right: newTileX + boxWidth / (2 * tileSize),
-        top: newTileY - boxHeight / (2 * tileSize) + verticalOffset,
-        bottom: newTileY + boxHeight / (2 * tileSize) + verticalOffset
-    };
-    
-    const checkPoints = [
-        { x: testBox.left, y: testBox.top },      // Oben links
-        { x: testBox.right, y: testBox.top },     // Oben rechts
-        { x: testBox.left, y: testBox.bottom },   // Unten links
-        { x: testBox.right, y: testBox.bottom },  // Unten rechts
-        { x: newTileX, y: newTileY + verticalOffset }  // Mitte (auch mit Offset)
-    ];
-
-    for (const point of checkPoints) {
-        const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
-        if (tileType === TILE_TYPES.WATER) {
-            return false;
-        }
-    }
-    
-    return true;
-}*/
 
 function isPositionValidFor(checkDino, newTileX, newTileY, purpose = 'movement') {
     // Schwimmer können sich überall bewegen
@@ -2516,14 +2551,14 @@ function isPositionValidFor(checkDino, newTileX, newTileY, purpose = 'movement')
     for (const point of checkPoints) {
         const tileType = getTileTypeAtPosition(Math.floor(point.x), Math.floor(point.y));
         
-        if (purpose === 'movement') {
+        if (purpose === "movement") {
             // Für Bewegung: Wasser vermeiden
             if (tileType === TILE_TYPES.WATER) {
                 return false;
             }
-        } else if (purpose === 'egglaying') {
+        } else if (purpose === "egglaying") {
             // Für Eiablage: MUSS Gras sein
-            if (tileType !== TILE_TYPES.GRASS) {
+            if (tileType !== TILE_TYPES.GRASS && tileType !== TILE_TYPES.DRY_GRASS) {
                 return false;
             }
         }
@@ -2675,7 +2710,6 @@ function handleClick(event, checkOnly = false) {
 
 function pauseGame() {
     if (placementPhase) {
-        console.log('⚠️ Pause während Platzierung nicht möglich');
         return;
     }
 
@@ -2786,7 +2820,6 @@ function handlePlacementClick(event) {
     } else {
         // Visuelles Feedback für ungültigen Klick
         showInvalidClickFeedback(mouseX, mouseY);
-        console.log('❌ Klick außerhalb des erlaubten Bereichs');
     }
 }
 
@@ -3821,6 +3854,10 @@ function completeFoodConsumption(dino) {
     dino.feedingRotationLocked = false;
     dino.changeState(DINO_STATES.IDLE);
     dino.foodTarget = null;
+
+    if (!dino.isAdult && !dino.hasEatenOnce) {
+        dino.hasEatenOnce = true;
+    }
     
     updateHUD(); // HUD mit neuen Nahrungspunkten aktualisieren
 }
@@ -4047,7 +4084,6 @@ function calculateOptimalFeedingPositions(foodSource, dinoPosition) {
 }
 
 function updateFoodConsumingState(dino) {
-    //if(dino.selected){ console.log(`updateFoodConsumingState(dino) ${frame} -- ${dino.state}`);}  
     const currentTime = Date.now();
     const elapsed = (currentTime - dino.consumptionStartTime) / 1000;
 
@@ -4084,7 +4120,6 @@ function updateFoodConsumingState(dino) {
             // Neuen Dash starten
             dino.isConsuming = true;
             dino.consumptionDashStart = Date.now() - (cycleTime * 1000);
-            // console.log(`🦷 ${dino.species.name} macht Konsum-Dash (Zyklus ${Math.floor(elapsed / dashInterval) + 1})`);
             
             // NEU: Blatteffekt bei Bäumen
             if (dino.foodTarget && dino.foodTarget.object.type === 'tree') {
@@ -4111,7 +4146,6 @@ function cleanupOrphanedFoodReservations() {
         const stillConsuming = dino.state === DINO_STATES.CONSUMING;
         
         if (!dinoExists || !stillConsuming) {
-            //// console.log(`🧹 Verwaiste Nahrungsreservierung entfernt: ${sourceId}`);
             toDelete.push(sourceId);
         }
     }
@@ -4351,7 +4385,6 @@ class PregnancyManager {
                 if (pregnancyElapsed >= pregnancyDuration) {
                     // Hier später: Ei legen Logik
                     dino.isPregnant = false;
-                    console.log(`🥚 ${dino.species.name} Schwangerschaft beendet (würde Ei legen)`);
                 }
             }
         });
@@ -4380,7 +4413,6 @@ class PregnancyManager {
     makePregnant(dino) {
         dino.isPregnant = true;
         dino.pregnancyStartTime = Date.now();
-        console.log(`🥚 ${dino.species.name} ist jetzt schwanger! (${dino.isEnemy ? 'Feind' : 'Eigener'})`);
     }
 }
 
@@ -4409,6 +4441,5 @@ document.addEventListener('DOMContentLoaded', initGame);
 document.addEventListener('keydown', (event) => {
     if (event.key === 'd' || event.key === 'D') {
         debugMode = !debugMode;
-        console.log('🐛 Debug-Modus:', debugMode ? 'AN' : 'AUS');
     }
 });
