@@ -1630,7 +1630,7 @@ class Dino {
         }
         
         ctx.restore();
-        if(debugMode && this.selected) {
+        if(!this.selected) {
             ctx.save(); 
             ctx.fillStyle = '#FFFF00';
             ctx.font = '12px Arial';
@@ -1672,7 +1672,49 @@ class Dino {
                                         
             }
                                                         
-            ctx.fillText(`Geschwindgkeit: ${this.getMovementSpeed()}) | state: ${this.state}`, pixelX, pixelY + 90);                       
+            ctx.fillText(`Geschwindgkeit: ${this.getMovementSpeed()}) | state: ${this.state}`, pixelX, pixelY + 90);         
+            
+if (this.state === DINO_STATES.SEEKING_FOOD && this.foodTarget) {
+    // Position der Nahrungsquelle in Pixel umrechnen
+    const foodPixel = PositionUtils.tileToPixel(
+        this.foodTarget.object.tileX, 
+        this.foodTarget.object.tileY, 
+        tileSize, 
+        terrainOffsetX, 
+        terrainOffsetY
+    );
+    
+    // Linie vom Dino zur Nahrungsquelle
+    ctx.strokeStyle = '#ff0800';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(pixelX, pixelY);
+    ctx.lineTo(foodPixel.x, foodPixel.y);
+    ctx.stroke();
+    
+    // Rechteck um die Nahrungsquelle (strokeRect braucht x, y, width, height)
+    ctx.strokeStyle = '#ff0800';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);  // Keine gestrichelte Linie für das Rechteck
+    ctx.strokeRect(
+        foodPixel.x - 20,  // x
+        foodPixel.y - 20,  // y
+        40,                // width
+        40                 // height
+    );
+    
+    // Optional: Kreis um die Nahrungsquelle
+    ctx.beginPath();
+    ctx.arc(foodPixel.x, foodPixel.y, 25, 0, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Info-Text bei der Nahrungsquelle
+    ctx.fillStyle = '#ff0800';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('FOOD', foodPixel.x, foodPixel.y - 30);
+}
             ctx.restore();
         }
     }
@@ -2196,10 +2238,28 @@ class Dino {
             });
             
             if (availableEnemies.length > 0) {
-                this.combatTarget = availableEnemies.reduce((nearest, enemy) => 
-                    PositionUtils.calculateDistance(this, enemy) < PositionUtils.calculateDistance(this, nearest) ? enemy : nearest
-                );
-                this.state = DINO_STATES.SEEKING_ENEMY;
+                // Nur erreichbare Feinde berücksichtigen
+                const reachableEnemies = availableEnemies.filter(enemy => {
+                    const pathCheck = this.checkPathBlocked(
+                        this,
+                        this.tileX,
+                        this.tileY,
+                        enemy.tileX,
+                        enemy.tileY
+                    );
+                    return !pathCheck.blocked;
+                });
+                
+                if (reachableEnemies.length > 0) {
+                    // Nächsten ERREICHBAREN Feind auswählen
+                    this.combatTarget = reachableEnemies.reduce((nearest, enemy) => 
+                        PositionUtils.calculateDistance(this, enemy) < PositionUtils.calculateDistance(this, nearest) ? enemy : nearest
+                    );
+                    this.state = DINO_STATES.SEEKING_ENEMY;
+                } else {
+                    console.log("Keine erreichbaren Feinde gefunden");
+                    // Alle Feinde sind unerreichbar (auf Inseln/im Wasser)
+                }
             }
         } else {
             // Einfache Nahrungssuche - OHNE Konkurrenz-Checks
@@ -2211,11 +2271,26 @@ class Dino {
                     y: this.tileY
                 });
                 
-                this.state = DINO_STATES.SEEKING_FOOD;
-                this.foodTarget = bestFood;
-                this.feedingPosition = feedingPosition;
-                this.seekingStartTime = Date.now();
-                this.lastPosition = null;
+                const pathCheck = this.checkPathBlocked(
+                    this,
+                    this.tileX,
+                    this.tileY,
+                    feedingPosition.x,  // Zur feedingPosition prüfen, nicht zum Food selbst
+                    feedingPosition.y
+                );
+                
+                if (!pathCheck.blocked) {
+                    // Pfad ist frei - können das Ziel ansteuern
+                    this.changeState(DINO_STATES.SEEKING_FOOD);
+                    this.foodTarget = bestFood;
+                    this.feedingPosition = feedingPosition;
+                    this.seekingStartTime = Date.now();
+                    this.lastPosition = null;
+                } else {
+                    // Pfad blockiert - diese Nahrung ignorieren
+                    console.log("Nahrung nicht erreichbar:", bestFood.object.type, "bei", feedingPosition);
+                    this.foodCooldownUntil = Date.now() + 1000; // Kurze Pause
+                }
                 
              } else {
                 // Keine freie Nahrung gefunden - kurze Pause
@@ -3916,16 +3991,6 @@ function updateFoodSeekingState(dino) {
         return;
     }
     
-    // Prüfe ob Nahrungsquelle noch reserviert ist
-    //const reservedBy = occupiedFoodSources.get(dino.foodTarget.sources);
-    /*
-    if (reservedBy !== dino) {
-        console.log(`Dino ${dino} --- reservedby ${reservedBy}`);
-        dino.changeState(DINO_STATES.IDLE);
-        dino.foodTarget = null;
-        return;
-    }*/
-    
     // Timeout
     const seekingTime = (Date.now() - dino.seekingStartTime) / 1000;
     if (seekingTime > 6) {
@@ -3986,7 +4051,6 @@ function updateFoodSeekingState(dino) {
         return;
     }
     
-    // DIREKTE BEWEGUNG zur Nahrung (ohne Kollisionsvermeidung mit anderen Dinos)
     const dx = targetX - dino.tileX;
     const dy = targetY - dino.tileY;
     const moveDistance = Math.sqrt(dx * dx + dy * dy);
