@@ -299,122 +299,215 @@
         // ===================================
         // GEGNER-SLOTS DEFINITION
         // ===================================
-        
+
+
+        // Ur-Gegner Basis (ähnlich wie Spieler Ur-Dinos)
+        const urEnemyBase = {
+            gepanzert: 10, stachelig: 8, farbig: 20, tarnung: 30,
+            kopf_beisskraft: 35, kopf_größe: 45, kopf_hörner_anzahl: 0,
+            kopf_hörner_größe: 0, kragen_größe: 0, maul_zahntyp: 40,
+            hals_länge: 30, hals_breite: 40, körper_länge: 80, körper_höhe: 38,
+            vorderbeine_länge: 60, vorderbeine_stärke: 45, vorderklauen_länge: 20,
+            hinterbeine_länge: 65, hinterbeine_stärke: 50, hinterklauen_länge: 20,
+            schwanz_länge: 70, schwanz_breite: 30, schwanz_keule: 0, schwanz_stacheln: 0,
+            flügel: 0, flossen: 0, fleisch: 35, pflanzen: 35, aas: 35
+        };
+
+        // Funktion für evolutionäre Anpassung
+        function evolveEnemy(baseProps, evolutionStage, specialization) {
+            const props = { ...baseProps };
+            
+            // Basis-Evolution pro Stufe
+            const evolutionBoost = 1 + (evolutionStage * 0.15);
+            
+            // Allgemeine Verbesserungen
+            const generalStats = ['kopf_größe', 'körper_länge', 'körper_höhe', 
+                                'vorderbeine_stärke', 'hinterbeine_stärke'];
+            generalStats.forEach(stat => {
+                props[stat] = Math.min(100, Math.round(props[stat] * evolutionBoost));
+            });
+            
+            // Spezialisierung anwenden
+            switch(specialization) {
+                case 'predator':
+                    // Raubtier-Evolution
+                    props.kopf_beisskraft = Math.min(100, props.kopf_beisskraft + evolutionStage * 15);
+                    props.maul_zahntyp = Math.min(100, props.maul_zahntyp + evolutionStage * 12);
+                    props.vorderklauen_länge = Math.min(100, props.vorderklauen_länge + evolutionStage * 10);
+                    props.hinterklauen_länge = Math.min(100, props.hinterklauen_länge + evolutionStage * 10);
+                    props.fleisch = Math.min(95, props.fleisch + evolutionStage * 15);
+                    props.pflanzen = Math.max(5, props.pflanzen - evolutionStage * 10);
+                    props.hinterbeine_länge = Math.min(100, props.hinterbeine_länge + evolutionStage * 8);
+                    props.tarnung = Math.min(100, props.tarnung + evolutionStage * 5);
+                    break;
+                    
+                case 'herbivore':
+                    // Pflanzenfresser-Evolution
+                    props.gepanzert = Math.min(100, props.gepanzert + evolutionStage * 12);
+                    props.kopf_hörner_anzahl = Math.min(3, Math.floor(evolutionStage / 2));
+                    props.kopf_hörner_größe = Math.min(100, evolutionStage * 15);
+                    props.kragen_größe = Math.min(100, evolutionStage * 18);
+                    props.schwanz_keule = Math.min(100, evolutionStage * 15);
+                    props.pflanzen = Math.min(95, props.pflanzen + evolutionStage * 15);
+                    props.fleisch = Math.max(5, props.fleisch - evolutionStage * 10);
+                    props.körper_höhe = Math.min(100, props.körper_höhe + evolutionStage * 10);
+                    break;
+                    
+                case 'defender':
+                    // Verteidiger-Evolution
+                    props.gepanzert = Math.min(100, props.gepanzert + evolutionStage * 18);
+                    props.stachelig = Math.min(100, props.stachelig + evolutionStage * 15);
+                    props.schwanz_stacheln = Math.min(100, evolutionStage * 20);
+                    props.kragen_größe = Math.min(100, evolutionStage * 12);
+                    props.körper_breite = Math.min(100, props.körper_breite + evolutionStage * 8);
+                    break;
+                    
+                case 'aerial':
+                    // Flug-Evolution (ab Level 4)
+                    if (evolutionStage >= 3) {
+                        props.flügel = Math.min(100, (evolutionStage - 2) * 30);
+                        props.körper_höhe = Math.max(30, props.körper_höhe - 10);
+                        props.vorderbeine_länge = Math.min(100, props.vorderbeine_länge + 15);
+                    }
+                    break;
+                    
+                case 'aquatic':
+                    // Wasser-Evolution (ab Level 4)
+                    if (evolutionStage >= 3) {
+                        props.flossen = Math.min(100, (evolutionStage - 2) * 30);
+                        props.körper_länge = Math.min(100, props.körper_länge + 15);
+                        props.schwanz_länge = Math.min(100, props.schwanz_länge + 10);
+                    }
+                    break;
+                    
+                case 'apex':
+                    // Apex-Predator (ab Level 5)
+                    if (evolutionStage >= 4) {
+                        // T-Rex ähnliche Evolution
+                        props.kopf_beisskraft = Math.min(100, 70 + evolutionStage * 6);
+                        props.kopf_größe = Math.min(100, 60 + evolutionStage * 8);
+                        props.maul_zahntyp = Math.min(100, 70 + evolutionStage * 6);
+                        props.hinterbeine_stärke = Math.min(100, 70 + evolutionStage * 5);
+                        props.vorderbeine_länge = Math.max(20, 50 - evolutionStage * 6); // Kleine Arme
+                    }
+                    break;
+            }
+            
+            return props;
+        }
+
         const ENEMY_SLOTS = [
-            // Level 1 Gegner (bestehend)
+            // Level 1 - Ur-Dinos mit leichter Varianz
             {
-                name: "Kleine Räuber", level: 1,
-                properties: {
-                    gepanzert: 5, stachelig: 0, farbig: 15, tarnung: 25,
-                    kopf_beisskraft: 35, kopf_größe: 40, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 0,
-                    maul_zahntyp: 45, hals_länge: 20, hals_breite: 30, körper_länge: 50, körper_höhe: 35,
-                    vorderbeine_länge: 25, vorderbeine_stärke: 20, vorderklauen_länge: 30,
-                    hinterbeine_länge: 60, hinterbeine_stärke: 45, hinterklauen_länge: 40,
-                    schwanz_länge: 45, schwanz_breite: 25, schwanz_keule: 0, schwanz_stacheln: 0,
-                    flügel: 0, flossen: 0, fleisch: 70, pflanzen: 5, aas: 40
-                }
+                name: "Ur-Jäger", 
+                level: 1,
+                properties: evolveEnemy(urEnemyBase, 0, 'predator')
             },
             {
-                name: "Stachel-Verteidiger", level: 2,
-                properties: {
-                    gepanzert: 25, stachelig: 35, farbig: 10, tarnung: 20,
-                    kopf_beisskraft: 25, kopf_größe: 50, kopf_hörner_anzahl: 1, kopf_hörner_größe: 25, kragen_größe: 30,
-                    maul_zahntyp: 20, hals_länge: 35, hals_breite: 40, körper_länge: 70, körper_höhe: 60,
-                    vorderbeine_länge: 55, vorderbeine_stärke: 45, vorderklauen_länge: 15,
-                    hinterbeine_länge: 60, hinterbeine_stärke: 55, hinterklauen_länge: 20,
-                    schwanz_länge: 55, schwanz_breite: 45, schwanz_keule: 0, schwanz_stacheln: 40,
-                    flügel: 0, flossen: 0, fleisch: 15, pflanzen: 75, aas: 20
-                }
+                name: "Ur-Sammler", 
+                level: 1,
+                properties: evolveEnemy(urEnemyBase, 0, 'herbivore')
             },
-            // Level 2+ Gegner (NEU)
+            
+            // Level 2 - Erste Evolution
             {
-                name: "Panzer-Gigant", level: 2,
-                properties: {
-                    gepanzert: 60, stachelig: 25, farbig: 10, tarnung: 15,
-                    kopf_beisskraft: 50, kopf_größe: 75, kopf_hörner_anzahl: 2, kopf_hörner_größe: 45, kragen_größe: 60,
-                    maul_zahntyp: 35, hals_länge: 30, hals_breite: 65, körper_länge: 90, körper_höhe: 80,
-                    vorderbeine_länge: 70, vorderbeine_stärke: 75, vorderklauen_länge: 20,
-                    hinterbeine_länge: 75, hinterbeine_stärke: 85, hinterklauen_länge: 25,
-                    schwanz_länge: 65, schwanz_breite: 70, schwanz_keule: 70, schwanz_stacheln: 0,
-                    flügel: 0, flossen: 0, fleisch: 20, pflanzen: 85, aas: 30
-                }
-            },
-            // Level 3+ Gegner
-            {
-                name: "Gift-Assassine", level: 3,
-                properties: {
-                    gepanzert: 20, stachelig: 15, farbig: 80, tarnung: 55,
-                    kopf_beisskraft: 65, kopf_größe: 60, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 20,
-                    maul_zahntyp: 85, hals_länge: 45, hals_breite: 40, körper_länge: 65, körper_höhe: 50,
-                    vorderbeine_länge: 45, vorderbeine_stärke: 40, vorderklauen_länge: 60,
-                    hinterbeine_länge: 75, hinterbeine_stärke: 60, hinterklauen_länge: 75,
-                    schwanz_länge: 55, schwanz_breite: 40, schwanz_keule: 0, schwanz_stacheln: 25,
-                    flügel: 0, flossen: 0, fleisch: 75, pflanzen: 20, aas: 80
-                }
+                name: "Proto-Räuber", 
+                level: 2,
+                properties: evolveEnemy(urEnemyBase, 1, 'predator')
             },
             {
-                name: "Sichelklauen-Jäger", level: 3,
-                properties: {
-                    gepanzert: 15, stachelig: 10, farbig: 35, tarnung: 65,
-                    kopf_beisskraft: 75, kopf_größe: 70, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 15,
-                    maul_zahntyp: 80, hals_länge: 25, hals_breite: 50, körper_länge: 70, körper_höhe: 55,
-                    vorderbeine_länge: 35, vorderbeine_stärke: 50, vorderklauen_länge: 70,
-                    hinterbeine_länge: 85, hinterbeine_stärke: 75, hinterklauen_länge: 95,
-                    schwanz_länge: 60, schwanz_breite: 45, schwanz_keule: 0, schwanz_stacheln: 0,
-                    flügel: 0, flossen: 0, fleisch: 85, pflanzen: 5, aas: 75
-                }
+                name: "Früh-Verteidiger", 
+                level: 2,
+                properties: evolveEnemy(urEnemyBase, 1, 'defender')
             },
-            // Level 4+ Gegner
+            
+            // Level 3 - Mittlere Evolution
             {
-                name: "Flug-Terror", level: 4,
-                properties: {
-                    gepanzert: 25, stachelig: 15, farbig: 50, tarnung: 40,
-                    kopf_beisskraft: 70, kopf_größe: 65, kopf_hörner_anzahl: 1, kopf_hörner_größe: 35, kragen_größe: 20,
-                    maul_zahntyp: 75, hals_länge: 40, hals_breite: 45, körper_länge: 75, körper_höhe: 60,
-                    vorderbeine_länge: 50, vorderbeine_stärke: 45, vorderklauen_länge: 80,
-                    hinterbeine_länge: 80, hinterbeine_stärke: 70, hinterklauen_länge: 85,
-                    schwanz_länge: 65, schwanz_breite: 50, schwanz_keule: 0, schwanz_stacheln: 30,
-                    flügel: 80, flossen: 0, fleisch: 80, pflanzen: 10, aas: 70
-                }
+                name: "Sichelklauen-Jäger", 
+                level: 3,
+                properties: evolveEnemy(urEnemyBase, 2, 'predator')
             },
             {
-                name: "Wasser-Titan", level: 4,
-                properties: {
-                    gepanzert: 40, stachelig: 20, farbig: 30, tarnung: 45,
-                    kopf_beisskraft: 80, kopf_größe: 85, kopf_hörner_anzahl: 0, kopf_hörner_größe: 0, kragen_größe: 40,
-                    maul_zahntyp: 85, hals_länge: 60, hals_breite: 70, körper_länge: 95, körper_höhe: 75,
-                    vorderbeine_länge: 60, vorderbeine_stärke: 65, vorderklauen_länge: 40,
-                    hinterbeine_länge: 80, hinterbeine_stärke: 80, hinterklauen_länge: 50,
-                    schwanz_länge: 85, schwanz_breite: 75, schwanz_keule: 0, schwanz_stacheln: 0,
-                    flügel: 0, flossen: 85, fleisch: 70, pflanzen: 40, aas: 60
-                }
-            },
-            // Level 5+ Gegner (Endgame)
-            {
-                name: "Alpha-Zerstörer", level: 5,
-                properties: {
-                    gepanzert: 50, stachelig: 40, farbig: 40, tarnung: 60,
-                    kopf_beisskraft: 95, kopf_größe: 90, kopf_hörner_anzahl: 3, kopf_hörner_größe: 60, kragen_größe: 35,
-                    maul_zahntyp: 95, hals_länge: 35, hals_breite: 75, körper_länge: 85, körper_höhe: 85,
-                    vorderbeine_länge: 45, vorderbeine_stärke: 55, vorderklauen_länge: 90,
-                    hinterbeine_länge: 90, hinterbeine_stärke: 95, hinterklauen_länge: 100,
-                    schwanz_länge: 80, schwanz_breite: 60, schwanz_keule: 0, schwanz_stacheln: 50,
-                    flügel: 0, flossen: 0, fleisch: 95, pflanzen: 5, aas: 85
-                }
+                name: "Panzer-Pflanzenfresser", 
+                level: 3,
+                properties: evolveEnemy(urEnemyBase, 2, 'herbivore')
             },
             {
-                name: "Ultimativer Räuber", level: 6,
-                properties: {
-                    gepanzert: 45, stachelig: 35, farbig: 60, tarnung: 70,
-                    kopf_beisskraft: 100, kopf_größe: 95, kopf_hörner_anzahl: 2, kopf_hörner_größe: 50, kragen_größe: 40,
-                    maul_zahntyp: 100, hals_länge: 40, hals_breite: 80, körper_länge: 90, körper_höhe: 80,
-                    vorderbeine_länge: 50, vorderbeine_stärke: 60, vorderklauen_länge: 95,
-                    hinterbeine_länge: 95, hinterbeine_stärke: 100, hinterklauen_länge: 100,
-                    schwanz_länge: 85, schwanz_breite: 65, schwanz_keule: 40, schwanz_stacheln: 60,
-                    flügel: 60, flossen: 0, fleisch: 100, pflanzen: 0, aas: 90
-                }
+                name: "Stachel-Verteidiger", 
+                level: 3,
+                properties: evolveEnemy(urEnemyBase, 2, 'defender')
+            },
+            
+            // Level 4 - Fortgeschrittene Evolution
+            {
+                name: "Flug-Jäger", 
+                level: 4,
+                properties: evolveEnemy(urEnemyBase, 3, 'aerial')
+            },
+            {
+                name: "Wasser-Räuber", 
+                level: 4,
+                properties: evolveEnemy(urEnemyBase, 3, 'aquatic')
+            },
+            {
+                name: "Gehörnter Titan", 
+                level: 4,
+                properties: evolveEnemy(urEnemyBase, 3, 'herbivore')
+            },
+            
+            // Level 5 - Fast vollständige Evolution
+            {
+                name: "Proto-Rex", 
+                level: 5,
+                properties: evolveEnemy(urEnemyBase, 4, 'apex')
+            },
+            {
+                name: "Langhals-Riese", 
+                level: 5,
+                properties: (() => {
+                    const props = evolveEnemy(urEnemyBase, 4, 'herbivore');
+                    props.hals_länge = 85;
+                    props.körper_höhe = 90;
+                    props.körper_länge = 95;
+                    return props;
+                })()
+            },
+            
+            // Level 6+ - Voll entwickelte Apex-Predatoren
+            {
+                name: "Tyranno-Rex", 
+                level: 6,
+                properties: evolveEnemy(urEnemyBase, 5, 'apex')
+            },
+            {
+                name: "Mega-Brachiosaurus", 
+                level: 6,
+                properties: (() => {
+                    const props = evolveEnemy(urEnemyBase, 5, 'herbivore');
+                    props.hals_länge = 95;
+                    props.körper_höhe = 95;
+                    props.körper_länge = 100;
+                    props.vorderbeine_länge = 85;
+                    return props;
+                })()
+            },
+            {
+                name: "Ultimate Predator", 
+                level: 7,
+                properties: evolveEnemy(urEnemyBase, 6, 'apex')
             }
         ];
+
+        // Optional: Zufällige Varianz für mehr Abwechslung
+        ENEMY_SLOTS.forEach(enemy => {
+            // Kleine zufällige Varianz (±5) für einige Eigenschaften
+            const varyProps = ['gepanzert', 'farbig', 'tarnung', 'kopf_größe'];
+            varyProps.forEach(prop => {
+                const variance = Math.floor(Math.random() * 11) - 5; // -5 bis +5
+                enemy.properties[prop] = Math.max(0, Math.min(100, enemy.properties[prop] + variance));
+            });
+        });
+
 
         // ===================================
         // DATEN LADEN

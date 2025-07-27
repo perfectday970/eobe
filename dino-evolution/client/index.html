@@ -628,6 +628,31 @@
                 grid-column: span 2;
             }
         }
+        .test-mode-toggle {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 1px solid #333;
+        }
+
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            color: #fff;
+        }
+
+        .toggle-label input[type="checkbox"] {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .toggle-text {
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -661,6 +686,13 @@
                 <div class="status-message" id="statusMessage"></div>
             </div>
         </div>
+    </div>
+
+    <div class="test-mode-toggle">
+        <label class="toggle-label">
+            <input type="checkbox" id="testModeToggle" onchange="toggleTestMode()">
+            <span class="toggle-text">Test-Modus (Entwickelte Dinos)</span>
+        </label>
     </div>
 
     <div class="container">
@@ -773,6 +805,99 @@
                 }
             }
         ];
+
+        // Ur-Dino Basis-Konfiguration (vierbeinig, flach wie Krokodil)
+        const urDinoBase = {
+            gepanzert: 15, stachelig: 5, farbig: 25, tarnung: 35,
+            kopf_beisskraft: 40, kopf_größe: 50, kopf_hörner_anzahl: 0,
+            kopf_hörner_größe: 0, kragen_größe: 0, maul_zahntyp: 45,
+            hals_länge: 25, hals_breite: 45, körper_länge: 85, körper_höhe: 40,
+            vorderbeine_länge: 65, vorderbeine_stärke: 50, vorderklauen_länge: 25,
+            hinterbeine_länge: 70, hinterbeine_stärke: 55, hinterklauen_länge: 25,
+            schwanz_länge: 75, schwanz_breite: 35, schwanz_keule: 0, schwanz_stacheln: 0,
+            flügel: 0, flossen: 0, fleisch: 40, pflanzen: 40, aas: 30
+        };
+        
+        function createUrDinoWithVariance(name) {
+            const variance = 10; // ±10 Punkte Varianz
+            const props = { ...urDinoBase };
+            
+            // Zufällige Varianz für wichtige Eigenschaften
+            const varyProps = [
+                'gepanzert', 'kopf_beisskraft', 'kopf_größe', 'körper_länge', 
+                'körper_höhe', 'vorderbeine_länge', 'hinterbeine_länge', 
+                'vorderklauen_länge', 'hinterklauen_länge', 'schwanz_länge',
+                'hals_länge', 'maul_zahntyp', 'farbig', 'tarnung'
+            ];
+            
+            varyProps.forEach(prop => {
+                const baseValue = props[prop];
+                const variation = Math.floor(Math.random() * variance * 2) - variance;
+                props[prop] = Math.max(0, Math.min(100, baseValue + variation));
+            });
+            
+            // Ernährung mit größerer Varianz (±15)
+            const foodVariance = 15;
+            ['fleisch', 'pflanzen', 'aas'].forEach(prop => {
+                const baseValue = props[prop];
+                const variation = Math.floor(Math.random() * foodVariance * 2) - foodVariance;
+                props[prop] = Math.max(5, Math.min(95, baseValue + variation));
+            });
+            
+            // Ernährung normalisieren (sollte zusammen ~110 ergeben)
+            const totalFood = props.fleisch + props.pflanzen + props.aas;
+            if (totalFood > 0) {
+                const factor = 110 / totalFood;
+                props.fleisch = Math.round(props.fleisch * factor);
+                props.pflanzen = Math.round(props.pflanzen * factor);
+                props.aas = Math.round(props.aas * factor);
+            }
+            
+            return { name, properties: props };
+        }
+
+        // Ur-Dino Slots mit Zufallsvarianz
+        const urDinoSlots = [
+            createUrDinoWithVariance("Ur-Dino Alpha"),
+            createUrDinoWithVariance("Ur-Dino Beta"),
+            createUrDinoWithVariance("Ur-Dino Gamma")
+        ];
+
+        let testMode = false;
+
+        let developedDinoSlots;
+
+
+
+        function toggleTestMode() {
+            testMode = document.getElementById('testModeToggle').checked;
+            
+            // Dino-Slots wechseln - KORRIGIERTE LOGIK
+            if (testMode) {
+                // Test-Modus: Entwickelte Dinos laden
+                dinoSlots.forEach((slot, index) => {
+                    Object.assign(slot.properties, developedDinoSlots[index].properties);
+                    slot.name = developedDinoSlots[index].name;
+                });
+            } else {
+                // Standard-Modus: Ur-Dinos laden
+                dinoSlots.forEach((slot, index) => {
+                    Object.assign(slot.properties, urDinoSlots[index].properties);
+                    slot.name = urDinoSlots[index].name;
+                });
+            }
+            
+            // Display aktualisieren
+            updateDisplay();
+            renderDino(); // Animation neu starten
+            
+            // Status-Meldung anzeigen
+            showStatus(
+                testMode ? 'Test-Modus aktiviert: Entwickelte Dinos' : 'Standard-Modus: Ur-Dinos',
+                'info'
+            );
+        }
+
 
         // ===================================
         // API-FUNKTIONEN
@@ -1447,6 +1572,19 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Dino Evolution Generator gestartet');
+            
+            developedDinoSlots = dinoSlots.map(slot => ({
+                name: slot.name,
+                properties: { ...slot.properties }
+            }));
+    
+            
+            // Dann Ur-Dinos als Standard laden
+            dinoSlots.forEach((slot, index) => {
+                slot.name = urDinoSlots[index].name;
+                slot.properties = { ...urDinoSlots[index].properties };
+            });
+            
             processUrlParameters();
             updateDisplay();
             startAnimation();

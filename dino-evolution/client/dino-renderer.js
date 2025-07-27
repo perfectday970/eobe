@@ -556,27 +556,17 @@ class DinoRenderer {
     getDinoColor(properties, isEnemy = false) {
         const baseColors = this.colorPalettes.braun;
         
-        if (isEnemy) {
-            // Feinde bekommen rote Farbtöne
-            if (properties.farbig > 75) {
-                return '#8B0000'; // Dunkelrot für Warnfarben
-            } else if (properties.tarnung > 60) {
-                return '#8B0000'; // Alle Feinde rot
-            } else if (properties.farbig > 40) {
-                return '#DC143C'; // Heller rot
-            }
-            return '#8B0000'; // Standard-Feind-rot
-        } else {
-            // Normale Farblogik
-            if (properties.farbig > 75) {
-                return this.colorPalettes.rot[1]; // Warnfarben
-            } else if (properties.tarnung > 60) {
-                return this.colorPalettes.grün[0]; // Tarnfarben
-            } else if (properties.farbig > 40) {
-                return baseColors[2]; // Heller
-            }
-            return baseColors[1]; // Standard braun
+        // ENTFERNT: Spezielle Farben für Feinde
+        // Alle Dinos verwenden die gleiche Farblogik
+        
+        if (properties.farbig > 75) {
+            return this.colorPalettes.rot[1]; // Warnfarben
+        } else if (properties.tarnung > 60) {
+            return this.colorPalettes.grün[0]; // Tarnfarben
+        } else if (properties.farbig > 40) {
+            return baseColors[2]; // Heller
         }
+        return baseColors[1]; // Standard braun
     }
 
     /**

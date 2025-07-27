@@ -3546,15 +3546,21 @@ function renderCombatUI(dino) {
     const barHeight = 3;               // Dünner (3 statt 4)
     const barSpacing = 2;              // Sehr eng (2 statt 3)
     
-    // Startposition noch höher
     const startY = pixelY - 80 * dino.scale;
     
     // HP-Balken
     ctx.fillStyle = '#333333';
     ctx.fillRect(pixelX - barWidth/2, startY, barWidth, barHeight);
-    ctx.fillStyle = '#FF0000';
-    ctx.fillRect(pixelX - barWidth/2, startY, barWidth * (dino.currentHP/dino.maxHP), barHeight);
     
+    // Farbe abhängig von Fraktion
+    if (dino.isEnemy) {
+        ctx.fillStyle = '#FF0000'; // Rot für Feinde
+    } else {
+        ctx.fillStyle = '#00FF00'; // Grün für eigene Dinos
+    }
+
+    ctx.fillRect(pixelX - barWidth/2, startY, barWidth * (dino.currentHP / dino.maxHP), barHeight);
+
     // Stamina-Balken
     const staminaY = startY + barHeight + barSpacing;
     ctx.fillStyle = '#333333';
@@ -4278,35 +4284,50 @@ function updateHUD() {
     const ownDinos = gameObjects.filter(obj => obj instanceof Dino && !obj.isEnemy);
     const enemyDinos = gameObjects.filter(obj => obj instanceof Dino && obj.isEnemy);
     
+    // Eigene Dino-Arten anzeigen
     levelData.populationData.forEach(species => {
         const ownCount = ownDinos.filter(d => d.species.name === species.name).length;
-        const enemyCount = enemyDinos.filter(d => d.species && d.species.name === species.name).length || 0;
         const pregnantCount = ownDinos.filter(d => d.species.name === species.name && d.isPregnant).length;
+        
         html += `
             <div class="species-status">
                 <span class="species-name">${species.name}:</span>
                 <span class="population-count">Eigene: ${ownCount}</span>
                 ${pregnantCount > 0 ? `<span style="color: #FFB6C1;"> (${pregnantCount}🥚)</span>` : ''}
-                | <span style="color: #ff6b35;">Feinde: ${enemyCount}</span>
             </div>
         `;
-
-
-        html += `
-            <div class="species-status">
-                <span class="species-name">${species.name}:</span>
-                <span class="population-count">Eigene: ${ownCount}</span> | 
-                <span style="color: #ff6b35;">Feinde: ${enemyCount}</span>
-            </div>
-        `;
+    });
+    
+    // Feind-Arten separat anzeigen (wenn vorhanden)
+    if (levelData.enemyData && levelData.enemyData.length > 0) {
+        html += `<div style="border-top: 1px solid #8b4513; margin: 5px 0;"></div>`;
+        
+        // Gruppiere Feinde nach Art
+        const enemyCountBySpecies = {};
+        enemyDinos.forEach(dino => {
+            const name = dino.species.name;
+            enemyCountBySpecies[name] = (enemyCountBySpecies[name] || 0) + 1;
         });
-        html += `
-            <div class="species-status" style="border-top: 1px solid #8b4513; margin-top: 10px; padding-top: 10px;">
-                <span style="color: #32cd32; font-weight: bold;">
-                    🌿 Pflanzen: ${teamFood.plants} | 🥩 Fleisch: ${teamFood.meat}
-                </span>
-            </div>
-        `;
+        
+        // Zeige alle Feind-Arten
+        Object.entries(enemyCountBySpecies).forEach(([name, count]) => {
+            html += `
+                <div class="species-status">
+                    <span class="species-name" style="color: #ff6b35;">⚔️ ${name}:</span>
+                    <span class="population-count" style="color: #ff6b35;">Feinde: ${count}</span>
+                </div>
+            `;
+        });
+    }
+    
+    // Nahrungsanzeige
+    html += `
+        <div class="species-status" style="border-top: 1px solid #8b4513; margin-top: 10px; padding-top: 10px;">
+            <span style="color: #32cd32; font-weight: bold;">
+                🌿 Pflanzen: ${teamFood.plants} | 🥩 Fleisch: ${teamFood.meat}
+            </span>
+        </div>
+    `;
 
     statusContainer.innerHTML = html;
 }
