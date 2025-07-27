@@ -83,7 +83,8 @@ let occupiedFoodSources = new Map();
 const FOOD_CONSUMPTION_DISTANCES = {
     'tree': 1.2,     // Bäume: Etwas weiter weg (große Objekte)
     'rodent': 0.6,   // Nagetiere: Sehr nah (kleine Objekte)
-    'corpse': 0.8    // Leichen: Mittel nah
+    'corpse': 0.8,    // Leichen: Mittel nah
+    'cactus': 1.0
 };
 
 const FOOD_CONFIG = {
@@ -2415,6 +2416,31 @@ class Dino {
             bottom: tileY + boxHeightInTiles / 2 + verticalOffset
         };
     }
+
+    createFlowerPregnancyEffect() {
+        // Herz-Partikel für magische Schwangerschaft
+        const particleCount = 5;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = {
+                x: this.tileX * tileSize + tileSize / 2 + terrainOffsetX,
+                y: this.tileY * tileSize + terrainOffsetY,
+                vx: (Math.random() - 0.5) * 40,
+                vy: -50 - Math.random() * 30,
+                life: 1.0,
+                maxLife: 1.5,
+                size: 6,
+                type: 'heart',
+                color: '#FF69B4' // Pink
+            };
+            
+            // Füge zu einer globalen Partikel-Liste hinzu (muss erstellt werden)
+            if (typeof flowerParticles === 'undefined') {
+                window.flowerParticles = [];
+            }
+            flowerParticles.push(particle);
+        }
+    }
 }
 
 
@@ -3555,6 +3581,23 @@ function findFoodSourcesInRange(dino) {
                 });
             }
         }
+
+        if (obj.type === 'cactus' && obj.hasFlower && dino.canConsumePlants) {
+            const sourceId = `cactus_${obj.tileX}_${obj.tileY}`;
+            
+            // Nur wenn nicht bereits konsumiert oder besetzt
+            if (!consumedFoodSources.has(sourceId) && !occupiedFoodSources.has(sourceId)) {
+                sources.push({
+                    object: obj,
+                    type: 'plants',
+                    value: 1, // Sehr wenig Nahrung
+                    distance: distance,
+                    sourceId: sourceId,
+                    consumeType: 'cactus_flower', // Spezieller Typ
+                    preference: dino.foodPreferences.plants
+                });
+            }
+        }
         
         // Nagetiere (Fleisch) - NUR WENN NICHT RESERVIERT
         if (obj.type === 'rodent' && dino.canConsumeMeat) {
@@ -3693,6 +3736,27 @@ function completeFoodConsumption(dino) {
         teamFood.meat += finalValue;
     }
 
+    if (foodSource.consumeType === 'cactus_flower') {
+        // Kakteen-Blüte macht sofort schwanger!
+        if (dino.isAdult && !dino.isPregnant && dino.abilities['Fortpflanzungsgeschwindigkeit'] > 0) {
+            // Zeige zuerst Pflanzen-Icon für Nahrung
+            showFoodIcon(dino, foodSource.type, finalValue);
+            
+            // Nach 0.8 Sekunden zeige Herz-Icon für Schwangerschaft
+            setTimeout(() => {
+                showFoodIcon(dino, 'love', '💕');
+                pregnancyManager.makePregnant(dino);
+            }, 500);
+        }
+        
+        // Blüte verschwindet
+        foodSource.object.hasFlower = false;
+        consumedFoodSources.add(foodSource.sourceId);
+    } else {
+        // Normale Nahrung - nur ein Icon
+        showFoodIcon(dino, foodSource.type, finalValue);
+    }
+
     // NEU: Individuelle Nahrungspunkte für Gesättigt-Boost tracken
     dino.totalFoodConsumed += finalValue;
  
@@ -3780,21 +3844,22 @@ function interruptFoodConsumption(dino, reason = 'unknown') {
     dino.consumptionStartTime = 0;
 }
 
-// Food Icon anzeigen (ähnlich wie Attack Icons)
 function showFoodIcon(dino, foodType, value) {
+    // Zähle existierende Icons für diesen Dino
+    const existingIcons = foodIcons.filter(icon => icon.dino === dino).length;
+    
     const icon = {
         dino: dino,
         type: foodType,
-        symbol: FOOD_CONFIG.FOOD_ICONS[foodType],
-        value: value,
+        symbol: foodType === 'love' ? '💕' : FOOD_CONFIG.FOOD_ICONS[foodType],
+        value: foodType === 'love' ? '' : value, // Kein Wert bei Herz
         startTime: Date.now(),
-        duration: 1500, // 1.5 Sekunden
-        offsetY: 0
+        duration: 1500,
+        offsetY: existingIcons * -25 // Versetzt Icons nach oben wenn mehrere da sind
     };
     
     foodIcons.push(icon);
     
-    // Icon nach 1.5 Sekunden entfernen
     setTimeout(() => {
         const index = foodIcons.indexOf(icon);
         if (index > -1) {
@@ -3861,6 +3926,7 @@ function updateFoodSeekingState(dino) {
     // Erforderliche Distanz
     let requiredDistance;
     if (targetObj.type === 'tree') requiredDistance = 0.1;
+    else if (targetObj.type === 'cactus') requiredDistance = 0.1;
     else if (targetObj.type === 'rodent') requiredDistance = 0.1;   
     else if (targetObj.deathTime) requiredDistance = 0.1;
     else requiredDistance = 0.1;
@@ -4308,7 +4374,7 @@ class PregnancyManager {
         // Lineare Skalierung von 10% bei Wert 50 bis 100% bei Wert 100
         const normalizedValue = (reproductionValue - PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE) / 
                                (100 - PREGNANCY_CONFIG.MIN_REPRODUCTION_VALUE);
-        return 0.8 + (normalizedValue * 0.9);
+        return 0.8 + (normalizedValue * 0.3);
     }
 
     makePregnant(dino) {

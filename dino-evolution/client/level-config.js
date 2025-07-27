@@ -98,7 +98,29 @@ class EnvironmentObject {
             this.crownHeight = this.baseCrownHeight;
             
             this.treeSeed = Math.floor(tileX * 123 + tileY * 456);
-        } else if (type === 'rock') {
+        }else if (type === 'cactus') {
+            // Basis-Größen (wie bei Bäumen!)
+            this.baseSize = (Math.random() * 15 + 10) * 0.448;
+            this.size = this.baseSize;
+            
+            // WICHTIG: Basis-Dimensionen definieren
+            this.baseTrunkWidth = this.baseSize * 0.4;
+            this.baseTrunkHeight = this.baseSize * 1.5;
+            
+            // Aktuelle Dimensionen (werden bei updateScale gesetzt)
+            this.trunkWidth = this.baseTrunkWidth;
+            this.trunkHeight = this.baseTrunkHeight;
+            
+            // Blüten-Eigenschaften
+            this.hasFlower = Math.random() < 0.3;
+            this.flowerColor = options.flowerColor || '#FF69B4';
+            
+            // Zufalls-Seed für konsistente Details
+            this.cactusSeed = Math.floor(Math.random() * 1000);
+
+            this.flowerRegrowTime = 120.0; // 2 Minuten bis neue Blüte wächst
+            this.timeSinceFlowerEaten = 0;
+        }else if (type === 'rock') {
             this.rockType = options.rockType || 'medium';
             this.isGroupLeader = options.isGroupLeader || false;
             this.groupIndex = options.groupIndex || 0;
@@ -152,6 +174,9 @@ class EnvironmentObject {
         } else if (this.type === 'rock') {
             this.width = this.baseWidth * scaleFactor;
             this.height = this.baseHeight * scaleFactor;
+        } else if (this.type === 'cactus') {
+            this.trunkWidth = this.baseTrunkWidth * scaleFactor;
+            this.trunkHeight = this.baseTrunkHeight * scaleFactor;
         }
     }
 
@@ -171,7 +196,9 @@ class EnvironmentObject {
             case 'tree':
                 this.renderDetailedTree();
                 break;
-                
+            case 'cactus':
+                this.renderCactus(ctx);
+                break;              
             case 'rock':
                 this.renderDetailedRock();
                 break;
@@ -223,6 +250,104 @@ class EnvironmentObject {
         }
         
         ctx.restore();
+    }
+
+       renderCactus() {
+        const scale = tileSize / baseTileSize;
+        
+        // Schatten auf dem Boden
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.trunkWidth * 0.7, this.trunkWidth * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Position ist jetzt relativ zu (0,0) wegen translate in render()
+        const trunkX = -this.trunkWidth / 2;
+        const trunkY = -this.trunkHeight;
+        
+        // Basis-Farbe
+        ctx.fillStyle = '#2B5F2B';
+        ctx.fillRect(trunkX, trunkY, this.trunkWidth, this.trunkHeight);
+        
+        // Schatten (skaliert mit scale)
+        const shadowSize = Math.max(1, Math.floor(2 * scale));
+        ctx.fillStyle = '#1A3F1A';
+        ctx.fillRect(trunkX + this.trunkWidth - shadowSize, trunkY, shadowSize, this.trunkHeight);
+        ctx.fillRect(trunkX, trunkY + this.trunkHeight - shadowSize, this.trunkWidth, shadowSize);
+        
+        // Highlight
+        ctx.fillStyle = '#3B7F3B';
+        ctx.fillRect(trunkX, trunkY, shadowSize, this.trunkHeight);
+        ctx.fillRect(trunkX, trunkY, this.trunkWidth, shadowSize);
+        
+        // Vertikale Rillen
+        ctx.fillStyle = '#1A3F1A';
+        const grooveCount = Math.max(2, Math.floor(this.trunkWidth / (4 * scale)));
+        for (let i = 1; i < grooveCount; i++) {
+            const grooveX = trunkX + i * (this.trunkWidth / grooveCount);
+            ctx.fillRect(grooveX, trunkY + 2 * scale, 1 * scale, this.trunkHeight - 4 * scale);
+        }
+        
+        // Stacheln
+        ctx.fillStyle = '#F5F5DC';
+        const spineRows = Math.max(3, Math.floor(this.trunkHeight / (6 * scale)));
+        for (let row = 0; row < spineRows; row++) {
+            const y = trunkY + 3 * scale + row * (this.trunkHeight - 6 * scale) / spineRows;
+            
+            ctx.fillRect(trunkX - 1 * scale, y, 1 * scale, 1 * scale);
+            ctx.fillRect(trunkX + this.trunkWidth, y, 1 * scale, 1 * scale);
+        }
+        
+        // Seitenarme (skalieren auch mit)
+        if (this.baseSize > 12) {
+            const armWidth = this.trunkWidth * 0.7;
+            const armHeight = this.trunkHeight * 0.3;
+            
+            // Linker Arm
+            const leftArmX = -this.trunkWidth * 1.2;
+            const leftArmY = -this.trunkHeight * 0.6;
+            
+            ctx.fillStyle = '#2B5F2B';
+            ctx.fillRect(leftArmX, leftArmY, armWidth, armHeight);
+            
+            ctx.fillStyle = '#1A3F1A';
+            ctx.fillRect(leftArmX + armWidth - shadowSize, leftArmY, shadowSize, armHeight);
+            ctx.fillRect(leftArmX, leftArmY + armHeight - shadowSize, armWidth, shadowSize);
+            
+            ctx.fillStyle = '#3B7F3B';
+            ctx.fillRect(leftArmX, leftArmY, shadowSize, armHeight);
+            
+            // Rechter Arm
+            const rightArmX = this.trunkWidth * 0.5;
+            const rightArmY = -this.trunkHeight * 0.7;
+            
+            ctx.fillStyle = '#2B5F2B';
+            ctx.fillRect(rightArmX, rightArmY, armWidth, armHeight);
+            
+            ctx.fillStyle = '#1A3F1A';
+            ctx.fillRect(rightArmX + armWidth - shadowSize, rightArmY, shadowSize, armHeight);
+            
+            ctx.fillStyle = '#3B7F3B';
+            ctx.fillRect(rightArmX, rightArmY, shadowSize, armHeight);
+        }
+        
+        // Blüte
+        if (this.hasFlower) {
+            const flowerY = trunkY - 4 * scale;
+            const flowerSize = 6 * scale;
+            
+            // Blüten-Basis
+            ctx.fillStyle = this.flowerColor;
+            ctx.fillRect(-flowerSize/2, flowerY - flowerSize, flowerSize, flowerSize);
+            
+            // Blütenblätter
+            ctx.fillRect(-flowerSize * 1.5, flowerY - flowerSize/2, flowerSize * 3, flowerSize/2);
+            ctx.fillRect(-flowerSize/2, flowerY - flowerSize * 1.5, flowerSize/2, flowerSize * 2);
+            
+            // Blütenmitte
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(-2 * scale, flowerY - flowerSize/2 - 2 * scale, 4 * scale, 4 * scale);
+        }
     }
 
     renderDetailedTree() {
@@ -387,6 +512,19 @@ class EnvironmentObject {
     }
 
     addRockTexture(baseColor, shadowColor) {
+    }
+
+    update(deltaTime) {
+        if (this.type === 'cactus' && !this.hasFlower && this.flowerRegrowTime) {
+            this.timeSinceFlowerEaten += deltaTime;
+            
+            if (this.timeSinceFlowerEaten >= this.flowerRegrowTime) {
+                // Neue Blüte wächst nach
+                this.hasFlower = true;
+                this.timeSinceFlowerEaten = 0;
+                console.log('🌺 Kakteen-Blüte ist nachgewachsen!');
+            }
+        }
     }
 }
 
@@ -841,6 +979,44 @@ function generateEnvironment(objectCounts) {
     generateTreeGroups(objectCounts);
     generateRockGroups(objectCounts);
     generateRodentGroups(objectCounts);
+    generateCactiGroups(objectCounts);
+}
+
+function generateCactiGroups(objectCounts) {
+    // Nur auf Wüstenkacheln spawnen
+    let cactiCount = 0;
+    
+    for (let y = 1; y < mapHeight -1; y++) {
+        for (let x = 1; x < mapWidth-1; x++) {
+            if (tileMap[y][x] === TILE_TYPES.DESERT) {
+                // 10% Chance für Kakteen-Gruppe pro Wüstenkachel
+                if (Math.random() < 0.05) {
+                    // 1-3 Kakteen pro Gruppe
+                    const groupSize = Math.floor(Math.random() * 3) + 1;
+                    
+                    for (let i = 0; i < groupSize; i++) {
+                        // Zufällige Position innerhalb der Kachel mit etwas Abstand
+                        const offsetX = 0.2 + Math.random() * 0.6;
+                        const offsetY = 0.2 + Math.random() * 0.6;
+                        
+                        const cactus = new EnvironmentObject(
+                            x + offsetX,
+                            y + offsetY,
+                            'cactus',
+                            {
+                                flowerColor: Math.random() < 0.5 ? '#FF69B4' : '#FFD700' // Pink oder Gold
+                            }
+                        );
+                        
+                        gameObjects.push(cactus);
+                        cactiCount++;
+                    }
+                }
+            }
+        }
+    }
+    
+    objectCounts.cacti = cactiCount;
 }
 
 function generateTreeGroups(objectCounts) {
